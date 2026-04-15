@@ -15,6 +15,32 @@ This file is intentionally practical: it records the tools needed to run the bro
 
 The browser editor/runtime loop only needs Node/Corepack/pnpm. The Tauri desktop shell also needs Rust and native system packages.
 
+## Tauri, Vite, And The Desktop Binary
+
+Tauri is the native desktop shell and build pipeline. Fieldcraft's editor UI and application logic are TypeScript running inside the Tauri window's WebView.
+
+Vite is used in two different ways:
+
+- In development, `corepack pnpm tauri:dev` starts Vite on `http://127.0.0.1:5173/` and points the Tauri window at that local dev server.
+- In a built desktop app, Vite first compiles static frontend assets into `apps/editor/dist/`, then Tauri builds a native binary that loads those assets. A shipped desktop build does not need port `5173` or a Vite dev server.
+
+After a debug native build:
+
+```sh
+. "$HOME/.cargo/env"
+corepack pnpm --dir apps/editor tauri build --debug --no-bundle
+```
+
+the runnable debug binary lives at:
+
+```sh
+apps/editor/src-tauri/target/debug/fieldcraft
+```
+
+It can be run directly from a terminal or launched from a file manager if the desktop environment allows executing local binaries. It is not installed as a system application unless a platform bundle is built and installed.
+
+Release builds normally place the direct binary at `apps/editor/src-tauri/target/release/fieldcraft`; packaged installers or app bundles are written under `apps/editor/src-tauri/target/release/bundle/`.
+
 ## Ubuntu/Debian Setup
 
 This is the expected setup path for the current Linux development host.
