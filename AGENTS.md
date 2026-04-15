@@ -28,6 +28,8 @@ Current stack decisions live in `DECISIONS.md`:
 
 ## Workflow
 
+Before starting feature, fix, or exploratory implementation work, check `NEXT.md` for the current near-term branch plan and update it if manual testing has changed the order.
+
 Use discussion to frame the next question, especially for structural or hard-to-reverse choices.
 Answer it with the smallest runnable experiment that preserves flexibility and avoids premature assumptions.
 
@@ -87,6 +89,7 @@ Keep docs light.
 - `README.md` — project overview, setup, commands, and docs index
 - `AGENTS.md` — workflow, contribution guardrails, and how to work in this repo
 - `DECISIONS.md` — canonical record of settled architectural and design decisions
+- `NEXT.md` — current near-term branch plan and manually discovered priorities
 - `CLAUDE.md` — compatibility pointer to `AGENTS.md`
 
 When a durable architectural choice is made, record it once in `DECISIONS.md` instead of duplicating rationale across files.

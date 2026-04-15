@@ -140,4 +140,5 @@ References:
 - `README.md` — project overview, setup, commands, and docs index
 - `AGENTS.md` — workflow, contribution guardrails, and how to work in this repo
 - `DECISIONS.md` — canonical record of settled architectural and design decisions
+- `NEXT.md` — current near-term branch plan and manually discovered priorities
 - `CLAUDE.md` — compatibility pointer to `AGENTS.md`
