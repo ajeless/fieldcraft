@@ -2,7 +2,7 @@
 
 Settled decisions that should not be relitigated without explicit discussion.
 
-Mutable plans, open design questions, and implementation sequencing belong in `NEXT.md`.
+Mutable plans, open design questions, and implementation sequencing belong in `PLAN.md`.
 
 ## 001 — Editor-first, not engine-first
 

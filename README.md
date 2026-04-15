@@ -142,4 +142,4 @@ Project docs are intentionally small:
 - `README.md` covers setup and commands.
 - `AGENTS.md` covers contribution and agent workflow.
 - `DECISIONS.md` records settled choices.
-- `NEXT.md` tracks mutable plans and open design work.
+- `PLAN.md` tracks mutable plans and open design work.

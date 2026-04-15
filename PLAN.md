@@ -1,4 +1,4 @@
-# NEXT.md
+# PLAN.md
 
 Mutable planning notes for the next editor slices. This is not a roadmap promise; it is the current working plan for small, manually testable branches.
 
@@ -6,7 +6,7 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Make board authoring credible before expanding into broader editor systems. The branch sequence first stabilizes the canvas viewport, then asks whether the grid-geometry seam holds up for a second tile geometry before setup UI hardens around square-grid assumptions.
+Make board authoring credible before expanding into broader editor systems. The branch sequence first stabilizes the canvas viewport and board placement workflow, then asks whether the grid-geometry seam holds up for a second tile geometry before setup UI hardens around square-grid assumptions.
 
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
@@ -20,44 +20,51 @@ Current manual testing pressure points are captured in the branch sequence below
    - Establish renderer-independent coordinate flow: screen point to viewport point to board/world point to tile coordinate.
    - Keep the scope strict: canvas grid/background surface, simple marker interaction, no asset system, no animation system, and no full renderer framework.
 
-2. `codex/hex-grid-proof`
+2. `codex/token-palette-placement`
+   - Replace plain left-click marker creation with selection or no-op behavior until selectable board objects exist.
+   - Add a small temporary palette/sidebar widget with the default marker used by the early editor experiment.
+   - Support dragging that marker onto the canvas-backed board through the viewport coordinate flow.
+   - Preserve current marker persistence in scenario JSON.
+   - Keep the scope strict: no asset library, imported media, token styling system, selection inspector, or broader drag-and-drop framework.
+
+3. `codex/hex-grid-proof`
    - Add a minimal hex tile geometry implementation before broader board setup work.
    - Render a basic hex grid through the same canvas-backed viewport used by square grids.
-   - Prove hit-testing and marker placement on hex centers using model-based pointer math, not SVG or DOM tile targets.
+   - Prove hit-testing and marker placement on hex centers using model-based pointer math and the palette placement workflow, not SVG or DOM tile targets.
    - Keep the branch focused on making hex first-class in the geometry seam; defer full hex rules, movement, terrain, styling, and setup polish.
 
-3. `codex/space-and-scale-setup`
+4. `codex/space-and-scale-setup`
    - Extend board setup toward explicit space configuration rather than only square-grid dimensions.
    - Make square grid and hex grid explicit author-facing setup choices.
    - Add data-model room for free-coordinate bounds, authored scale, tile size, grid line color, grid line opacity, and board background.
    - Keep the first UI small; the goal is to establish the shape without implementing every grid type or rule mechanic.
 
-4. `codex/editor-menu-bar`
+5. `codex/editor-menu-bar`
    - Add a File/Edit/View-style in-app menu bar that works in browser and desktop.
    - Wire existing commands first: New, Open, Save, Save As, Launch Runtime.
    - Leave native Tauri menus as a later refinement after the command model is clearer.
 
-5. `codex/theme-toggle`
+6. `codex/theme-toggle`
    - Add light and dark editor themes using CSS variables.
    - Persist the chosen theme.
    - Default from system preference when no choice exists.
 
-6. `codex/draft-autosave`
+7. `codex/draft-autosave`
    - Add draft recovery autosave for the editor session.
    - Do not silently overwrite scenario files.
    - Keep explicit Save and Save As as the durable file actions.
 
-7. `codex/source-editor`
+8. `codex/source-editor`
    - Turn the scenario JSON panel into an editable source view.
    - Validate edits before applying them to the visual editor.
    - Provide a safe way to recover from invalid JSON.
 
-8. `codex/asset-library-imports`
+9. `codex/asset-library-imports`
    - Add the first scenario asset model for imported images.
    - Keep scenario JSON readable by referencing assets rather than embedding large image payloads.
    - Start with board backgrounds or token images before broader sprite/tile workflows.
 
-9. `codex/export-runtime-spike`
+10. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
    - Keep standalone binary game export out of this branch; prove the browser bundle first.
@@ -66,17 +73,17 @@ Current manual testing pressure points are captured in the branch sequence below
 
 These are not committed near-term order. They hold open design work that should stay out of `DECISIONS.md` until concrete implementation and manual testing settle it.
 
-10. `codex/scenario-format-hardening`
+11. `codex/scenario-format-hardening`
    - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
    - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
    - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
 
-11. `codex/rules-expression-spike`
+12. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Keep the first rule authoring loop visible in the editor.
 
-12. `codex/standalone-runtime-export`
+13. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.
