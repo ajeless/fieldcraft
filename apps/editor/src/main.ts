@@ -1,5 +1,12 @@
 import "./styles.css";
 import {
+  type BoardViewportState,
+  createBoardViewport,
+  createBoardViewportState,
+  resetBoardViewportState
+} from "./board-viewport";
+import {
+  type Scenario,
   createEmptyScenario,
   scenarioToJson
 } from "./scenario";
@@ -29,6 +36,10 @@ const app = appRoot;
 let scenario = createEmptyScenario();
 let dirty = false;
 let statusMessage = "Ready";
+const boardViewportStates: Record<Route, BoardViewportState> = {
+  editor: createBoardViewportState(),
+  runtime: createBoardViewportState()
+};
 
 window.addEventListener("hashchange", render);
 
@@ -88,7 +99,8 @@ function createEditorView(): HTMLElement {
     scenario.space
       ? createBoard({
           readonly: false,
-          cellAttribute: "cell",
+          mode: "editor",
+          state: boardViewportStates.editor,
           onCellClick: toggleMarker
         })
       : createBoardSetup()
@@ -133,7 +145,8 @@ function createRuntimeView(): HTMLElement {
     scenario.space
       ? createBoard({
           readonly: true,
-          cellAttribute: "runtimeCell"
+          mode: "runtime",
+          state: boardViewportStates.runtime
         })
       : createBlankBoardMessage()
   );
@@ -184,7 +197,8 @@ function createActionStack(): HTMLElement {
 
 function createBoard(options: {
   readonly: boolean;
-  cellAttribute: "cell" | "runtimeCell";
+  mode: Route;
+  state: BoardViewportState;
   onCellClick?: (x: number, y: number) => void;
 }): HTMLElement {
   const space = scenario.space;
@@ -192,37 +206,14 @@ function createBoard(options: {
     return createBlankBoardMessage();
   }
 
-  const board = element("div", "board");
-  board.style.setProperty("--grid-width", String(space.width));
-  board.style.setProperty("--grid-height", String(space.height));
-
-  const piecesByPosition = new Map(scenario.pieces.map((piece) => [`${piece.x},${piece.y}`, piece]));
-
-  for (let y = 0; y < space.height; y += 1) {
-    for (let x = 0; x < space.width; x += 1) {
-      const cell = document.createElement("button");
-      const piece = piecesByPosition.get(`${x},${y}`);
-      cell.type = "button";
-      cell.className = piece ? "board-cell occupied" : "board-cell";
-      cell.disabled = options.readonly;
-      cell.dataset[options.cellAttribute] = `${x}-${y}`;
-      cell.setAttribute("aria-label", `Column ${x + 1}, row ${y + 1}`);
-
-      if (piece) {
-        const marker = element("span", "marker");
-        marker.setAttribute("aria-hidden", "true");
-        cell.append(marker);
-      }
-
-      if (!options.readonly && options.onCellClick) {
-        cell.addEventListener("click", () => options.onCellClick?.(x, y));
-      }
-
-      board.append(cell);
-    }
-  }
-
-  return board;
+  return createBoardViewport({
+    mode: options.mode,
+    readonly: options.readonly,
+    space,
+    pieces: scenario.pieces,
+    state: options.state,
+    onTileClick: options.onCellClick
+  });
 }
 
 function createBoardSetup(): HTMLElement {
@@ -284,6 +275,7 @@ function toggleMarker(x: number, y: number): void {
 function createNewScenario(): void {
   scenario = createEmptyScenario();
   clearCurrentFilePath();
+  resetBoardViewportStates();
   dirty = false;
   statusMessage = "New blank scenario";
   navigate("editor");
@@ -308,6 +300,7 @@ function createSquareGrid(widthValue: string, heightValue: string): void {
     },
     pieces: []
   };
+  resetBoardViewportStates();
   dirty = true;
   statusMessage = `Square grid created: ${width} x ${height}`;
   render();
@@ -345,11 +338,21 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
     return;
   }
 
+  const previousBoardKey = getScenarioBoardKey(scenario);
+  let shouldResetViewport = false;
+
   if (result.scenario) {
     scenario = result.scenario;
+    shouldResetViewport =
+      previousBoardKey !== getScenarioBoardKey(scenario) ||
+      result.statusMessage.startsWith("Opened ") ||
+      result.statusMessage.startsWith("Loaded ");
   }
   if (result.dirty !== undefined) {
     dirty = result.dirty;
+  }
+  if (shouldResetViewport) {
+    resetBoardViewportStates();
   }
   statusMessage = result.statusMessage;
   render();
@@ -453,6 +456,19 @@ function getDocumentState(): string {
   }
 
   return "New scenario";
+}
+
+function resetBoardViewportStates(): void {
+  resetBoardViewportState(boardViewportStates.editor);
+  resetBoardViewportState(boardViewportStates.runtime);
+}
+
+function getScenarioBoardKey(value: Scenario): string | null {
+  if (!value.space) {
+    return null;
+  }
+
+  return `${value.space.type}:${value.space.width}x${value.space.height}`;
 }
 
 function parseGridSize(value: string): number | null {

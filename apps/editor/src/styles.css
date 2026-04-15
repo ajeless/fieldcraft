@@ -17,6 +17,7 @@
   --warning: #b45f17;
   --board-line: #aeb8c1;
   --board-fill: #f9fbfb;
+  --viewport-fill: #e8edf0;
   --marker: #d24b3f;
   --marker-ring: #61221e;
 }
@@ -29,6 +30,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 button,
@@ -47,14 +49,17 @@ button:disabled {
 
 .shell {
   min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background:
     linear-gradient(180deg, rgba(31, 122, 104, 0.08), transparent 240px),
     var(--field);
 }
 
 .topbar {
+  flex: 0 0 auto;
   min-height: 64px;
   display: flex;
   align-items: center;
@@ -111,32 +116,40 @@ button:disabled {
 
 .workspace {
   width: 100%;
-  max-width: 1480px;
   flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(420px, 1fr) minmax(280px, 360px);
-  gap: 20px;
+  grid-template-columns: minmax(220px, 272px) minmax(0, 1fr) minmax(280px, 360px);
+  gap: 16px;
   align-items: stretch;
-  margin: 0 auto;
-  padding: 20px clamp(16px, 4vw, 32px) 28px;
+  margin: 0;
+  padding: 16px;
+  overflow: hidden;
 }
 
 .runtime-workspace {
-  grid-template-columns: minmax(220px, 300px) minmax(420px, 1fr);
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
 }
 
 .panel {
   min-width: 0;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   padding: 18px;
+  overflow: auto;
   box-shadow: 0 16px 40px rgba(23, 32, 42, 0.08);
 }
 
 .left-panel,
 .right-panel {
-  align-self: start;
+  align-self: stretch;
+}
+
+.right-panel {
+  display: flex;
+  flex-direction: column;
 }
 
 .eyebrow {
@@ -210,7 +223,8 @@ button:disabled {
 
 .action-button:focus-visible,
 .mode-button:focus-visible,
-.board-cell:focus-visible,
+.viewport-button:focus-visible,
+.board-canvas:focus-visible,
 .field-label input:focus-visible {
   outline: 3px solid rgba(31, 122, 104, 0.3);
   outline-offset: 2px;
@@ -230,6 +244,7 @@ button:disabled {
 
 .board-stage {
   min-width: 0;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
@@ -242,21 +257,84 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.board {
-  --grid-width: 8;
-  --grid-height: 8;
-  width: min(100%, calc((100vh - 160px) * var(--grid-width) / var(--grid-height)));
-  max-width: 760px;
-  aspect-ratio: var(--grid-width) / var(--grid-height);
+.board-viewport {
+  min-width: 0;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(var(--grid-width), minmax(0, 1fr));
-  grid-template-rows: repeat(var(--grid-height), minmax(0, 1fr));
-  place-self: start center;
-  border: 2px solid var(--ink);
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--board-line);
-  box-shadow: 0 22px 50px rgba(23, 32, 42, 0.14);
+  background: var(--panel);
+  box-shadow: 0 22px 50px rgba(23, 32, 42, 0.12);
+}
+
+.board-toolbar {
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.board-size-label,
+.zoom-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.board-size-label {
+  margin-right: auto;
+}
+
+.viewport-button {
+  min-width: 36px;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.viewport-button:hover,
+.viewport-button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+
+.board-surface {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--viewport-fill);
+}
+
+.board-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: default;
+  touch-action: none;
+}
+
+.board-surface.is-pan-modifier-active .board-canvas {
+  cursor: grab;
+}
+
+.board-surface.is-panning .board-canvas {
+  cursor: grabbing;
+}
+
+.runtime-stage .board-canvas {
+  cursor: default;
 }
 
 .board-setup,
@@ -289,40 +367,6 @@ button:disabled {
   font-size: 1.4rem;
 }
 
-.board-cell {
-  min-width: 0;
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-right: 1px solid var(--board-line);
-  border-bottom: 1px solid var(--board-line);
-  background: var(--board-fill);
-}
-
-.board-cell:hover:not(:disabled) {
-  background: #e4f1ed;
-}
-
-.board-cell.occupied {
-  background:
-    linear-gradient(135deg, rgba(210, 75, 63, 0.12), rgba(31, 122, 104, 0.06)),
-    var(--board-fill);
-}
-
-.marker {
-  width: 54%;
-  height: 54%;
-  border: 3px solid var(--marker-ring);
-  border-radius: 50%;
-  background: var(--marker);
-  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.5);
-}
-
-.runtime-stage .board-cell {
-  background: #f2f5f6;
-}
-
 .runtime-title {
   margin: 0 0 16px;
   color: var(--ink);
@@ -331,7 +375,8 @@ button:disabled {
 }
 
 .scenario-preview {
-  max-height: calc(100vh - 240px);
+  flex: 1;
+  min-height: 180px;
   overflow: auto;
   margin: 0;
   border: 1px solid var(--line);
@@ -345,9 +390,16 @@ button:disabled {
 }
 
 @media (max-width: 1080px) {
+  body,
+  .shell {
+    height: auto;
+    overflow: auto;
+  }
+
   .workspace,
   .runtime-workspace {
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .left-panel,
@@ -355,8 +407,8 @@ button:disabled {
     align-self: stretch;
   }
 
-  .board {
-    width: min(100%, 720px);
+  .board-viewport {
+    min-height: min(72vh, 680px);
   }
 }
 

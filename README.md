@@ -8,7 +8,7 @@ Fieldcraft aims to be an editor-first environment for designing, play-testing, a
 
 ## Status
 
-First vertical slices in progress: a minimal editor can place markers on a square grid, save and open human-readable scenario JSON documents in the desktop shell, and launch a read-only runtime view from the current scenario.
+First vertical slices in progress: a minimal editor can place markers on a canvas-backed square-grid board, pan and zoom the board viewport, save and open human-readable scenario JSON documents in the desktop shell, and launch a read-only runtime view from the current scenario.
 
 ## Stack
 
@@ -137,8 +137,9 @@ References:
 
 ## Docs
 
-- `README.md` — project overview, setup, commands, and docs index
-- `AGENTS.md` — workflow, contribution guardrails, and how to work in this repo
-- `DECISIONS.md` — canonical record of settled architectural and design decisions
-- `NEXT.md` — current near-term branch plan and manually discovered priorities
-- `CLAUDE.md` — compatibility pointer to `AGENTS.md`
+Project docs are intentionally small:
+
+- `README.md` covers setup and commands.
+- `AGENTS.md` covers contribution and agent workflow.
+- `DECISIONS.md` records settled choices.
+- `NEXT.md` tracks mutable plans and open design work.

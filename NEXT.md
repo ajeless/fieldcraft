@@ -1,18 +1,14 @@
 # NEXT.md
 
-Near-term planning notes for the next editor slices. This is not a roadmap promise; it is the current working plan for small, manually testable branches.
+Mutable planning notes for the next editor slices. This is not a roadmap promise; it is the current working plan for small, manually testable branches.
+
+Settled architectural choices belong in `DECISIONS.md`. Open questions, implementation order, and deferred design space live here until a choice is durable enough to record as a decision.
 
 ## Current Focus
 
-Make board authoring credible before expanding into broader editor systems.
+Make board authoring credible before expanding into broader editor systems. The branch sequence first stabilizes the canvas viewport, then asks whether the grid-geometry seam holds up for a second tile geometry before setup UI hardens around square-grid assumptions.
 
-The immediate pressure points from manual testing are:
-- the editor workspace should use available window size better
-- the board viewport should support pan, zoom, rotation, and reset-view groundwork early
-- 64 x 64 grids should render correctly
-- larger maps and boards should be possible without rendering every tile as a DOM control, starting with a canvas-backed board surface
-- square and hex grids should both be treated as first-class tile geometries early, not as square-grid plus later hex special cases
-- board setup should grow toward configurable tile size, grid type, line color, line opacity, board background, bounds, and scale
+Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
@@ -64,21 +60,36 @@ The immediate pressure points from manual testing are:
 9. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
-   - Keep standalone binary game export as a follow-on after the browser export shape is clear.
+   - Keep standalone binary game export out of this branch; prove the browser bundle first.
+
+## Later Branch Candidates
+
+These are not committed near-term order. They hold open design work that should stay out of `DECISIONS.md` until concrete implementation and manual testing settle it.
+
+10. `codex/scenario-format-hardening`
+   - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
+   - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
+   - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
+
+11. `codex/rules-expression-spike`
+   - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
+   - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
+   - Keep the first rule authoring loop visible in the editor.
+
+12. `codex/standalone-runtime-export`
+   - Package a finished game as a standalone Tauri binary after the browser export path is working.
+   - Reuse the browser runtime/export shape where possible.
+   - Add platform-specific packaging incrementally instead of trying to support every target at once.
 
 ## Deferred Design Space
 
 Large boards and map styling:
-- support square, hex, triangle, and other tile grids over time
+- support triangle and other tile grids only after square and hex prove the geometry seam
 - support no-grid free-coordinate boards for free-space scenarios
-- make tile size, grid color, line opacity, and board background authorable
-- support maps larger than the visible viewport through pan, zoom, and viewport-based rendering
-- support viewport rotation and reset-to-home orientation without assuming north-up forever
-- give free-coordinate boards explicit bounds because there are no tiles to delimit the play area
-- support authored scale for tiled and free-coordinate boards, such as one hex equals a distance or one editor unit equals a physical distance
+- define authored scale semantics for tiled and free-coordinate boards, such as one hex equals a distance or one editor unit equals a physical distance
+- introduce a scenario-level home view only if there is a clear authoring or runtime need to persist view state
 
 Assets and author media:
-- import images for board backgrounds, map tiles, sprites, tokens, and icons
 - prefer a project/package asset library with stable relative references over base64-heavy scenario JSON
 - distinguish asset import and token styling from full image editing
 - defer a built-in sprite creator until the editor has real asset workflows and authoring pressure justifies it
@@ -91,8 +102,6 @@ Editor layout customization:
 - avoid turning this into a plugin system until at least two real editor workflows need it
 
 Export, packaging, and network play:
-- export is important but should follow a useful runtime slice
-- first target should be a browser-playable bundle containing a scenario and minimal runtime
 - packaged binary distribution of the editor itself is also future work beyond repo-based development
 - server-hosted and multiplayer games are intentionally later work
 - keep future network play possible, but do not let it drive the current editor architecture

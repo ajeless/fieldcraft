@@ -2,6 +2,8 @@
 
 Settled decisions that should not be relitigated without explicit discussion.
 
+Mutable plans, open design questions, and implementation sequencing belong in `NEXT.md`.
+
 ## 001 — Editor-first, not engine-first
 
 The editor is the product. The engine exists to serve the editor and the authored experiences it produces. Features that don't surface in the editor aren't ready to build.
@@ -40,14 +42,12 @@ Decision: game rules combine structured data for configuration (parameters, thre
 
 Rejected alternatives: not embedded scripting (Python, Lua) and not pure structured data without logic.
 
-Open design space: the exact expression language syntax, evaluator shape, and editor UX are not yet designed. Those details should emerge from authoring concrete scenarios.
-
 Rationale: pure structured data fails when mechanics require branching logic or cross-entity state. Embedded scripting makes rules opaque to the editor and uninspectable. The middle ground keeps rules editable and visible in the editor while supporting the complexity of real tactical game mechanics.
 
 ## 007 — Browser and standalone binary as export targets
 
-Finished games export to browser-playable bundles and standalone desktop binaries (via Tauri). Both are first-class targets, added incrementally — not all platforms need to be supported simultaneously.
+Finished games export to browser-playable bundles and standalone desktop binaries (via Tauri). Both are first-class targets.
 
 ## 008 — Scenario files are human-readable
 
-Scenario files must be readable and editable in a plain text editor. The visual editor writes them, but never traps the author. Format TBD, but readability is a hard constraint.
+Scenario files must be readable and editable in a plain text editor. The visual editor writes them, but never traps the author. Readability is a hard constraint.

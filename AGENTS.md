@@ -84,13 +84,13 @@ building engine features that don't surface in the editor. If the editor can't s
 
 ## Docs
 
-Keep docs light.
+Keep docs light and split by ownership:
 
-- `README.md` — project overview, setup, commands, and docs index
-- `AGENTS.md` — workflow, contribution guardrails, and how to work in this repo
-- `DECISIONS.md` — canonical record of settled architectural and design decisions
-- `NEXT.md` — current near-term branch plan and manually discovered priorities
-- `CLAUDE.md` — compatibility pointer to `AGENTS.md`
+- `README.md` is for project overview, setup, and commands.
+- `AGENTS.md` is for agent workflow and contribution guardrails.
+- `DECISIONS.md` is for settled architectural and design choices.
+- `NEXT.md` is for mutable branch plans, open questions, and deferred design space.
+- `CLAUDE.md` is only a compatibility pointer to `AGENTS.md`.
 
 When a durable architectural choice is made, record it once in `DECISIONS.md` instead of duplicating rationale across files.
 
