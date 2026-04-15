@@ -1,0 +1,25 @@
+{
+  "name": "fieldcraft",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "stop": "node scripts/stop.mjs",
+    "build": "corepack pnpm --dir apps/editor build",
+    "dev": "corepack pnpm --dir apps/editor dev",
+    "tauri": "corepack pnpm --dir apps/editor tauri",
+    "tauri:dev": "corepack pnpm --dir apps/editor tauri dev",
+    "tauri:build": "corepack pnpm --dir apps/editor tauri build",
+    "test:smoke": "node scripts/test-browser-smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
