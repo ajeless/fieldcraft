@@ -53,6 +53,7 @@ type BoardViewportOptions = {
   pieces: ScenarioPiece[];
   state: BoardViewportState;
   onTileClick?: (x: number, y: number) => void;
+  onMarkerDrop?: (x: number, y: number) => void;
 };
 
 type DrawOptions = {
@@ -64,6 +65,8 @@ const homePadding = 40;
 const minZoom = 0.04;
 const maxZoom = 5;
 const resizeRecoveryVisibleRatio = 0.08;
+
+export const markerDragDataType = "application/x-fieldcraft-marker";
 
 export function createBoardViewportState(): BoardViewportState {
   return {
@@ -155,10 +158,20 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
     draw,
     onTileClick: options.onTileClick
   });
+  const markerDropController = createMarkerDropController({
+    surface,
+    state: options.state,
+    readonly: options.readonly,
+    geometry,
+    onMarkerDrop: options.onMarkerDrop
+  });
   canvas.addEventListener("pointerdown", pointerController.handlePointerDown);
   canvas.addEventListener("pointermove", pointerController.handlePointerMove);
   canvas.addEventListener("pointerup", pointerController.handlePointerUp);
   canvas.addEventListener("pointercancel", pointerController.handlePointerCancel);
+  surface.addEventListener("dragover", markerDropController.handleDragOver);
+  surface.addEventListener("dragleave", markerDropController.handleDragLeave);
+  surface.addEventListener("drop", markerDropController.handleDrop);
   canvas.addEventListener("auxclick", (event) => {
     if (event.button === 1) {
       event.preventDefault();
@@ -460,6 +473,75 @@ function createPointerController(options: {
       }
     }
   };
+}
+
+function createMarkerDropController(options: {
+  surface: HTMLElement;
+  state: BoardViewportState;
+  readonly: boolean;
+  geometry: GridGeometry;
+  onMarkerDrop?: (x: number, y: number) => void;
+}): {
+  handleDragOver: (event: DragEvent) => void;
+  handleDragLeave: (event: DragEvent) => void;
+  handleDrop: (event: DragEvent) => void;
+} {
+  return {
+    handleDragOver: (event) => {
+      if (!canAcceptMarkerDrop(event, options.readonly, options.onMarkerDrop)) {
+        return;
+      }
+
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "copy";
+      }
+      options.surface.classList.add("is-marker-drop-target");
+    },
+    handleDragLeave: (event) => {
+      if (
+        event.relatedTarget instanceof Node &&
+        options.surface.contains(event.relatedTarget)
+      ) {
+        return;
+      }
+
+      options.surface.classList.remove("is-marker-drop-target");
+    },
+    handleDrop: (event) => {
+      if (!canAcceptMarkerDrop(event, options.readonly, options.onMarkerDrop)) {
+        return;
+      }
+
+      event.preventDefault();
+      options.surface.classList.remove("is-marker-drop-target");
+      ensureTransform(options.state, options.geometry);
+      const viewportPoint = screenPointToViewportPoint(
+        {
+          x: event.clientX,
+          y: event.clientY
+        },
+        options.surface
+      );
+      const worldPoint = viewportPointToWorldPoint(viewportPoint, options.state.transform);
+      const tile = worldPoint ? options.geometry.worldToTile(worldPoint) : null;
+      if (tile) {
+        options.onMarkerDrop?.(tile.x, tile.y);
+      }
+    }
+  };
+}
+
+function canAcceptMarkerDrop(
+  event: DragEvent,
+  readonly: boolean,
+  onMarkerDrop: ((x: number, y: number) => void) | undefined
+): boolean {
+  return (
+    !readonly &&
+    Boolean(onMarkerDrop) &&
+    Array.from(event.dataTransfer?.types ?? []).includes(markerDragDataType)
+  );
 }
 
 function createPanKeyController(

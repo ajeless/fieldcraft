@@ -3,6 +3,7 @@ import {
   type BoardViewportState,
   createBoardViewport,
   createBoardViewportState,
+  markerDragDataType,
   resetBoardViewportState
 } from "./board-viewport";
 import {
@@ -80,7 +81,7 @@ function createEditorView(): HTMLElement {
   view.dataset.view = "editor";
 
   const sidebar = element("aside", "panel left-panel");
-  sidebar.append(
+  const sidebarItems: HTMLElement[] = [
     element("p", "eyebrow", "Scenario"),
     labeledInput("Title", scenario.title, (value) => {
       scenario = { ...scenario, title: value || createEmptyScenario().title };
@@ -89,9 +90,13 @@ function createEditorView(): HTMLElement {
     }),
     metric("Board", getBoardLabel()),
     metric("Markers", String(scenario.pieces.length), "marker-count"),
-    metric("File", getFileLabel(), "current-file"),
-    createActionStack()
-  );
+    metric("File", getFileLabel(), "current-file")
+  ];
+  if (scenario.space) {
+    sidebarItems.push(createMarkerPalette());
+  }
+  sidebarItems.push(createActionStack());
+  sidebar.append(...sidebarItems);
 
   const boardStage = element("section", "board-stage");
   boardStage.append(
@@ -101,7 +106,7 @@ function createEditorView(): HTMLElement {
           readonly: false,
           mode: "editor",
           state: boardViewportStates.editor,
-          onCellClick: toggleMarker
+          onMarkerDrop: placeDefaultMarker
         })
       : createBoardSetup()
   );
@@ -199,7 +204,7 @@ function createBoard(options: {
   readonly: boolean;
   mode: Route;
   state: BoardViewportState;
-  onCellClick?: (x: number, y: number) => void;
+  onMarkerDrop?: (x: number, y: number) => void;
 }): HTMLElement {
   const space = scenario.space;
   if (!space) {
@@ -212,8 +217,39 @@ function createBoard(options: {
     space,
     pieces: scenario.pieces,
     state: options.state,
-    onTileClick: options.onCellClick
+    onMarkerDrop: options.onMarkerDrop
   });
+}
+
+function createMarkerPalette(): HTMLElement {
+  const palette = element("section", "marker-palette");
+  const marker = document.createElement("button");
+  const swatch = element("span", "palette-marker-swatch");
+  const label = element("span", "palette-marker-label", "Marker");
+
+  marker.type = "button";
+  marker.className = "palette-marker";
+  marker.draggable = true;
+  marker.dataset.testid = "palette-marker";
+  marker.setAttribute("aria-label", "Default marker");
+  marker.title = "Default marker";
+  marker.addEventListener("dragstart", (event) => {
+    if (!event.dataTransfer) {
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(markerDragDataType, "default-marker");
+    event.dataTransfer.setData("text/plain", "Fieldcraft marker");
+    event.dataTransfer.setDragImage(
+      swatch,
+      swatch.offsetWidth / 2,
+      swatch.offsetHeight / 2
+    );
+  });
+  marker.append(swatch, label);
+  palette.append(element("p", "eyebrow", "Palette"), marker);
+  return palette;
 }
 
 function createBoardSetup(): HTMLElement {
@@ -244,31 +280,33 @@ function createBlankBoardMessage(): HTMLElement {
   return blank;
 }
 
-function toggleMarker(x: number, y: number): void {
+function placeDefaultMarker(x: number, y: number): void {
   if (!scenario.space) {
     return;
   }
 
   const existing = scenario.pieces.find((piece) => piece.x === x && piece.y === y);
-  const pieces = existing
-    ? scenario.pieces.filter((piece) => piece.id !== existing.id)
-    : [
-        ...scenario.pieces,
-        {
-          id: `marker-${x}-${y}`,
-          kind: "marker" as const,
-          side: "neutral" as const,
-          x,
-          y
-        }
-      ];
+  if (existing) {
+    statusMessage = "Marker already present";
+    render();
+    return;
+  }
 
   scenario = {
     ...scenario,
-    pieces
+    pieces: [
+      ...scenario.pieces,
+      {
+        id: `marker-${x}-${y}`,
+        kind: "marker" as const,
+        side: "neutral" as const,
+        x,
+        y
+      }
+    ]
   };
   dirty = true;
-  statusMessage = existing ? "Marker removed" : "Marker placed";
+  statusMessage = "Marker placed";
   render();
 }
 
