@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Fieldcraft icon">
+  <rect width="512" height="512" rx="96" fill="#17202a" />
+  <path d="M104 112h304v288H104z" fill="#f5f7f8" />
+  <path d="M104 184h304M104 256h304M104 328h304M180 112v288M256 112v288M332 112v288" stroke="#aeb8c1" stroke-width="10" />
+  <circle cx="256" cy="256" r="54" fill="#d24b3f" stroke="#61221e" stroke-width="18" />
+  <path d="M128 136h256v240H128z" fill="none" stroke="#1f7a68" stroke-width="20" />
+</svg>
