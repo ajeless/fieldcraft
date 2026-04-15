@@ -178,6 +178,7 @@ button:disabled {
 .metric strong {
   color: var(--ink);
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .action-stack {

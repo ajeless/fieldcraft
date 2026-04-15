@@ -8,7 +8,7 @@ Fieldcraft aims to be an editor-first environment for designing, play-testing, a
 
 ## Status
 
-First vertical slice in progress: a minimal editor can place markers on a square grid, save a human-readable scenario JSON document, and launch a read-only runtime view from that saved scenario.
+First vertical slices in progress: a minimal editor can place markers on a square grid, save and open human-readable scenario JSON documents in the desktop shell, and launch a read-only runtime view from the current scenario.
 
 ## Stack
 
@@ -65,6 +65,8 @@ corepack pnpm tauri:dev
 ```
 
 The Tauri command requires a local Rust toolchain and platform prerequisites. The browser editor/runtime loop can be used without Rust.
+
+In the desktop shell, **Open Scenario**, **Save Scenario**, and **Save As** use native file dialogs. In the browser fallback, **Open Scenario** imports JSON through the browser file picker and **Download JSON** saves a copy.
 
 ## Docs
 

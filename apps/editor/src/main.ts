@@ -1,4 +1,7 @@
 import "./styles.css";
+import { isTauri } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   type Scenario,
   createEmptyScenario,
@@ -10,6 +13,13 @@ import {
 
 type Route = "editor" | "runtime";
 
+const scenarioFileFilters = [
+  {
+    name: "Fieldcraft Scenario",
+    extensions: ["json"]
+  }
+];
+
 const appRoot = document.querySelector<HTMLDivElement>("#app");
 
 if (!appRoot) {
@@ -18,6 +28,7 @@ if (!appRoot) {
 
 const app = appRoot;
 let scenario = loadScenario();
+let currentFilePath: string | null = null;
 let dirty = false;
 let statusMessage = "Ready";
 
@@ -69,6 +80,7 @@ function createEditorView(): HTMLElement {
     }),
     metric("Grid", `${scenario.space.width} x ${scenario.space.height}`),
     metric("Markers", String(scenario.pieces.length), "marker-count"),
+    metric("File", getFileLabel(), "current-file"),
     createActionStack()
   );
 
@@ -89,9 +101,13 @@ function createEditorView(): HTMLElement {
   inspector.append(
     element("p", "eyebrow", "Saved Game"),
     metric("State", dirty ? "Unsaved changes" : "Saved"),
-    metric("Last Save", savedAt),
-    element("pre", "scenario-preview", scenarioToJson(scenario))
+    metric("Mode", isTauri() ? "Desktop file" : "Browser fallback"),
+    metric("Last Save", savedAt)
   );
+  if (currentFilePath) {
+    inspector.append(metric("Path", currentFilePath));
+  }
+  inspector.append(element("pre", "scenario-preview", scenarioToJson(scenario)));
 
   view.append(sidebar, boardStage, inspector);
   return view;
@@ -138,6 +154,7 @@ function createActionStack(): HTMLElement {
     void file.text().then((contents) => {
       try {
         scenario = parseScenario(contents);
+        currentFilePath = null;
         dirty = false;
         statusMessage = `Loaded ${file.name}`;
       } catch (error) {
@@ -150,11 +167,11 @@ function createActionStack(): HTMLElement {
   });
 
   actions.append(
+    buttonElement("Open Scenario", () => openScenario(fileInput), "open-scenario"),
     buttonElement("Save Scenario", saveScenario, "save-scenario"),
-    buttonElement("Download JSON", downloadScenario, "download-scenario"),
-    buttonElement("Import JSON", () => fileInput.click(), "import-scenario"),
+    buttonElement(getSaveAsLabel(), saveScenarioAs, "save-as-scenario"),
     buttonElement("Launch Runtime", () => {
-      saveScenario();
+      rememberScenario();
       navigate("runtime");
     }, "launch-runtime"),
     fileInput,
@@ -226,16 +243,101 @@ function toggleMarker(x: number, y: number): void {
   render();
 }
 
-function saveScenario(): void {
+async function openScenario(fileInput: HTMLInputElement): Promise<void> {
+  if (!isTauri()) {
+    fileInput.click();
+    return;
+  }
+
+  try {
+    const selected = await open({
+      title: "Open Fieldcraft Scenario",
+      multiple: false,
+      directory: false,
+      filters: scenarioFileFilters
+    });
+
+    if (!selected) {
+      statusMessage = "Open cancelled";
+      render();
+      return;
+    }
+
+    const contents = await readTextFile(selected);
+    scenario = parseScenario(contents);
+    currentFilePath = selected;
+    dirty = false;
+    statusMessage = `Opened ${getFileName(selected)}`;
+    rememberScenario();
+    render();
+  } catch (error) {
+    statusMessage = getErrorMessage(error, "Could not open scenario.");
+    render();
+  }
+}
+
+async function saveScenario(): Promise<void> {
+  if (isTauri()) {
+    if (!currentFilePath) {
+      await saveScenarioAs();
+      return;
+    }
+
+    try {
+      await writeScenarioFile(currentFilePath);
+    } catch (error) {
+      statusMessage = getErrorMessage(error, "Could not save scenario.");
+      render();
+    }
+    return;
+  }
+
   scenario = prepareScenarioForSave(scenario);
-  window.localStorage.setItem(scenarioStorageKey, scenarioToJson(scenario));
+  rememberScenario();
   dirty = false;
   statusMessage = "Scenario saved";
   render();
 }
 
+async function saveScenarioAs(): Promise<void> {
+  if (isTauri()) {
+    try {
+      const selected = await save({
+        title: "Save Fieldcraft Scenario",
+        defaultPath: currentFilePath ?? getDefaultScenarioFileName(),
+        filters: scenarioFileFilters
+      });
+
+      if (!selected) {
+        statusMessage = "Save cancelled";
+        render();
+        return;
+      }
+
+      await writeScenarioFile(selected);
+    } catch (error) {
+      statusMessage = getErrorMessage(error, "Could not save scenario.");
+      render();
+    }
+    return;
+  }
+
+  downloadScenario();
+}
+
+async function writeScenarioFile(filePath: string): Promise<void> {
+  scenario = prepareScenarioForSave(scenario);
+  await writeTextFile(filePath, scenarioToJson(scenario));
+  currentFilePath = filePath;
+  dirty = false;
+  statusMessage = `Saved ${getFileName(filePath)}`;
+  rememberScenario();
+  render();
+}
+
 function downloadScenario(): void {
   scenario = prepareScenarioForSave(scenario);
+  rememberScenario();
   const blob = new Blob([scenarioToJson(scenario)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -246,6 +348,10 @@ function downloadScenario(): void {
   dirty = false;
   statusMessage = "Scenario downloaded";
   render();
+}
+
+function rememberScenario(): void {
+  window.localStorage.setItem(scenarioStorageKey, scenarioToJson(scenario));
 }
 
 function loadScenario(): Scenario {
@@ -260,6 +366,35 @@ function loadScenario(): Scenario {
   } catch {
     return createEmptyScenario();
   }
+}
+
+function getFileLabel(): string {
+  if (currentFilePath) {
+    return getFileName(currentFilePath);
+  }
+
+  return isTauri() ? "Unsaved" : "Browser storage";
+}
+
+function getFileName(filePath: string): string {
+  return filePath.split(/[\\/]/).pop() || filePath;
+}
+
+function getDefaultScenarioFileName(): string {
+  const slug = scenario.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `${slug || "fieldcraft-scenario"}.fieldcraft.json`;
+}
+
+function getSaveAsLabel(): string {
+  return isTauri() ? "Save As" : "Download JSON";
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 function getRoute(): Route {
@@ -297,14 +432,22 @@ function metric(label: string, value: string, testId?: string): HTMLElement {
 
 function buttonElement(
   label: string,
-  onClick: () => void,
+  onClick: () => void | Promise<void>,
   testId?: string
 ): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "action-button";
   button.textContent = label;
-  button.addEventListener("click", onClick);
+  button.addEventListener("click", () => {
+    const result = onClick();
+    if (result instanceof Promise) {
+      void result.catch((error) => {
+        statusMessage = getErrorMessage(error, "Action failed.");
+        render();
+      });
+    }
+  });
   if (testId) {
     button.dataset.testid = testId;
   }
