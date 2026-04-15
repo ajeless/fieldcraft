@@ -8,6 +8,11 @@ import { isProcessRunning, readState, repoRoot } from "./process-utils.mjs";
 const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:5173/";
 const startScript = path.join(repoRoot, "scripts", "start.mjs");
 const stopScript = path.join(repoRoot, "scripts", "stop.mjs");
+const smokeDir = path.join(repoRoot, ".fieldcraft", "smoke");
+const menuOpenFixturePath = path.join(smokeDir, "menu-open-scenario.fieldcraft.json");
+
+fs.mkdirSync(smokeDir, { recursive: true });
+fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
 
 const before = await readState();
 const beforePid = before?.pid;
@@ -31,7 +36,10 @@ try {
     executablePath
   });
 
-  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  const page = await browser.newPage({
+    viewport: { width: 1280, height: 820 },
+    acceptDownloads: true
+  });
   await page.goto(baseUrl);
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
@@ -39,7 +47,29 @@ try {
   await page.waitForFunction(() => {
     return document.querySelector('[data-testid="marker-count"]')?.textContent === "0";
   });
-  await page.waitForSelector('[data-testid="launch-runtime"]:disabled');
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+
+  await openScenarioFromSidebar(page, menuOpenFixturePath);
+  await expectMarkerCount(page, "1");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await waitForMarker(page, "board-surface", "1-2");
+  await page.click('[data-testid="new-scenario"]');
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await expectMarkerCount(page, "0");
+
+  await openScenarioFromMenu(page, menuOpenFixturePath);
+  await expectMarkerCount(page, "1");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await waitForMarker(page, "board-surface", "1-2");
+  await page.click('[data-testid="mode-runtime"]');
+  await page.waitForSelector('[data-view="runtime"]');
+  await waitForMarker(page, "runtime-board-surface", "1-2");
+  await page.click('[data-testid="mode-editor"]');
+  await page.waitForSelector('[data-view="editor"]');
+  await clickMenuItem(page, "file", "menu-new-scenario");
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await expectMarkerCount(page, "0");
+
   await expectInvalidSetupPreservesDraft(page);
   await createGrid(page, "square", 64, 64, {
     tileSize: 48,
@@ -97,7 +127,7 @@ try {
   await page.click('[data-testid="reset-board-view"]');
   await waitForTransform(page, "board-surface", homeTransform);
 
-  await page.click('[data-testid="save-scenario"]');
+  await clickMenuItem(page, "file", "menu-save-scenario");
 
   const savedScenario = await page.evaluate(() => window.localStorage.getItem("fieldcraft:last-scenario"));
   if (!savedScenario || !savedScenario.includes('"schema": "fieldcraft.scenario.v0"')) {
@@ -124,16 +154,22 @@ try {
     throw new Error("Saved scenario did not preserve dragged markers.");
   }
 
-  await page.click('[data-testid="launch-runtime"]');
+  await expectScenarioDownload(page, () => clickMenuItem(page, "file", "menu-save-as-scenario"));
+  await expectScenarioDownload(page, () => page.click('[data-testid="save-as-scenario"]'));
+  await page.waitForFunction(() => {
+    return document.querySelector(".status-line")?.textContent === "Scenario downloaded";
+  });
+
+  await page.click('[data-testid="mode-runtime"]');
   await page.waitForSelector('[data-view="runtime"]');
   await waitForMarker(page, "runtime-board-surface", "32-32");
   await waitForMarker(page, "runtime-board-surface", "0-0");
   await waitForMarker(page, "runtime-board-surface", "63-63");
-  await page.click('[data-testid="close-runtime"]');
+  await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
 
   await page.click('[data-testid="new-scenario"]');
-  await page.waitForSelector('[data-testid="launch-runtime"]:disabled');
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
   await createGrid(page, "hex", 18, 14);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
   await expectSurfaceSpace(page, "board-surface", "hex-grid");
@@ -228,7 +264,7 @@ try {
     throw new Error("Saved hex scenario did not preserve dragged markers.");
   }
 
-  await page.click('[data-testid="launch-runtime"]');
+  await page.click('[data-testid="mode-runtime"]');
   await page.waitForSelector('[data-view="runtime"]');
   await expectSurfaceSpace(page, "runtime-board-surface", "hex-grid");
   await expectCanvasHasRenderedBoard(page, "runtime-board-canvas");
@@ -237,7 +273,7 @@ try {
   await waitForMarker(page, "runtime-board-surface", "17-13");
   await waitForMarker(page, "runtime-board-surface", "0-13");
   await waitForMarker(page, "runtime-board-surface", extremeDropMarker);
-  await page.click('[data-testid="close-runtime"]');
+  await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
 
   console.log("Browser smoke passed: square and hex editor placement, persistence, and runtime checks passed.");
@@ -267,6 +303,47 @@ function runNodeScript(scriptPath) {
       }
     });
   });
+}
+
+function createMenuOpenFixture() {
+  return `${JSON.stringify(
+    {
+      schema: "fieldcraft.scenario.v0",
+      title: "Menu Open Fixture",
+      space: {
+        type: "square-grid",
+        width: 4,
+        height: 4,
+        tileSize: 48,
+        scale: {
+          distancePerTile: 1,
+          unit: "tile"
+        },
+        grid: {
+          lineColor: "#aeb8c1",
+          lineOpacity: 1
+        },
+        background: {
+          color: "#f9fbfb"
+        }
+      },
+      pieces: [
+        {
+          id: "marker-1-2",
+          kind: "marker",
+          side: "neutral",
+          x: 1,
+          y: 2
+        }
+      ],
+      metadata: {
+        editorVersion: "0.1.0-experiment",
+        savedAt: null
+      }
+    },
+    null,
+    2
+  )}\n`;
 }
 
 async function createGrid(page, gridType, width, height, options = {}) {
@@ -318,6 +395,35 @@ async function expectInputValue(page, selector, expectedValue) {
   if (value !== expectedValue) {
     throw new Error(`${selector} was reset to ${JSON.stringify(value)}.`);
   }
+}
+
+async function clickMenuItem(page, menuId, itemTestId) {
+  await page.click(`[data-testid="menu-${menuId}"]`);
+  await page.click(`[data-testid="${itemTestId}"]`);
+}
+
+async function openScenarioFromMenu(page, filePath) {
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await clickMenuItem(page, "file", "menu-open-scenario");
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(filePath);
+}
+
+async function openScenarioFromSidebar(page, filePath) {
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.click('[data-testid="open-scenario"]');
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(filePath);
+}
+
+async function expectScenarioDownload(page, action) {
+  const downloadPromise = page.waitForEvent("download");
+  await action();
+  const download = await downloadPromise;
+  if (download.suggestedFilename() !== "fieldcraft-scenario.json") {
+    throw new Error(`Unexpected scenario download filename: ${download.suggestedFilename()}`);
+  }
+  await download.delete();
 }
 
 async function setInputValue(page, selector, value) {

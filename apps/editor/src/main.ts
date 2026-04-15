@@ -37,6 +37,25 @@ import {
 
 type Route = "editor" | "runtime";
 
+type EditorCommandId = "new" | "open" | "save" | "save-as";
+
+type EditorCommand = {
+  id: EditorCommandId;
+  menuLabel: string;
+  sidebarLabel: string;
+  testId: string;
+  enabled: boolean;
+  run: () => void | Promise<void>;
+};
+
+type EditorCommands = Record<EditorCommandId, EditorCommand>;
+
+type MenuEntry =
+  | EditorCommand
+  | {
+      kind: "separator";
+    };
+
 type BoardSetupDraft = {
   type: ScenarioTileSpaceType;
   widthValue: string;
@@ -77,30 +96,43 @@ function render(): void {
 
 function createShell(route: Route): HTMLElement {
   const shell = element("main", "shell");
+  const fileInput = createOpenScenarioInput();
+  const commands = createEditorCommands(fileInput);
   const header = element("header", "topbar");
   const brand = element("div", "brand");
   brand.append(element("span", "brand-mark", "FC"), element("strong", "", "Fieldcraft"));
+  const menuBar = createMenuBar(commands);
 
   const routeSwitch = element("nav", "route-switch");
   routeSwitch.setAttribute("aria-label", "Mode");
   routeSwitch.append(
-    modeButton("Editor", "editor", route),
-    modeButton("Runtime", "runtime", route)
+    modeButton("Editor", "editor", route, () => navigate("editor")),
+    modeButton("Runtime", "runtime", route, launchRuntime, !isTileScenarioSpace(scenario.space))
   );
 
-  header.append(brand, routeSwitch);
-  shell.append(header, route === "runtime" ? createRuntimeView() : createEditorView());
+  header.append(brand, menuBar, routeSwitch);
+  shell.append(
+    header,
+    fileInput,
+    route === "runtime" ? createRuntimeView() : createEditorView(commands)
+  );
   return shell;
 }
 
-function modeButton(label: string, targetRoute: Route, activeRoute: Route): HTMLButtonElement {
-  const button = buttonElement(label, () => navigate(targetRoute));
+function modeButton(
+  label: string,
+  targetRoute: Route,
+  activeRoute: Route,
+  onClick: () => void | Promise<void>,
+  disabled = false
+): HTMLButtonElement {
+  const button = buttonElement(label, onClick, `mode-${targetRoute}`, disabled);
   button.className = targetRoute === activeRoute ? "mode-button active" : "mode-button";
   button.type = "button";
   return button;
 }
 
-function createEditorView(): HTMLElement {
+function createEditorView(commands: EditorCommands): HTMLElement {
   const view = element("section", "workspace");
   view.dataset.view = "editor";
 
@@ -119,7 +151,7 @@ function createEditorView(): HTMLElement {
   if (isTileScenarioSpace(scenario.space)) {
     sidebarItems.push(createMarkerPalette());
   }
-  sidebarItems.push(createActionStack());
+  sidebarItems.push(createActionStack(commands));
   sidebar.append(...sidebarItems);
 
   const boardStage = element("section", "board-stage");
@@ -155,37 +187,7 @@ function createEditorView(): HTMLElement {
   return view;
 }
 
-function createRuntimeView(): HTMLElement {
-  const view = element("section", "workspace runtime-workspace");
-  view.dataset.view = "runtime";
-
-  const sidebar = element("aside", "panel left-panel");
-  sidebar.append(
-    element("p", "eyebrow", "Runtime"),
-    element("h1", "runtime-title", scenario.title),
-    metric("Board", getBoardLabel()),
-    metric("Markers", String(scenario.pieces.length)),
-    buttonElement("Close Runtime", () => navigate("editor"), "close-runtime")
-  );
-
-  const boardStage = element("section", "board-stage runtime-stage");
-  boardStage.append(
-    element("div", "stage-header", "Game Runtime"),
-    scenario.space
-      ? createBoard({
-          readonly: true,
-          mode: "runtime",
-          state: boardViewportStates.runtime
-        })
-      : createBlankBoardMessage()
-  );
-
-  view.append(sidebar, boardStage);
-  return view;
-}
-
-function createActionStack(): HTMLElement {
-  const actions = element("div", "action-stack");
+function createOpenScenarioInput(): HTMLInputElement {
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = "application/json,.json";
@@ -208,23 +210,189 @@ function createActionStack(): HTMLElement {
       });
   });
 
+  return fileInput;
+}
+
+function createEditorCommands(fileInput: HTMLInputElement): EditorCommands {
+  return {
+    new: {
+      id: "new",
+      menuLabel: "New",
+      sidebarLabel: "New Scenario",
+      testId: "new-scenario",
+      enabled: true,
+      run: createNewScenario
+    },
+    open: {
+      id: "open",
+      menuLabel: "Open",
+      sidebarLabel: "Open Scenario",
+      testId: "open-scenario",
+      enabled: true,
+      run: () => openScenario(fileInput)
+    },
+    save: {
+      id: "save",
+      menuLabel: "Save",
+      sidebarLabel: "Save Scenario",
+      testId: "save-scenario",
+      enabled: true,
+      run: saveScenario
+    },
+    "save-as": {
+      id: "save-as",
+      menuLabel: getSaveAsLabel(),
+      sidebarLabel: getSaveAsLabel(),
+      testId: "save-as-scenario",
+      enabled: true,
+      run: saveScenarioAs
+    }
+  };
+}
+
+function createMenuBar(commands: EditorCommands): HTMLElement {
+  const menuBar = element("nav", "app-menu-bar");
+  menuBar.setAttribute("aria-label", "Application menu");
+  menuBar.append(
+    createMenu("File", "file", [
+      commands.new,
+      commands.open,
+      { kind: "separator" },
+      commands.save,
+      commands["save-as"]
+    ])
+  );
+  return menuBar;
+}
+
+function createMenu(label: string, id: string, entries: MenuEntry[]): HTMLElement {
+  const details = document.createElement("details");
+  const summary = element("summary", "app-menu-trigger", label);
+  const popover = element("div", "app-menu-popover");
+
+  details.className = "app-menu";
+  summary.dataset.testid = `menu-${id}`;
+  popover.setAttribute("role", "menu");
+
+  for (const entry of entries) {
+    if ("kind" in entry) {
+      popover.append(element("div", "menu-separator"));
+      continue;
+    }
+
+    popover.append(createMenuCommandButton(entry));
+  }
+
+  details.addEventListener("toggle", () => {
+    if (!details.open) {
+      return;
+    }
+
+    const siblingMenus = details.parentElement?.querySelectorAll<HTMLDetailsElement>(
+      "details.app-menu"
+    );
+    siblingMenus?.forEach((menu) => {
+      if (menu !== details) {
+        menu.open = false;
+      }
+    });
+  });
+  details.addEventListener("focusout", (event) => {
+    const nextFocusedNode = event.relatedTarget;
+    if (nextFocusedNode instanceof Node && details.contains(nextFocusedNode)) {
+      return;
+    }
+
+    details.open = false;
+  });
+
+  details.append(summary, popover);
+  return details;
+}
+
+function createMenuCommandButton(command: EditorCommand): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "menu-item";
+  button.textContent = command.menuLabel;
+  button.disabled = !command.enabled;
+  button.dataset.testid = `menu-${command.testId}`;
+  button.addEventListener("click", () => {
+    const menu = button.closest("details");
+    if (menu instanceof HTMLDetailsElement) {
+      menu.open = false;
+    }
+
+    executeCommand(command);
+  });
+  return button;
+}
+
+function executeCommand(command: EditorCommand): void {
+  if (!command.enabled) {
+    return;
+  }
+
+  const result = command.run();
+  if (result instanceof Promise) {
+    void result.catch((error) => {
+      statusMessage = getErrorMessage(error, "Action failed.");
+      render();
+    });
+  }
+}
+
+function createRuntimeView(): HTMLElement {
+  const view = element("section", "workspace runtime-workspace");
+  view.dataset.view = "runtime";
+
+  const sidebar = element("aside", "panel left-panel");
+  sidebar.append(
+    element("p", "eyebrow", "Runtime"),
+    element("h1", "runtime-title", scenario.title),
+    metric("Board", getBoardLabel()),
+    metric("Markers", String(scenario.pieces.length))
+  );
+
+  const boardStage = element("section", "board-stage runtime-stage");
+  boardStage.append(
+    element("div", "stage-header", "Game Runtime"),
+    scenario.space
+      ? createBoard({
+          readonly: true,
+          mode: "runtime",
+          state: boardViewportStates.runtime
+        })
+      : createBlankBoardMessage()
+  );
+
+  view.append(sidebar, boardStage);
+  return view;
+}
+
+function createActionStack(commands: EditorCommands): HTMLElement {
+  const actions = element("div", "action-stack");
   const status = element("p", "status-line", statusMessage);
   status.title = statusMessage;
 
   actions.append(
-    buttonElement("New Scenario", createNewScenario, "new-scenario"),
-    buttonElement("Open Scenario", () => openScenario(fileInput), "open-scenario"),
-    buttonElement("Save Scenario", saveScenario, "save-scenario"),
-    buttonElement(getSaveAsLabel(), saveScenarioAs, "save-as-scenario"),
-    buttonElement("Launch Runtime", () => {
-      rememberScenario(scenario);
-      navigate("runtime");
-    }, "launch-runtime", !isTileScenarioSpace(scenario.space)),
-    fileInput,
+    commandActionButton(commands.new),
+    commandActionButton(commands.open),
+    commandActionButton(commands.save),
+    commandActionButton(commands["save-as"]),
     status
   );
 
   return actions;
+}
+
+function commandActionButton(command: EditorCommand): HTMLButtonElement {
+  return buttonElement(
+    command.sidebarLabel,
+    command.run,
+    command.testId,
+    !command.enabled
+  );
 }
 
 function createBoard(options: {
@@ -470,6 +638,17 @@ function createNewScenario(): void {
   dirty = false;
   statusMessage = "New blank scenario";
   navigate("editor");
+}
+
+function launchRuntime(): void {
+  if (!isTileScenarioSpace(scenario.space)) {
+    statusMessage = "Create a board before launching runtime.";
+    render();
+    return;
+  }
+
+  rememberScenario(scenario);
+  navigate("runtime");
 }
 
 function createTileGrid(options: {
