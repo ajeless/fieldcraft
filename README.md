@@ -8,7 +8,7 @@ Fieldcraft aims to be an editor-first environment for designing, play-testing, a
 
 ## Status
 
-First vertical slices in progress: a minimal editor can place markers on a canvas-backed square-grid board, pan and zoom the board viewport, save and open human-readable scenario JSON documents in the desktop shell, and launch a read-only runtime view from the current scenario.
+First vertical slices in progress: the editor can create square-grid and pointy-top hex boards, configure basic board scale and styling, place markers through a canvas-backed viewport, pan/zoom/reset the board view, save and open human-readable scenario JSON documents, and launch a read-only runtime view from the current scenario. Free-coordinate board authoring is the next planned space-model slice; see `PLAN.md` for current branch sequencing.
 
 ## Stack
 
@@ -108,7 +108,7 @@ Run the browser smoke test:
 corepack pnpm test:smoke
 ```
 
-The smoke test starts the tracked dev server if needed, places a marker, saves the scenario, launches the runtime, verifies the marker is rendered there, closes the runtime, and stops any server it started.
+The smoke test starts the tracked dev server if needed, exercises browser file/menu commands, creates square and hex boards, verifies canvas-backed rendering, drags palette markers onto the board, checks pan/zoom/reset behavior, saves scenario JSON, launches the runtime, verifies markers render there, and stops any server it started.
 
 Run the Tauri desktop shell for development:
 
@@ -143,3 +143,4 @@ Project docs are intentionally small:
 - `AGENTS.md` covers contribution and agent workflow.
 - `DECISIONS.md` records settled choices.
 - `PLAN.md` tracks mutable plans and open design work.
+- `CLAUDE.md` is a compatibility pointer to `AGENTS.md`.
