@@ -8,6 +8,8 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 Make board authoring credible before expanding into broader editor systems. The branch sequence first stabilizes the canvas viewport and board placement workflow, then asks whether the grid-geometry seam holds up for a second tile geometry before setup UI hardens around square-grid assumptions.
 
+Free-coordinate space is a required project capability, not optional design space. It does not need to interrupt the immediate tile-board authoring slices, but it must be implemented before export and rules work harden around tile-only assumptions.
+
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
@@ -82,50 +84,63 @@ Current manual testing pressure points are captured in the branch sequence below
    - Turn the scenario JSON panel into an editable source view.
    - Validate edits before applying them to the visual editor.
    - Provide a safe way to recover from invalid JSON.
+   - Apply the same supported board-size limits to source edits and opened files, or surface unsupported sizes explicitly instead of letting large maps enter a partially supported state.
 
-12. `codex/asset-library-imports`
+12. `codex/free-coordinate-space-foundation`
+   - Promote free-coordinate space from data-model room to a visible, manually testable editor mode.
+   - Add setup UI for no-grid free-coordinate boards with explicit bounds, authored scale, and background.
+   - Add a free-coordinate renderer and pointer interaction path through the same viewport model without forcing it through tile geometry.
+   - Support simple free-space marker placement and persistence with floating-point positions.
+   - Establish coordinate, distance, and 360-degree bearing helpers for later movement, targeting, and rules work.
+   - Render free-coordinate boards and placed markers in the runtime view.
+   - Keep the scope strict: no plotted orders, movement engine, terrain, large-map virtualization, or full unit/rules model in this branch.
+
+13. `codex/asset-library-imports`
    - Add the first scenario asset model for imported images.
    - Prefer a project/package asset library with stable relative references over base64-heavy scenario JSON.
    - Start with board backgrounds or token images before broader sprite/tile workflows.
    - Treat sprite sheets, board tile images, and tile/sprite placement workflows as follow-on pressure after basic image imports.
 
-13. `codex/export-runtime-spike`
+14. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
+   - Prove export assumptions against both tile-based and free-coordinate scenarios before treating the runtime bundle shape as settled.
    - Keep standalone binary game export out of this branch; prove the browser bundle first.
 
 ## Later Branch Candidates
 
 These are not committed near-term order. They hold open design work that should stay out of `DECISIONS.md` until concrete implementation and manual testing settle it.
 
-14. `codex/scenario-format-hardening`
+15. `codex/scenario-format-hardening`
    - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
    - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
    - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
    - Define the migration contract in this branch; implement actual migration tooling only for format changes that already exist or split it into a follow-up if it grows beyond the scenario-file hardening slice.
 
-15. `codex/rules-expression-spike`
+16. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
+   - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-16. `codex/standalone-runtime-export`
+17. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.
 
-17. `codex/unit-entity-model`
+18. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
-   - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, and editable properties.
+   - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
+   - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-18. `codex/token-styling`
+19. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-19. `codex/rules-authoring-system`
+20. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
@@ -134,9 +149,8 @@ These are not committed near-term order. They hold open design work that should 
 
 Large boards and map styling:
 - support triangle and other tile grids only after square and hex prove the geometry seam
-- support no-grid free-coordinate boards for free-space scenarios
-- add a free-coordinate renderer and pointer interaction branch once a concrete free-space scenario justifies the data-model room from `codex/space-and-scale-setup`
-- define authored scale semantics for tiled and free-coordinate boards, such as one hex equals a distance or one editor unit equals a physical distance
+- free-coordinate boards are required planned work in `codex/free-coordinate-space-foundation`; keep only follow-on refinements here
+- refine authored scale semantics for tiled and free-coordinate boards after the first free-coordinate editor/runtime slice proves the basic model
 - add concise setup help or tooltip hints once labels like distance per tile, scale unit, tile size, and free-coordinate bounds need to carry real authoring meaning
 - add a live board setup preview that updates the board as setup values change, with clear rules for whether placed objects are preserved or cleared; this becomes relevant once board setup is revisited or an inspector allows post-creation setup edits
 - introduce a scenario-level home view only if there is a clear authoring or runtime need to persist view state
