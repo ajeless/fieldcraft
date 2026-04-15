@@ -8,6 +8,7 @@ import {
 } from "./board-viewport";
 import {
   type Scenario,
+  type ScenarioSpaceType,
   createEmptyScenario,
   scenarioToJson
 } from "./scenario";
@@ -265,6 +266,11 @@ function createBoardSetup(): HTMLElement {
       "Create Square Grid",
       () => createSquareGrid(widthInput.input.value, heightInput.input.value),
       "create-square-grid"
+    ),
+    buttonElement(
+      "Create Hex Grid",
+      () => createHexGrid(widthInput.input.value, heightInput.input.value),
+      "create-hex-grid"
     )
   );
 
@@ -320,6 +326,19 @@ function createNewScenario(): void {
 }
 
 function createSquareGrid(widthValue: string, heightValue: string): void {
+  createTileGrid("square-grid", "Square grid", widthValue, heightValue);
+}
+
+function createHexGrid(widthValue: string, heightValue: string): void {
+  createTileGrid("hex-grid", "Hex grid", widthValue, heightValue);
+}
+
+function createTileGrid(
+  type: ScenarioSpaceType,
+  label: string,
+  widthValue: string,
+  heightValue: string
+): void {
   const width = parseGridSize(widthValue);
   const height = parseGridSize(heightValue);
 
@@ -332,7 +351,7 @@ function createSquareGrid(widthValue: string, heightValue: string): void {
   scenario = {
     ...scenario,
     space: {
-      type: "square-grid",
+      type,
       width,
       height
     },
@@ -340,7 +359,7 @@ function createSquareGrid(widthValue: string, heightValue: string): void {
   };
   resetBoardViewportStates();
   dirty = true;
-  statusMessage = `Square grid created: ${width} x ${height}`;
+  statusMessage = `${label} created: ${width} x ${height}`;
   render();
 }
 
@@ -481,7 +500,9 @@ function getBoardLabel(): string {
     return "Not set";
   }
 
-  return `${scenario.space.width} x ${scenario.space.height} square`;
+  const gridType = scenario.space.type === "hex-grid" ? "hex" : "square";
+
+  return `${scenario.space.width} x ${scenario.space.height} ${gridType}`;
 }
 
 function getDocumentState(): string {

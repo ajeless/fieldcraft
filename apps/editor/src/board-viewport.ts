@@ -37,6 +37,7 @@ type GridColors = {
 
 type GridGeometry = {
   key: string;
+  spaceType: ScenarioSpace["type"];
   bounds: Bounds;
   columns: number;
   rows: number;
@@ -61,6 +62,10 @@ type DrawOptions = {
 };
 
 const squareTileSize = 48;
+const hexRadius = 28;
+const hexWidth = Math.sqrt(3) * hexRadius;
+const hexHeight = hexRadius * 2;
+const hexRowStep = hexRadius * 1.5;
 const homePadding = 40;
 const minZoom = 0.04;
 const maxZoom = 5;
@@ -140,7 +145,7 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
   });
 
   toolbar.append(
-    element("span", "board-size-label", `${options.space.width} x ${options.space.height}`),
+    element("span", "board-size-label", getBoardSizeLabel(options.space)),
     zoomOutButton,
     resetButton,
     zoomInButton,
@@ -282,6 +287,8 @@ function createGridGeometry(space: ScenarioSpace): GridGeometry {
   switch (space.type) {
     case "square-grid":
       return createSquareGridGeometry(space);
+    case "hex-grid":
+      return createHexGridGeometry(space);
   }
 }
 
@@ -295,6 +302,7 @@ function createSquareGridGeometry(space: ScenarioSpace): GridGeometry {
 
   return {
     key: `${space.type}:${space.width}x${space.height}`,
+    spaceType: space.type,
     bounds,
     columns: space.width,
     rows: space.height,
@@ -345,6 +353,119 @@ function createSquareGridGeometry(space: ScenarioSpace): GridGeometry {
       return { x, y };
     }
   };
+}
+
+function createHexGridGeometry(space: ScenarioSpace): GridGeometry {
+  const bounds = {
+    x: 0,
+    y: 0,
+    width: space.width * hexWidth + (space.height > 1 ? hexWidth / 2 : 0),
+    height: hexHeight + (space.height - 1) * hexRowStep
+  };
+
+  const tileToWorldCenter = (tile: TileCoordinate): Point => ({
+    x: hexWidth / 2 + tile.x * hexWidth + getHexRowOffset(tile.y),
+    y: hexRadius + tile.y * hexRowStep
+  });
+
+  return {
+    key: `${space.type}:${space.width}x${space.height}`,
+    spaceType: space.type,
+    bounds,
+    columns: space.width,
+    rows: space.height,
+    draw: (context, colors, scale) => {
+      context.fillStyle = colors.boardFill;
+      context.strokeStyle = colors.boardLine;
+      context.lineWidth = Math.max(1 / scale, 0.75);
+      context.lineJoin = "round";
+      context.beginPath();
+
+      for (let row = 0; row < space.height; row += 1) {
+        for (let column = 0; column < space.width; column += 1) {
+          tracePointyHexPath(context, tileToWorldCenter({ x: column, y: row }));
+        }
+      }
+
+      context.fill();
+      context.stroke();
+    },
+    markerRadius: (scale) =>
+      Math.min(hexRadius * 0.56, Math.max(hexRadius * 0.34, 5 / scale)),
+    tileToWorldCenter,
+    worldToTile: (point) => {
+      if (
+        point.x < bounds.x ||
+        point.y < bounds.y ||
+        point.x >= bounds.width ||
+        point.y >= bounds.height
+      ) {
+        return null;
+      }
+
+      const likelyRow = Math.round((point.y - hexRadius) / hexRowStep);
+      for (let row = likelyRow - 1; row <= likelyRow + 1; row += 1) {
+        if (row < 0 || row >= space.height) {
+          continue;
+        }
+
+        const likelyColumn = Math.round(
+          (point.x - hexWidth / 2 - getHexRowOffset(row)) / hexWidth
+        );
+        for (let column = likelyColumn - 1; column <= likelyColumn + 1; column += 1) {
+          if (column < 0 || column >= space.width) {
+            continue;
+          }
+
+          const tile = { x: column, y: row };
+          if (isPointInsidePointyHex(point, tileToWorldCenter(tile))) {
+            return tile;
+          }
+        }
+      }
+
+      return null;
+    }
+  };
+}
+
+function getHexRowOffset(row: number): number {
+  return row % 2 === 1 ? hexWidth / 2 : 0;
+}
+
+function tracePointyHexPath(context: CanvasRenderingContext2D, center: Point): void {
+  for (let side = 0; side < 6; side += 1) {
+    const angle = -Math.PI / 2 + side * (Math.PI / 3);
+    const point = {
+      x: center.x + hexRadius * Math.cos(angle),
+      y: center.y + hexRadius * Math.sin(angle)
+    };
+
+    if (side === 0) {
+      context.moveTo(point.x, point.y);
+    } else {
+      context.lineTo(point.x, point.y);
+    }
+  }
+
+  context.closePath();
+}
+
+function isPointInsidePointyHex(point: Point, center: Point): boolean {
+  const dx = Math.abs(point.x - center.x);
+  const dy = Math.abs(point.y - center.y);
+  const halfWidth = hexWidth / 2;
+  const epsilon = 0.001;
+
+  if (dy > hexRadius + epsilon || dx > halfWidth + epsilon) {
+    return false;
+  }
+
+  if (dy <= hexRadius / 2 + epsilon) {
+    return true;
+  }
+
+  return dx <= (hexRadius - dy) * (hexWidth / hexRadius) + epsilon;
 }
 
 function createPointerController(options: {
@@ -603,6 +724,11 @@ function shouldRecoverViewAfterResize(
     return false;
   }
 
+  const sizeChanged = previousSize.width !== size.width || previousSize.height !== size.height;
+  if (!sizeChanged) {
+    return false;
+  }
+
   const resizedSmaller = size.width < previousSize.width || size.height < previousSize.height;
   if (!resizedSmaller && !recoverHiddenView) {
     return false;
@@ -815,6 +941,7 @@ function updateSurfaceData(
   surface.dataset.viewRotation = String(transform.rotation);
   surface.dataset.viewPanX = String(transform.panX);
   surface.dataset.viewPanY = String(transform.panY);
+  surface.dataset.boardSpaceType = geometry.spaceType;
   surface.dataset.boardWorldWidth = String(geometry.bounds.width);
   surface.dataset.boardWorldHeight = String(geometry.bounds.height);
   surface.dataset.boardColumns = String(geometry.columns);
@@ -844,6 +971,12 @@ function getCanvasLabel(space: ScenarioSpace, readonly: boolean): string {
   const mode = readonly ? "read-only board" : "interactive board";
 
   return `${space.width} by ${space.height} ${space.type} ${mode}`;
+}
+
+function getBoardSizeLabel(space: ScenarioSpace): string {
+  const gridType = space.type === "hex-grid" ? "hex" : "square";
+
+  return `${space.width} x ${space.height} ${gridType}`;
 }
 
 function cssVariable(styles: CSSStyleDeclaration, name: string, fallback: string): string {

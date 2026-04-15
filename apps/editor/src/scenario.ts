@@ -8,8 +8,10 @@ export type ScenarioPiece = {
   y: number;
 };
 
+export type ScenarioSpaceType = "square-grid" | "hex-grid";
+
 export type ScenarioSpace = {
-  type: "square-grid";
+  type: ScenarioSpaceType;
   width: number;
   height: number;
 };
@@ -130,7 +132,7 @@ function parseScenarioSpace(value: unknown): ScenarioSpace | null | false {
   }
 
   if (
-    value.type !== "square-grid" ||
+    !isScenarioSpaceType(value.type) ||
     !isPositiveInteger(value.width) ||
     !isPositiveInteger(value.height)
   ) {
@@ -142,6 +144,10 @@ function parseScenarioSpace(value: unknown): ScenarioSpace | null | false {
     width: value.width,
     height: value.height
   };
+}
+
+function isScenarioSpaceType(value: unknown): value is ScenarioSpaceType {
+  return value === "square-grid" || value === "hex-grid";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

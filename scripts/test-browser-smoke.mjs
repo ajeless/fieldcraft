@@ -40,10 +40,10 @@ try {
     return document.querySelector('[data-testid="marker-count"]')?.textContent === "0";
   });
   await page.waitForSelector('[data-testid="launch-runtime"]:disabled');
-  await page.fill('[data-testid="grid-width-input"]', "64");
-  await page.fill('[data-testid="grid-height-input"]', "64");
-  await page.click('[data-testid="create-square-grid"]');
+  await createGrid(page, "square", 64, 64);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectCanvasHasRenderedBoard(page, "board-canvas");
   const cellCount = await page.locator("[data-cell]").count();
   if (cellCount !== 0) {
     throw new Error("Canvas board should not render empty tiles as DOM controls.");
@@ -113,7 +113,104 @@ try {
   await page.click('[data-testid="close-runtime"]');
   await page.waitForSelector('[data-view="editor"]');
 
-  console.log("Browser smoke passed: editor loaded, scenario saved, runtime launched and closed.");
+  await page.click('[data-testid="new-scenario"]');
+  await page.waitForSelector('[data-testid="launch-runtime"]:disabled');
+  await createGrid(page, "hex", 18, 14);
+  await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
+  await expectSurfaceSpace(page, "board-surface", "hex-grid");
+  await expectCanvasHasRenderedBoard(page, "board-canvas");
+  const hexCellCount = await page.locator("[data-cell]").count();
+  if (hexCellCount !== 0) {
+    throw new Error("Hex canvas board should not render empty tiles as DOM controls.");
+  }
+  const hexHomeTransform = await getTransform(page, "board-surface");
+
+  await clickTile(page, "board-surface", 3, 4);
+  await page.waitForTimeout(100);
+  await expectMarkerCount(page, "0");
+  await placeMarkerFromPalette(page, "board-surface", 9, 7);
+  await expectMarkerCount(page, "1");
+  await waitForMarker(page, "board-surface", "9-7");
+  await placeMarkerFromPalette(page, "board-surface", 0, 0);
+  await expectMarkerCount(page, "2");
+  await waitForMarker(page, "board-surface", "0-0");
+  await placeMarkerFromPalette(page, "board-surface", 17, 13);
+  await expectMarkerCount(page, "3");
+  await waitForMarker(page, "board-surface", "17-13");
+  await placeMarkerFromPalette(page, "board-surface", 0, 13);
+  await expectMarkerCount(page, "4");
+  await waitForMarker(page, "board-surface", "0-13");
+  await panBoardToBottomRightSliver(page, "board-surface");
+  const extremePannedTransform = await getTransform(page, "board-surface");
+  const extremeDropTile = await getVisibleUnmarkedTile(page, "board-surface");
+  const extremeDropMarker = `${extremeDropTile.x}-${extremeDropTile.y}`;
+  await placeMarkerFromPalette(page, "board-surface", extremeDropTile.x, extremeDropTile.y);
+  await expectMarkerCount(page, "5");
+  await waitForMarker(page, "board-surface", extremeDropMarker);
+  const afterExtremeDropTransform = await getTransform(page, "board-surface");
+  if (!transformsAreClose(afterExtremeDropTransform, extremePannedTransform)) {
+    throw new Error("Marker drop reset an extreme panned hex board.");
+  }
+  await page.click('[data-testid="reset-board-view"]');
+  await waitForTransform(page, "board-surface", hexHomeTransform);
+
+  await panSurface(page, "board-surface");
+  const hexPannedTransform = await getTransform(page, "board-surface");
+  if (
+    Math.abs(hexPannedTransform.panX - hexHomeTransform.panX) < 1 &&
+    Math.abs(hexPannedTransform.panY - hexHomeTransform.panY) < 1
+  ) {
+    throw new Error("Ctrl-drag did not pan the hex board.");
+  }
+  await zoomSurface(page, "board-surface");
+  const hexZoomedTransform = await getTransform(page, "board-surface");
+  if (Math.abs(hexZoomedTransform.scale - hexPannedTransform.scale) < 0.001) {
+    throw new Error("Mouse wheel did not zoom the hex board.");
+  }
+  await page.click('[data-testid="reset-board-view"]');
+  await waitForTransform(page, "board-surface", hexHomeTransform);
+  await middlePanSurface(page, "board-surface");
+  const hexMiddlePannedTransform = await getTransform(page, "board-surface");
+  if (
+    Math.abs(hexMiddlePannedTransform.panX - hexHomeTransform.panX) < 1 &&
+    Math.abs(hexMiddlePannedTransform.panY - hexHomeTransform.panY) < 1
+  ) {
+    throw new Error("Middle-button drag did not pan the hex board.");
+  }
+  await page.click('[data-testid="reset-board-view"]');
+  await waitForTransform(page, "board-surface", hexHomeTransform);
+
+  await page.click('[data-testid="save-scenario"]');
+  const savedHexScenario = await page.evaluate(() => window.localStorage.getItem("fieldcraft:last-scenario"));
+  if (!savedHexScenario) {
+    throw new Error("Hex scenario was not saved to browser storage.");
+  }
+  const parsedHexScenario = JSON.parse(savedHexScenario);
+  if (
+    parsedHexScenario.space?.type !== "hex-grid" ||
+    parsedHexScenario.pieces.length !== 5 ||
+    !parsedHexScenario.pieces.some((piece) => piece.id === "marker-9-7") ||
+    !parsedHexScenario.pieces.some((piece) => piece.id === "marker-0-0") ||
+    !parsedHexScenario.pieces.some((piece) => piece.id === "marker-17-13") ||
+    !parsedHexScenario.pieces.some((piece) => piece.id === "marker-0-13") ||
+    !parsedHexScenario.pieces.some((piece) => piece.id === `marker-${extremeDropMarker}`)
+  ) {
+    throw new Error("Saved hex scenario did not preserve dragged markers.");
+  }
+
+  await page.click('[data-testid="launch-runtime"]');
+  await page.waitForSelector('[data-view="runtime"]');
+  await expectSurfaceSpace(page, "runtime-board-surface", "hex-grid");
+  await expectCanvasHasRenderedBoard(page, "runtime-board-canvas");
+  await waitForMarker(page, "runtime-board-surface", "9-7");
+  await waitForMarker(page, "runtime-board-surface", "0-0");
+  await waitForMarker(page, "runtime-board-surface", "17-13");
+  await waitForMarker(page, "runtime-board-surface", "0-13");
+  await waitForMarker(page, "runtime-board-surface", extremeDropMarker);
+  await page.click('[data-testid="close-runtime"]');
+  await page.waitForSelector('[data-view="editor"]');
+
+  console.log("Browser smoke passed: square and hex editor placement, persistence, and runtime checks passed.");
 } finally {
   if (browser) {
     await browser.close();
@@ -142,6 +239,12 @@ function runNodeScript(scriptPath) {
   });
 }
 
+async function createGrid(page, gridType, width, height) {
+  await page.fill('[data-testid="grid-width-input"]', String(width));
+  await page.fill('[data-testid="grid-height-input"]', String(height));
+  await page.click(`[data-testid="create-${gridType}-grid"]`);
+}
+
 async function clickTile(page, surfaceTestId, x, y) {
   await waitForSurfaceReady(page, surfaceTestId);
   const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
@@ -160,6 +263,73 @@ async function placeMarkerFromPalette(page, surfaceTestId, x, y) {
   });
 }
 
+async function panBoardToBottomRightSliver(page, surfaceTestId) {
+  await waitForSurfaceReady(page, surfaceTestId);
+  const target = await page.locator(`[data-testid="${surfaceTestId}"]`).evaluate((surface) => {
+    const rect = surface.getBoundingClientRect();
+
+    return {
+      deltaX: rect.width - 130 - Number(surface.getAttribute("data-view-pan-x")),
+      deltaY: rect.height - 180 - Number(surface.getAttribute("data-view-pan-y"))
+    };
+  });
+
+  await panSurfaceBy(page, surfaceTestId, target.deltaX, target.deltaY);
+}
+
+async function panSurfaceBy(page, surfaceTestId, deltaX, deltaY) {
+  const box = await getSurfaceBox(page, surfaceTestId);
+  const start = {
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2
+  };
+
+  await page.keyboard.down("Control");
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + deltaX, start.y + deltaY, { steps: 10 });
+  await page.mouse.up();
+  await page.keyboard.up("Control");
+}
+
+async function getVisibleUnmarkedTile(page, surfaceTestId) {
+  await waitForSurfaceReady(page, surfaceTestId);
+  const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
+  const board = await surface.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+
+    return {
+      width: rect.width,
+      height: rect.height,
+      columns: Number(element.getAttribute("data-board-columns")),
+      rows: Number(element.getAttribute("data-board-rows")),
+      markedTiles: (element.getAttribute("data-marker-positions") ?? "")
+        .split(" ")
+        .filter(Boolean)
+    };
+  });
+
+  for (let y = board.rows - 1; y >= 0; y -= 1) {
+    for (let x = board.columns - 1; x >= 0; x -= 1) {
+      if (board.markedTiles.includes(`${x}-${y}`)) {
+        continue;
+      }
+
+      const point = await getTileViewportPoint(page, surfaceTestId, x, y);
+      if (
+        point.x >= 14 &&
+        point.y >= 14 &&
+        point.x <= board.width - 14 &&
+        point.y <= board.height - 14
+      ) {
+        return { x, y };
+      }
+    }
+  }
+
+  throw new Error("Could not find a visible unmarked tile for marker placement.");
+}
+
 async function getTileViewportPoint(page, surfaceTestId, x, y) {
   const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
 
@@ -173,6 +343,7 @@ async function getTileViewportPoint(page, surfaceTestId, x, y) {
     const worldHeight = Number(element.dataset.boardWorldHeight);
     const columns = Number(element.dataset.boardColumns);
     const rows = Number(element.dataset.boardRows);
+    const spaceType = element.dataset.boardSpaceType;
 
     if (
       !Number.isFinite(scale) ||
@@ -182,13 +353,26 @@ async function getTileViewportPoint(page, surfaceTestId, x, y) {
       !Number.isFinite(worldWidth) ||
       !Number.isFinite(worldHeight) ||
       !Number.isFinite(columns) ||
-      !Number.isFinite(rows)
+      !Number.isFinite(rows) ||
+      !spaceType
     ) {
       throw new Error("Board viewport did not expose coordinate metadata.");
     }
 
-    const worldX = (tile.x + 0.5) * (worldWidth / columns);
-    const worldY = (tile.y + 0.5) * (worldHeight / rows);
+    let worldX;
+    let worldY;
+    if (spaceType === "hex-grid") {
+      const radius = worldHeight / (rows * 1.5 + 0.5);
+      const hexWidth = Math.sqrt(3) * radius;
+
+      worldX = hexWidth / 2 + tile.x * hexWidth + (tile.y % 2 === 1 ? hexWidth / 2 : 0);
+      worldY = radius + tile.y * radius * 1.5;
+    } else if (spaceType === "square-grid") {
+      worldX = (tile.x + 0.5) * (worldWidth / columns);
+      worldY = (tile.y + 0.5) * (worldHeight / rows);
+    } else {
+      throw new Error(`Unsupported board space type: ${spaceType}`);
+    }
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
 
@@ -197,6 +381,57 @@ async function getTileViewportPoint(page, surfaceTestId, x, y) {
       y: worldX * scale * sin + worldY * scale * cos + panY
     };
   }, { x, y });
+}
+
+async function expectSurfaceSpace(page, surfaceTestId, expectedType) {
+  await page.waitForFunction(
+    ({ testId, type }) => {
+      return document.querySelector(`[data-testid="${testId}"]`)?.getAttribute("data-board-space-type") === type;
+    },
+    {
+      testId: surfaceTestId,
+      type: expectedType
+    }
+  );
+}
+
+async function expectCanvasHasRenderedBoard(page, canvasTestId) {
+  await page.waitForFunction((testId) => {
+    const canvas = document.querySelector(`[data-testid="${testId}"]`);
+    if (!(canvas instanceof HTMLCanvasElement) || canvas.width <= 0 || canvas.height <= 0) {
+      return false;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return false;
+    }
+
+    const colors = new Set();
+    const samples = 16;
+    for (let yIndex = 0; yIndex < samples; yIndex += 1) {
+      const y = Math.min(
+        canvas.height - 1,
+        Math.max(0, Math.floor(((yIndex + 0.5) / samples) * canvas.height))
+      );
+      for (let xIndex = 0; xIndex < samples; xIndex += 1) {
+        const x = Math.min(
+          canvas.width - 1,
+          Math.max(0, Math.floor(((xIndex + 0.5) / samples) * canvas.width))
+        );
+        const [red, green, blue, alpha] = context.getImageData(x, y, 1, 1).data;
+
+        if (alpha > 0) {
+          colors.add(`${red}-${green}-${blue}`);
+        }
+        if (colors.size > 1) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }, canvasTestId);
 }
 
 async function expectMarkerCount(page, count) {
@@ -272,6 +507,18 @@ async function waitForTransform(page, surfaceTestId, expected) {
   );
 }
 
+function transformsAreClose(actual, expected) {
+  return (
+    closeTo(actual.scale, expected.scale) &&
+    closeTo(actual.panX, expected.panX) &&
+    closeTo(actual.panY, expected.panY)
+  );
+
+  function closeTo(value, target) {
+    return Number.isFinite(value) && Math.abs(value - target) < 0.01;
+  }
+}
+
 async function getSurfaceBox(page, surfaceTestId) {
   const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
   const box = await surface.boundingBox();
@@ -318,6 +565,7 @@ async function waitForSurfaceReady(page, surfaceTestId) {
       hasFiniteAttribute(surface, "data-view-rotation") &&
       hasFiniteAttribute(surface, "data-view-pan-x") &&
       hasFiniteAttribute(surface, "data-view-pan-y") &&
+      hasKnownSpaceType(surface) &&
       hasFiniteAttribute(surface, "data-board-world-width") &&
       hasFiniteAttribute(surface, "data-board-world-height") &&
       hasFiniteAttribute(surface, "data-board-columns") &&
@@ -328,6 +576,12 @@ async function waitForSurfaceReady(page, surfaceTestId) {
       const value = element?.getAttribute(name);
 
       return value !== null && Number.isFinite(Number(value));
+    }
+
+    function hasKnownSpaceType(element) {
+      const value = element?.getAttribute("data-board-space-type");
+
+      return value === "square-grid" || value === "hex-grid";
     }
   }, surfaceTestId);
 }
