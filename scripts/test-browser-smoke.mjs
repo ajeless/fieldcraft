@@ -36,6 +36,12 @@ try {
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
   await page.waitForSelector('[data-view="editor"]');
+  await page.waitForFunction(() => {
+    return document.querySelector('[data-testid="marker-count"]')?.textContent === "0";
+  });
+  await page.waitForSelector('[data-testid="launch-runtime"]:disabled');
+  await page.click('[data-testid="create-square-grid"]');
+  await page.waitForSelector('[data-cell="2-3"]');
   await page.click('[data-cell="2-3"]');
   await page.waitForFunction(() => {
     return document.querySelector('[data-testid="marker-count"]')?.textContent === "1";

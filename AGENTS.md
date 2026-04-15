@@ -44,6 +44,7 @@ Use the editor to build the editor. Once the tool can author scenarios at all, e
 
 Prefer short-lived, descriptively named branches for ideas, comparisons, and spikes.
 Name branches for the question or capability they explore, not by phase or sequence.
+Start feature, fix, and exploratory coding work on a branch unless the user explicitly asks to work on `main`.
 
 Keep `main` as the current best known runnable baseline.
 Do not merge into `main` until something has been manually tested and shown useful.

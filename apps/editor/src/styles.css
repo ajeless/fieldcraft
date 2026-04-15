@@ -202,6 +202,12 @@ button:disabled {
   background: var(--accent-dark);
 }
 
+.action-button:disabled,
+.action-button:disabled:hover {
+  background: #d7dee4;
+  color: var(--muted);
+}
+
 .action-button:focus-visible,
 .mode-button:focus-visible,
 .board-cell:focus-visible,
@@ -251,6 +257,36 @@ button:disabled {
   overflow: hidden;
   background: var(--board-line);
   box-shadow: 0 22px 50px rgba(23, 32, 42, 0.14);
+}
+
+.board-setup,
+.blank-board {
+  width: min(100%, 520px);
+  min-height: 320px;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  place-self: start center;
+  border: 2px dashed var(--board-line);
+  border-radius: 8px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.board-setup .action-button {
+  margin-top: 4px;
+}
+
+.blank-board {
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.blank-board h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.4rem;
 }
 
 .board-cell {

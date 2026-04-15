@@ -5,11 +5,11 @@ import {
 } from "./scenario";
 import {
   type ScenarioStorageResult,
+  clearCurrentFilePath,
   getCurrentFilePath,
   getFileLabel,
   getSaveAsLabel,
   getStorageModeLabel,
-  loadRememberedScenario,
   openBrowserScenarioFile,
   openScenarioFile,
   rememberScenario,
@@ -26,7 +26,7 @@ if (!appRoot) {
 }
 
 const app = appRoot;
-let scenario = loadRememberedScenario();
+let scenario = createEmptyScenario();
 let dirty = false;
 let statusMessage = "Ready";
 
@@ -76,7 +76,7 @@ function createEditorView(): HTMLElement {
       dirty = true;
       render();
     }),
-    metric("Grid", `${scenario.space.width} x ${scenario.space.height}`),
+    metric("Board", getBoardLabel()),
     metric("Markers", String(scenario.pieces.length), "marker-count"),
     metric("File", getFileLabel(), "current-file"),
     createActionStack()
@@ -84,12 +84,14 @@ function createEditorView(): HTMLElement {
 
   const boardStage = element("section", "board-stage");
   boardStage.append(
-    element("div", "stage-header", "Editor Board"),
-    createBoard({
-      readonly: false,
-      cellAttribute: "cell",
-      onCellClick: toggleMarker
-    })
+    element("div", "stage-header", scenario.space ? "Editor Board" : "Board Setup"),
+    scenario.space
+      ? createBoard({
+          readonly: false,
+          cellAttribute: "cell",
+          onCellClick: toggleMarker
+        })
+      : createBoardSetup()
   );
 
   const inspector = element("aside", "panel right-panel");
@@ -99,7 +101,7 @@ function createEditorView(): HTMLElement {
   const currentFilePath = getCurrentFilePath();
   inspector.append(
     element("p", "eyebrow", "Saved Game"),
-    metric("State", dirty ? "Unsaved changes" : "Saved"),
+    metric("State", getDocumentState()),
     metric("Mode", getStorageModeLabel()),
     metric("Last Save", savedAt)
   );
@@ -120,7 +122,7 @@ function createRuntimeView(): HTMLElement {
   sidebar.append(
     element("p", "eyebrow", "Runtime"),
     element("h1", "runtime-title", scenario.title),
-    metric("Grid", `${scenario.space.width} x ${scenario.space.height}`),
+    metric("Board", getBoardLabel()),
     metric("Markers", String(scenario.pieces.length)),
     buttonElement("Close Runtime", () => navigate("editor"), "close-runtime")
   );
@@ -128,10 +130,12 @@ function createRuntimeView(): HTMLElement {
   const boardStage = element("section", "board-stage runtime-stage");
   boardStage.append(
     element("div", "stage-header", "Game Runtime"),
-    createBoard({
-      readonly: true,
-      cellAttribute: "runtimeCell"
-    })
+    scenario.space
+      ? createBoard({
+          readonly: true,
+          cellAttribute: "runtimeCell"
+        })
+      : createBlankBoardMessage()
   );
 
   view.append(sidebar, boardStage);
@@ -163,13 +167,14 @@ function createActionStack(): HTMLElement {
   });
 
   actions.append(
+    buttonElement("New Scenario", createNewScenario, "new-scenario"),
     buttonElement("Open Scenario", () => openScenario(fileInput), "open-scenario"),
     buttonElement("Save Scenario", saveScenario, "save-scenario"),
     buttonElement(getSaveAsLabel(), saveScenarioAs, "save-as-scenario"),
     buttonElement("Launch Runtime", () => {
       rememberScenario(scenario);
       navigate("runtime");
-    }, "launch-runtime"),
+    }, "launch-runtime", !scenario.space),
     fileInput,
     element("p", "status-line", statusMessage)
   );
@@ -182,14 +187,19 @@ function createBoard(options: {
   cellAttribute: "cell" | "runtimeCell";
   onCellClick?: (x: number, y: number) => void;
 }): HTMLElement {
+  const space = scenario.space;
+  if (!space) {
+    return createBlankBoardMessage();
+  }
+
   const board = element("div", "board");
-  board.style.setProperty("--grid-width", String(scenario.space.width));
-  board.style.setProperty("--grid-height", String(scenario.space.height));
+  board.style.setProperty("--grid-width", String(space.width));
+  board.style.setProperty("--grid-height", String(space.height));
 
   const piecesByPosition = new Map(scenario.pieces.map((piece) => [`${piece.x},${piece.y}`, piece]));
 
-  for (let y = 0; y < scenario.space.height; y += 1) {
-    for (let x = 0; x < scenario.space.width; x += 1) {
+  for (let y = 0; y < space.height; y += 1) {
+    for (let x = 0; x < space.width; x += 1) {
       const cell = document.createElement("button");
       const piece = piecesByPosition.get(`${x},${y}`);
       cell.type = "button";
@@ -215,7 +225,39 @@ function createBoard(options: {
   return board;
 }
 
+function createBoardSetup(): HTMLElement {
+  const setup = element("section", "board-setup");
+  const widthInput = numberInput("Columns", "8", "grid-width-input");
+  const heightInput = numberInput("Rows", "8", "grid-height-input");
+
+  setup.append(
+    element("p", "eyebrow", "New Board"),
+    widthInput.label,
+    heightInput.label,
+    buttonElement(
+      "Create Square Grid",
+      () => createSquareGrid(widthInput.input.value, heightInput.input.value),
+      "create-square-grid"
+    )
+  );
+
+  return setup;
+}
+
+function createBlankBoardMessage(): HTMLElement {
+  const blank = element("section", "blank-board");
+  blank.append(
+    element("p", "eyebrow", "No Board"),
+    element("h2", "", "Blank scenario")
+  );
+  return blank;
+}
+
 function toggleMarker(x: number, y: number): void {
+  if (!scenario.space) {
+    return;
+  }
+
   const existing = scenario.pieces.find((piece) => piece.x === x && piece.y === y);
   const pieces = existing
     ? scenario.pieces.filter((piece) => piece.id !== existing.id)
@@ -236,6 +278,38 @@ function toggleMarker(x: number, y: number): void {
   };
   dirty = true;
   statusMessage = existing ? "Marker removed" : "Marker placed";
+  render();
+}
+
+function createNewScenario(): void {
+  scenario = createEmptyScenario();
+  clearCurrentFilePath();
+  dirty = false;
+  statusMessage = "New blank scenario";
+  navigate("editor");
+}
+
+function createSquareGrid(widthValue: string, heightValue: string): void {
+  const width = parseGridSize(widthValue);
+  const height = parseGridSize(heightValue);
+
+  if (!width || !height) {
+    statusMessage = "Grid size must be between 1 and 64";
+    render();
+    return;
+  }
+
+  scenario = {
+    ...scenario,
+    space: {
+      type: "square-grid",
+      width,
+      height
+    },
+    pieces: []
+  };
+  dirty = true;
+  statusMessage = `Square grid created: ${width} x ${height}`;
   render();
 }
 
@@ -308,6 +382,23 @@ function labeledInput(
   return label;
 }
 
+function numberInput(labelText: string, value: string, testId: string): {
+  label: HTMLElement;
+  input: HTMLInputElement;
+} {
+  const label = element("label", "field-label");
+  const text = element("span", "", labelText);
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "1";
+  input.max = "64";
+  input.step = "1";
+  input.value = value;
+  input.dataset.testid = testId;
+  label.append(text, input);
+  return { label, input };
+}
+
 function metric(label: string, value: string, testId?: string): HTMLElement {
   const item = element("div", "metric");
   const valueElement = element("strong", "", value);
@@ -321,12 +412,14 @@ function metric(label: string, value: string, testId?: string): HTMLElement {
 function buttonElement(
   label: string,
   onClick: () => void | Promise<void>,
-  testId?: string
+  testId?: string,
+  disabled = false
 ): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "action-button";
   button.textContent = label;
+  button.disabled = disabled;
   button.addEventListener("click", () => {
     const result = onClick();
     if (result instanceof Promise) {
@@ -340,6 +433,36 @@ function buttonElement(
     button.dataset.testid = testId;
   }
   return button;
+}
+
+function getBoardLabel(): string {
+  if (!scenario.space) {
+    return "Not set";
+  }
+
+  return `${scenario.space.width} x ${scenario.space.height} square`;
+}
+
+function getDocumentState(): string {
+  if (dirty) {
+    return "Unsaved changes";
+  }
+
+  if (getCurrentFilePath() || scenario.metadata.savedAt) {
+    return "Saved";
+  }
+
+  return "New scenario";
+}
+
+function parseGridSize(value: string): number | null {
+  const size = Number.parseInt(value, 10);
+
+  if (!Number.isInteger(size) || size < 1 || size > 64) {
+    return null;
+  }
+
+  return size;
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(

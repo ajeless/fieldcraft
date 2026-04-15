@@ -22,6 +22,8 @@ Tile-based space (hex, quad, and potentially other tessellations with integer co
 
 A scenario declares which space model it uses. The editor, engine, and rules language adapt accordingly.
 
+Draft scenarios in the editor may temporarily have no configured space model while the author is setting up the board. Once a scenario is ready to play-test or export, it declares exactly one space model.
+
 Rationale: these models differ in almost every operation — position representation, movement calculation, range, adjacency. A unified interface would either be uselessly abstract or would force one model's assumptions onto the other.
 
 ## 005 — Plotted simultaneous turns as universal time model

@@ -3,7 +3,6 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   type Scenario,
-  createEmptyScenario,
   parseScenario,
   prepareScenarioForSave,
   scenarioStorageKey,
@@ -33,12 +32,16 @@ export function getCurrentFilePath(): string | null {
   return currentFilePath;
 }
 
+export function clearCurrentFilePath(): void {
+  currentFilePath = null;
+}
+
 export function getFileLabel(): string {
   if (currentFilePath) {
     return getFileName(currentFilePath);
   }
 
-  return isTauri() ? "Unsaved" : "Browser storage";
+  return "Unsaved";
 }
 
 export function getSaveAsLabel(): string {
@@ -47,20 +50,6 @@ export function getSaveAsLabel(): string {
 
 export function rememberScenario(scenario: Scenario): void {
   window.localStorage.setItem(scenarioStorageKey, scenarioToJson(scenario));
-}
-
-export function loadRememberedScenario(): Scenario {
-  const stored = window.localStorage.getItem(scenarioStorageKey);
-
-  if (!stored) {
-    return createEmptyScenario();
-  }
-
-  try {
-    return parseScenario(stored);
-  } catch {
-    return createEmptyScenario();
-  }
 }
 
 export async function openScenarioFile(
