@@ -116,6 +116,8 @@ Large boards and map styling:
 - support no-grid free-coordinate boards for free-space scenarios
 - add a free-coordinate renderer and pointer interaction branch once a concrete free-space scenario justifies the data-model room from `codex/space-and-scale-setup`
 - define authored scale semantics for tiled and free-coordinate boards, such as one hex equals a distance or one editor unit equals a physical distance
+- add concise setup help or tooltip hints once labels like distance per tile, scale unit, tile size, and free-coordinate bounds need to carry real authoring meaning
+- consider a live board setup workflow where changing setup values previews or updates the board immediately, with clear rules for preserving or clearing placed objects
 - introduce a scenario-level home view only if there is a clear authoring or runtime need to persist view state
 - test large-map viewport performance under real authoring pressure, including draw cost, culling, and whether any lazy rendering or tile virtualization is needed
 - add terrain concepts only after placement and setup are credible: tile properties, terrain types, movement-cost hooks, and visual terrain styling
@@ -130,15 +132,18 @@ Assets and author media:
 Command model:
 - define a command registry before broader menu and layout work need duplicated command wiring
 - make commands addressable from the in-app menu bar, keyboard shortcuts, and later native Tauri menus
+- consider right-click context menus for board objects and empty board space once selection, deletion, and object inspectors exist
 - keep command metadata small at first: id, label, enabled state, handler, and shortcut hints only when needed
 
 Editor layout customization:
+- handle clipped side-panel content gracefully before deeper layout customization, including long file paths, saved filenames, status lines, and dense metrics
 - defer draggable/dockable panels until the main panel set stabilizes
 - design toward a small container/widget system rather than one-off panel code
 - likely concepts: panel registry, layout containers, persisted layouts, and reset-to-default
 - avoid turning this into a plugin system until at least two real editor workflows need it
 
 Board view and orientation:
+- consider editable exact zoom entry, such as making the zoom label/control accept a percentage, after the basic pan/zoom/reset controls are stable
 - add board view rotation controls only after pan, zoom, reset, and placement remain trustworthy across board types
 - distinguish rotating the camera/view from authored board orientation, such as pointy-top versus flat-top hexes
 - consider snap angles and persisted view/orientation state only when manual testing shows authoring value

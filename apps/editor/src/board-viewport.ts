@@ -1,4 +1,4 @@
-import type { ScenarioPiece, ScenarioSpace } from "./scenario";
+import type { ScenarioPiece, ScenarioTileSpace } from "./scenario";
 
 type Point = {
   x: number;
@@ -33,11 +33,12 @@ export type BoardViewportState = {
 type GridColors = {
   boardFill: string;
   boardLine: string;
+  boardLineOpacity: number;
 };
 
 type GridGeometry = {
   key: string;
-  spaceType: ScenarioSpace["type"];
+  spaceType: ScenarioTileSpace["type"];
   bounds: Bounds;
   columns: number;
   rows: number;
@@ -50,7 +51,7 @@ type GridGeometry = {
 type BoardViewportOptions = {
   mode: "editor" | "runtime";
   readonly: boolean;
-  space: ScenarioSpace;
+  space: ScenarioTileSpace;
   pieces: ScenarioPiece[];
   state: BoardViewportState;
   onTileClick?: (x: number, y: number) => void;
@@ -61,11 +62,6 @@ type DrawOptions = {
   recoverHiddenView?: boolean;
 };
 
-const squareTileSize = 48;
-const hexRadius = 28;
-const hexWidth = Math.sqrt(3) * hexRadius;
-const hexHeight = hexRadius * 2;
-const hexRowStep = hexRadius * 1.5;
 const homePadding = 40;
 const minZoom = 0.04;
 const maxZoom = 5;
@@ -260,8 +256,11 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
 
     const styles = getComputedStyle(viewport);
     const colors = {
-      boardFill: cssVariable(styles, "--board-fill", "#f9fbfb"),
-      boardLine: cssVariable(styles, "--board-line", "#aeb8c1")
+      boardFill:
+        options.space.background.color || cssVariable(styles, "--board-fill", "#f9fbfb"),
+      boardLine:
+        options.space.grid.lineColor || cssVariable(styles, "--board-line", "#aeb8c1"),
+      boardLineOpacity: options.space.grid.lineOpacity
     };
     const markerFill = cssVariable(styles, "--marker", "#d24b3f");
     const markerRing = cssVariable(styles, "--marker-ring", "#61221e");
@@ -283,7 +282,7 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
   }
 }
 
-function createGridGeometry(space: ScenarioSpace): GridGeometry {
+function createGridGeometry(space: ScenarioTileSpace): GridGeometry {
   switch (space.type) {
     case "square-grid":
       return createSquareGridGeometry(space);
@@ -292,12 +291,13 @@ function createGridGeometry(space: ScenarioSpace): GridGeometry {
   }
 }
 
-function createSquareGridGeometry(space: ScenarioSpace): GridGeometry {
+function createSquareGridGeometry(space: ScenarioTileSpace): GridGeometry {
+  const tileSize = space.tileSize;
   const bounds = {
     x: 0,
     y: 0,
-    width: space.width * squareTileSize,
-    height: space.height * squareTileSize
+    width: space.width * tileSize,
+    height: space.height * tileSize
   };
 
   return {
@@ -309,18 +309,18 @@ function createSquareGridGeometry(space: ScenarioSpace): GridGeometry {
     draw: (context, colors, scale) => {
       context.fillStyle = colors.boardFill;
       context.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
-      context.strokeStyle = colors.boardLine;
+      context.strokeStyle = colorWithOpacity(colors.boardLine, colors.boardLineOpacity);
       context.lineWidth = Math.max(1 / scale, 0.75);
       context.beginPath();
 
       for (let column = 0; column <= space.width; column += 1) {
-        const x = column * squareTileSize;
+        const x = column * tileSize;
         context.moveTo(x, 0);
         context.lineTo(x, bounds.height);
       }
 
       for (let row = 0; row <= space.height; row += 1) {
-        const y = row * squareTileSize;
+        const y = row * tileSize;
         context.moveTo(0, y);
         context.lineTo(bounds.width, y);
       }
@@ -328,10 +328,10 @@ function createSquareGridGeometry(space: ScenarioSpace): GridGeometry {
       context.stroke();
     },
     markerRadius: (scale) =>
-      Math.min(squareTileSize * 0.42, Math.max(squareTileSize * 0.24, 5 / scale)),
+      Math.min(tileSize * 0.42, Math.max(tileSize * 0.24, 5 / scale)),
     tileToWorldCenter: (tile) => ({
-      x: (tile.x + 0.5) * squareTileSize,
-      y: (tile.y + 0.5) * squareTileSize
+      x: (tile.x + 0.5) * tileSize,
+      y: (tile.y + 0.5) * tileSize
     }),
     worldToTile: (point) => {
       if (
@@ -343,8 +343,8 @@ function createSquareGridGeometry(space: ScenarioSpace): GridGeometry {
         return null;
       }
 
-      const x = Math.floor(point.x / squareTileSize);
-      const y = Math.floor(point.y / squareTileSize);
+      const x = Math.floor(point.x / tileSize);
+      const y = Math.floor(point.y / tileSize);
 
       if (x < 0 || y < 0 || x >= space.width || y >= space.height) {
         return null;
@@ -355,7 +355,11 @@ function createSquareGridGeometry(space: ScenarioSpace): GridGeometry {
   };
 }
 
-function createHexGridGeometry(space: ScenarioSpace): GridGeometry {
+function createHexGridGeometry(space: ScenarioTileSpace): GridGeometry {
+  const hexRadius = space.tileSize;
+  const hexWidth = Math.sqrt(3) * hexRadius;
+  const hexHeight = hexRadius * 2;
+  const hexRowStep = hexRadius * 1.5;
   const bounds = {
     x: 0,
     y: 0,
@@ -364,7 +368,7 @@ function createHexGridGeometry(space: ScenarioSpace): GridGeometry {
   };
 
   const tileToWorldCenter = (tile: TileCoordinate): Point => ({
-    x: hexWidth / 2 + tile.x * hexWidth + getHexRowOffset(tile.y),
+    x: hexWidth / 2 + tile.x * hexWidth + getHexRowOffset(tile.y, hexWidth),
     y: hexRadius + tile.y * hexRowStep
   });
 
@@ -376,14 +380,14 @@ function createHexGridGeometry(space: ScenarioSpace): GridGeometry {
     rows: space.height,
     draw: (context, colors, scale) => {
       context.fillStyle = colors.boardFill;
-      context.strokeStyle = colors.boardLine;
+      context.strokeStyle = colorWithOpacity(colors.boardLine, colors.boardLineOpacity);
       context.lineWidth = Math.max(1 / scale, 0.75);
       context.lineJoin = "round";
       context.beginPath();
 
       for (let row = 0; row < space.height; row += 1) {
         for (let column = 0; column < space.width; column += 1) {
-          tracePointyHexPath(context, tileToWorldCenter({ x: column, y: row }));
+          tracePointyHexPath(context, tileToWorldCenter({ x: column, y: row }), hexRadius);
         }
       }
 
@@ -410,7 +414,7 @@ function createHexGridGeometry(space: ScenarioSpace): GridGeometry {
         }
 
         const likelyColumn = Math.round(
-          (point.x - hexWidth / 2 - getHexRowOffset(row)) / hexWidth
+          (point.x - hexWidth / 2 - getHexRowOffset(row, hexWidth)) / hexWidth
         );
         for (let column = likelyColumn - 1; column <= likelyColumn + 1; column += 1) {
           if (column < 0 || column >= space.width) {
@@ -418,7 +422,7 @@ function createHexGridGeometry(space: ScenarioSpace): GridGeometry {
           }
 
           const tile = { x: column, y: row };
-          if (isPointInsidePointyHex(point, tileToWorldCenter(tile))) {
+          if (isPointInsidePointyHex(point, tileToWorldCenter(tile), hexRadius, hexWidth)) {
             return tile;
           }
         }
@@ -429,11 +433,15 @@ function createHexGridGeometry(space: ScenarioSpace): GridGeometry {
   };
 }
 
-function getHexRowOffset(row: number): number {
+function getHexRowOffset(row: number, hexWidth: number): number {
   return row % 2 === 1 ? hexWidth / 2 : 0;
 }
 
-function tracePointyHexPath(context: CanvasRenderingContext2D, center: Point): void {
+function tracePointyHexPath(
+  context: CanvasRenderingContext2D,
+  center: Point,
+  hexRadius: number
+): void {
   for (let side = 0; side < 6; side += 1) {
     const angle = -Math.PI / 2 + side * (Math.PI / 3);
     const point = {
@@ -451,7 +459,12 @@ function tracePointyHexPath(context: CanvasRenderingContext2D, center: Point): v
   context.closePath();
 }
 
-function isPointInsidePointyHex(point: Point, center: Point): boolean {
+function isPointInsidePointyHex(
+  point: Point,
+  center: Point,
+  hexRadius: number,
+  hexWidth: number
+): boolean {
   const dx = Math.abs(point.x - center.x);
   const dy = Math.abs(point.y - center.y);
   const halfWidth = hexWidth / 2;
@@ -967,20 +980,34 @@ function viewportButton(label: string, ariaLabel: string, testId: string): HTMLB
   return button;
 }
 
-function getCanvasLabel(space: ScenarioSpace, readonly: boolean): string {
+function getCanvasLabel(space: ScenarioTileSpace, readonly: boolean): string {
   const mode = readonly ? "read-only board" : "interactive board";
 
   return `${space.width} by ${space.height} ${space.type} ${mode}`;
 }
 
-function getBoardSizeLabel(space: ScenarioSpace): string {
+function getBoardSizeLabel(space: ScenarioTileSpace): string {
   const gridType = space.type === "hex-grid" ? "hex" : "square";
 
-  return `${space.width} x ${space.height} ${gridType}`;
+  return `${space.width} x ${space.height} ${gridType}, ${space.tileSize}px`;
 }
 
 function cssVariable(styles: CSSStyleDeclaration, name: string, fallback: string): string {
   return styles.getPropertyValue(name).trim() || fallback;
+}
+
+function colorWithOpacity(color: string, opacity: number): string {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(color);
+  if (!match) {
+    return color;
+  }
+
+  const hex = match[1];
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${clamp(opacity, 0, 1)})`;
 }
 
 function clamp(value: number, min: number, max: number): number {

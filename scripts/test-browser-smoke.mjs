@@ -40,7 +40,15 @@ try {
     return document.querySelector('[data-testid="marker-count"]')?.textContent === "0";
   });
   await page.waitForSelector('[data-testid="launch-runtime"]:disabled');
-  await createGrid(page, "square", 64, 64);
+  await expectInvalidSetupPreservesDraft(page);
+  await createGrid(page, "square", 64, 64, {
+    tileSize: 48,
+    scaleDistance: 5,
+    scaleUnit: "km",
+    gridLineColor: "#405f73",
+    gridLineOpacity: 0.55,
+    backgroundColor: "#f4faf7"
+  });
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await expectCanvasHasRenderedBoard(page, "board-canvas");
@@ -96,6 +104,17 @@ try {
     throw new Error("Scenario was not saved to browser storage.");
   }
   const parsedScenario = JSON.parse(savedScenario);
+  expectTileSpaceSetup(parsedScenario.space, {
+    type: "square-grid",
+    width: 64,
+    height: 64,
+    tileSize: 48,
+    distancePerTile: 5,
+    scaleUnit: "km",
+    gridLineColor: "#405f73",
+    gridLineOpacity: 0.55,
+    backgroundColor: "#f4faf7"
+  });
   if (
     parsedScenario.pieces.length !== 3 ||
     !parsedScenario.pieces.some((piece) => piece.id === "marker-32-32") ||
@@ -186,6 +205,17 @@ try {
     throw new Error("Hex scenario was not saved to browser storage.");
   }
   const parsedHexScenario = JSON.parse(savedHexScenario);
+  expectTileSpaceSetup(parsedHexScenario.space, {
+    type: "hex-grid",
+    width: 18,
+    height: 14,
+    tileSize: 28,
+    distancePerTile: 1,
+    scaleUnit: "tile",
+    gridLineColor: "#aeb8c1",
+    gridLineOpacity: 1,
+    backgroundColor: "#f9fbfb"
+  });
   if (
     parsedHexScenario.space?.type !== "hex-grid" ||
     parsedHexScenario.pieces.length !== 5 ||
@@ -239,10 +269,83 @@ function runNodeScript(scriptPath) {
   });
 }
 
-async function createGrid(page, gridType, width, height) {
+async function createGrid(page, gridType, width, height, options = {}) {
+  await page.check(`[data-testid="space-${gridType}-grid"]`);
   await page.fill('[data-testid="grid-width-input"]', String(width));
   await page.fill('[data-testid="grid-height-input"]', String(height));
-  await page.click(`[data-testid="create-${gridType}-grid"]`);
+  if (options.tileSize !== undefined) {
+    await page.fill('[data-testid="tile-size-input"]', String(options.tileSize));
+  }
+  if (options.scaleDistance !== undefined) {
+    await page.fill('[data-testid="scale-distance-input"]', String(options.scaleDistance));
+  }
+  if (options.scaleUnit !== undefined) {
+    await page.fill('[data-testid="scale-unit-input"]', String(options.scaleUnit));
+  }
+  if (options.gridLineColor !== undefined) {
+    await setInputValue(page, '[data-testid="grid-line-color-input"]', options.gridLineColor);
+  }
+  if (options.gridLineOpacity !== undefined) {
+    await page.fill('[data-testid="grid-line-opacity-input"]', String(options.gridLineOpacity));
+  }
+  if (options.backgroundColor !== undefined) {
+    await setInputValue(page, '[data-testid="board-background-input"]', options.backgroundColor);
+  }
+  await page.click('[data-testid="create-board"]');
+}
+
+async function expectInvalidSetupPreservesDraft(page) {
+  await page.check('[data-testid="space-hex-grid"]');
+  await page.fill('[data-testid="grid-width-input"]', "18");
+  await page.fill('[data-testid="grid-height-input"]', "14");
+  await page.fill('[data-testid="scale-unit-input"]', "km");
+  await page.fill('[data-testid="tile-size-input"]', "");
+  await page.click('[data-testid="create-board"]');
+  await page.waitForFunction(() => {
+    return document.querySelector(".status-line")?.textContent === "Board setup values are out of range";
+  });
+  if (!(await page.locator('[data-testid="space-hex-grid"]').isChecked())) {
+    throw new Error("Invalid setup reset the selected hex grid choice.");
+  }
+  await expectInputValue(page, '[data-testid="grid-width-input"]', "18");
+  await expectInputValue(page, '[data-testid="grid-height-input"]', "14");
+  await expectInputValue(page, '[data-testid="scale-unit-input"]', "km");
+  await expectInputValue(page, '[data-testid="tile-size-input"]', "");
+}
+
+async function expectInputValue(page, selector, expectedValue) {
+  const value = await page.locator(selector).inputValue();
+  if (value !== expectedValue) {
+    throw new Error(`${selector} was reset to ${JSON.stringify(value)}.`);
+  }
+}
+
+async function setInputValue(page, selector, value) {
+  await page.locator(selector).evaluate((input, nextValue) => {
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error("Target is not an input.");
+    }
+
+    input.value = nextValue;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, value);
+}
+
+function expectTileSpaceSetup(space, expected) {
+  if (
+    space?.type !== expected.type ||
+    space.width !== expected.width ||
+    space.height !== expected.height ||
+    space.tileSize !== expected.tileSize ||
+    space.scale?.distancePerTile !== expected.distancePerTile ||
+    space.scale?.unit !== expected.scaleUnit ||
+    space.grid?.lineColor !== expected.gridLineColor ||
+    Math.abs(space.grid?.lineOpacity - expected.gridLineOpacity) > 0.0001 ||
+    space.background?.color !== expected.backgroundColor
+  ) {
+    throw new Error(`Scenario space setup was not saved readably: ${JSON.stringify(space)}`);
+  }
 }
 
 async function clickTile(page, surfaceTestId, x, y) {
