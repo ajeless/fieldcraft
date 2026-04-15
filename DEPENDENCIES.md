@@ -21,7 +21,7 @@ Tauri is the native desktop shell and build pipeline. Fieldcraft's editor UI and
 
 Vite is used in two different ways:
 
-- In development, `corepack pnpm tauri:dev` starts Vite on `http://127.0.0.1:5173/` and points the Tauri window at that local dev server.
+- In development, `corepack pnpm desktop` starts Vite on `http://127.0.0.1:5173/` and points the Tauri window at that local dev server.
 - In a built desktop app, Vite first compiles static frontend assets into `apps/editor/dist/`, then Tauri builds a native binary that loads those assets. A shipped desktop build does not need port `5173` or a Vite dev server.
 
 After a debug native build:
@@ -149,6 +149,7 @@ corepack pnpm install
 ## Verify The Browser Loop
 
 ```sh
+corepack pnpm run doctor
 corepack pnpm build
 corepack pnpm test:smoke
 ```
@@ -158,32 +159,28 @@ The smoke test starts the tracked dev server if needed, places a marker in the e
 ## Verify The Tauri Tooling
 
 ```sh
-corepack pnpm --dir apps/editor tauri info
+corepack pnpm run doctor
 ```
 
-Once the system dependencies and Rust are installed, this should stop reporting missing `webkit2gtk-4.1`, `rsvg2`, `rustc`, `Cargo`, or `rustup` on Ubuntu/Debian.
+Once the system dependencies and Rust are installed, this should report passing checks for Node, Corepack, pnpm, Cargo, rustc, the Tauri CLI, the desktop dev port, and Linux native packages such as GTK 3, WebKitGTK 4.1, and librsvg.
 
 Run the desktop shell:
 
 ```sh
+corepack pnpm desktop
+```
+
+The desktop script checks the dev port before launch and prepends `~/.cargo/bin` to PATH when that directory exists, which handles the common case where Rust is installed but the current terminal did not load Cargo's environment.
+
+The lower-level equivalent remains available as:
+
+```sh
 corepack pnpm tauri:dev
 ```
 
-If `cargo` is installed but Tauri cannot find it, load Cargo's environment and retry:
+It uses the same friendly launcher.
 
-```sh
-. "$HOME/.cargo/env"
-corepack pnpm tauri:dev
-```
-
-On Linux, closing the Tauri window should return control to the terminal and stop the Vite dev server. If `tauri:dev` fails before the window opens, Vite may still be holding port `5173`. Check and stop it with:
-
-```sh
-ss -ltnp | grep 5173
-kill <pid>
-```
-
-The repo-owned `corepack pnpm start` and `corepack pnpm stop` scripts track and clean up the browser dev server they start. `tauri:dev` is managed by the Tauri CLI, so failed native startup can leave a separate untracked dev process behind.
+The repo-owned `corepack pnpm start` and `corepack pnpm stop` scripts track and clean up the browser dev server they start. `corepack pnpm desktop` starts that tracked browser server when needed, reuses it when it is already running, and stops only the server it started. If the same port is held by an untracked process, the desktop script stops before launch and reports that directly.
 
 ## Tauri Icons
 

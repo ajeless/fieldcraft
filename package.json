@@ -9,10 +9,12 @@
   "scripts": {
     "start": "node scripts/start.mjs",
     "stop": "node scripts/stop.mjs",
+    "desktop": "node scripts/desktop-dev.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "build": "corepack pnpm --dir apps/editor build",
     "dev": "corepack pnpm --dir apps/editor dev",
     "tauri": "corepack pnpm --dir apps/editor tauri",
-    "tauri:dev": "corepack pnpm --dir apps/editor tauri dev",
+    "tauri:dev": "node scripts/desktop-dev.mjs",
     "tauri:build": "corepack pnpm --dir apps/editor tauri build",
     "test:smoke": "node scripts/test-browser-smoke.mjs"
   },

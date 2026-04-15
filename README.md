@@ -30,13 +30,21 @@ Install dependencies:
 corepack pnpm install
 ```
 
+Check the local developer environment:
+
+```sh
+corepack pnpm run doctor
+```
+
 Start the browser editor:
 
 ```sh
 corepack pnpm start
 ```
 
-The tracked dev server listens on `http://127.0.0.1:5173/` by default. It writes process state to `.fieldcraft/run/dev-server.json` and logs to `.fieldcraft/logs/dev-server.log`.
+The browser development server listens on `http://127.0.0.1:5173/` by default. That port is for local development only. Shipped desktop builds load bundled static frontend assets and do not require a Vite dev server.
+
+The tracked browser dev server writes process state to `.fieldcraft/run/dev-server.json` and logs to `.fieldcraft/logs/dev-server.log`.
 
 Stop the browser editor:
 
@@ -58,13 +66,13 @@ corepack pnpm test:smoke
 
 The smoke test starts the tracked dev server if needed, places a marker, saves the scenario, launches the runtime, verifies the marker is rendered there, closes the runtime, and stops any server it started.
 
-Run the Tauri desktop shell:
+Run the Tauri desktop shell for development:
 
 ```sh
-corepack pnpm tauri:dev
+corepack pnpm desktop
 ```
 
-The Tauri command requires a local Rust toolchain and platform prerequisites. The browser editor/runtime loop can be used without Rust.
+The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, and launches the Tauri development shell. The browser editor/runtime loop can still be used without Rust.
 
 In the desktop shell, **Open Scenario**, **Save Scenario**, and **Save As** use native file dialogs. In the browser fallback, **Open Scenario** imports JSON through the browser file picker and **Download JSON** saves a copy.
 
