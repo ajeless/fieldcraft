@@ -86,7 +86,7 @@ async function checkDevPort() {
 
 function checkLinuxNativeDeps() {
   if (process.platform !== "linux") {
-    pass("Native desktop prerequisites", `${process.platform}; see DEPENDENCIES.md for platform setup`);
+    pass("Native desktop prerequisites", `${process.platform}; see README.md for platform setup`);
     return;
   }
 

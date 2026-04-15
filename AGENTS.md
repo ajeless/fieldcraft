@@ -7,7 +7,7 @@ If this file conflicts with `DECISIONS.md` on a settled architectural point, fol
 
 ## What this project is
 
-Fieldcraft is a visual authoring tool for crafting turn-based tactical board game experiences.
+Fieldcraft is a visual authoring tool for turn-based tactical board game experiences.
 
 The editor is the product. Everything else — the engine, the rules interpreter, the export pipeline — serves the editor. A scenario author should be able to design a map, place units, write rules, play-test, and export a finished game from within one environment.
 
@@ -52,13 +52,7 @@ Do not merge into `main` until something has been manually tested and shown usef
 
 Settled architecture lives in `DECISIONS.md`. Do not reopen those choices casually.
 
-Relevant decisions:
-- `001` — editor-first, not engine-first
-- `004` — tile-based and free-coordinate space are distinct models
-- `005` — plotted simultaneous turns are the universal time model
-- `006` — rules are structured data plus a small expression language
-- `007` — browser and standalone binary exports are both first-class targets
-- `008` — scenario files must remain human-readable
+Relevant decisions: `001` (editor-first), `004` (two space models), `005` (plotted simultaneous turns), `006` (structured data plus expression language), `007` (browser and binary exports), and `008` (human-readable scenario files).
 
 Establish the structural seams that those decisions require early. Generalize specific mechanics, rule patterns, or UI workflows only after at least two concrete scenarios justify it.
 
@@ -89,7 +83,12 @@ building engine features that don't surface in the editor. If the editor can't s
 
 Keep docs light.
 
-Use `README.md` as the repo map, `AGENTS.md` for working style, and `DECISIONS.md` for settled architecture. When a durable architectural choice is made, record it once in `DECISIONS.md` instead of duplicating rationale across files.
+- `README.md` — project overview, setup, commands, and docs index
+- `AGENTS.md` — workflow, contribution guardrails, and how to work in this repo
+- `DECISIONS.md` — canonical record of settled architectural and design decisions
+- `CLAUDE.md` — compatibility pointer to `AGENTS.md`
+
+When a durable architectural choice is made, record it once in `DECISIONS.md` instead of duplicating rationale across files.
 
 Do not create planning or process docs until the work earns them.
 

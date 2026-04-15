@@ -22,7 +22,53 @@ First vertical slices in progress: a minimal editor can place markers on a squar
 Prerequisites:
 
 - Node.js 22.12 or newer with Corepack
-- Rust, Cargo, and [platform Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop commands
+- Rust, Cargo, rustup, and [platform Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop commands
+- Google Chrome or Playwright-managed Chromium for browser smoke tests
+
+The browser editor/runtime loop only needs Node.js, Corepack, and pnpm. Desktop commands also need Rust and native system packages.
+
+### Platform Setup
+
+#### Ubuntu/Debian
+
+```sh
+sudo apt update
+sudo apt install libwebkit2gtk-4.1-dev \
+  build-essential \
+  curl \
+  wget \
+  file \
+  libxdo-dev \
+  libssl-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev
+```
+
+#### macOS
+
+```sh
+xcode-select --install
+```
+
+#### Windows
+
+- Install Microsoft C++ Build Tools with the "Desktop development with C++" workload
+- Install Microsoft Edge WebView2 Runtime if it is not already present
+- Install Rust with the MSVC toolchain
+
+Rust can be installed with rustup:
+
+```sh
+curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
+. "$HOME/.cargo/env"
+```
+
+On Windows, Rust can also be installed with winget:
+
+```powershell
+winget install --id Rustlang.Rustup
+rustup default stable-msvc
+```
 
 Install dependencies:
 
@@ -42,9 +88,7 @@ Start the browser editor:
 corepack pnpm start
 ```
 
-The browser development server listens on `http://127.0.0.1:5173/` by default. That port is for local development only. Shipped desktop builds load bundled static frontend assets and do not require a Vite dev server.
-
-The tracked browser dev server writes process state to `.fieldcraft/run/dev-server.json` and logs to `.fieldcraft/logs/dev-server.log`.
+The tracked Vite dev server runs at `http://127.0.0.1:5173/` by default, writes process state to `.fieldcraft/run/dev-server.json`, and writes logs to `.fieldcraft/logs/dev-server.log`. Desktop dev mode uses this server; production desktop builds bundle static assets from `apps/editor/dist/` and do not require Vite.
 
 Stop the browser editor:
 
@@ -72,14 +116,28 @@ Run the Tauri desktop shell for development:
 corepack pnpm desktop
 ```
 
-The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, and launches the Tauri development shell. The browser editor/runtime loop can still be used without Rust.
+The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, starts or reuses the tracked browser dev server, launches the Tauri development shell, and stops only the server it started.
+
+A debug desktop binary built with `corepack pnpm --dir apps/editor tauri build --debug --no-bundle` lives at `apps/editor/src-tauri/target/debug/fieldcraft`.
 
 In the desktop shell, **Open Scenario**, **Save Scenario**, and **Save As** use native file dialogs. In the browser fallback, **Open Scenario** imports JSON through the browser file picker and **Download JSON** saves a copy.
 
+### Maintenance
+
+Tauri icon assets are generated from `apps/editor/src-tauri/app-icon.svg` and committed under `apps/editor/src-tauri/icons/`.
+
+```sh
+corepack pnpm --dir apps/editor tauri icon src-tauri/app-icon.svg
+```
+
+References:
+
+- Tauri v2 prerequisites: https://v2.tauri.app/start/prerequisites/
+- Rust installation: https://www.rust-lang.org/tools/install
+
 ## Docs
 
-- `README.md` — project overview and current status
+- `README.md` — project overview, setup, commands, and docs index
 - `AGENTS.md` — workflow, contribution guardrails, and how to work in this repo
-- `DEPENDENCIES.md` — developer dependency setup for browser and Tauri workflows
 - `DECISIONS.md` — canonical record of settled architectural and design decisions
 - `CLAUDE.md` — compatibility pointer to `AGENTS.md`
