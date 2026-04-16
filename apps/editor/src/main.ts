@@ -52,7 +52,12 @@ import {
 
 type Route = "editor" | "runtime";
 
-type EditorCommandId = "new" | "open" | "save" | "save-as";
+type EditorCommandId =
+  | "new"
+  | "open"
+  | "save"
+  | "save-as"
+  | "delete-selected-marker";
 
 type EditorCommand = CommandDefinition<EditorCommandId>;
 type EditorCommands = CommandRegistry<EditorCommandId>;
@@ -119,6 +124,7 @@ let dirty = recoveredSessionDraft?.dirty ?? false;
 let statusMessage = recoveredSessionDraft ? "Recovered session draft" : "Ready";
 let boardSetupDraft =
   recoveredSessionDraft?.boardSetupDraft ?? createDefaultBoardSetupDraft(getActiveTheme());
+let selectedMarkerId: string | null = null;
 let commandRegistry: EditorCommands | null = null;
 const boardViewportStates: Record<Route, BoardViewportState> = {
   editor: createBoardViewportState(),
@@ -133,6 +139,7 @@ systemThemeMedia.addEventListener("change", handleSystemThemeChange);
 render();
 
 function render(): void {
+  syncSelectedMarkerWithScenario();
   syncEditorSessionDraft();
   app.innerHTML = "";
   app.append(createShell(getRoute()));
@@ -141,7 +148,7 @@ function render(): void {
 function createShell(route: Route): HTMLElement {
   const shell = element("main", "shell");
   const fileInput = createOpenScenarioInput();
-  commandRegistry = createEditorCommands(fileInput);
+  commandRegistry = createEditorCommands(fileInput, route);
   const header = element("header", "topbar");
   const brand = element("div", "brand");
   brand.append(element("span", "brand-mark", "FC"), element("strong", "", "Fieldcraft"));
@@ -203,6 +210,7 @@ function themeButton(
 function createEditorView(): HTMLElement {
   const view = element("section", "workspace");
   view.dataset.view = "editor";
+  const selectedMarker = getSelectedMarker();
 
   const sidebar = element("aside", "panel left-panel");
   const sidebarItems: HTMLElement[] = [
@@ -230,25 +238,30 @@ function createEditorView(): HTMLElement {
           readonly: false,
           mode: "editor",
           state: boardViewportStates.editor,
+          selectedMarkerId,
+          onPieceSelect: handleSelectedMarkerChange,
           onMarkerDrop: placeDefaultMarker
         })
       : createBoardSetup()
   );
 
   const inspector = element("aside", "panel right-panel");
+  inspector.append(createSelectionInspector(selectedMarker));
   const savedAt = scenario.metadata.savedAt
     ? new Date(scenario.metadata.savedAt).toLocaleString()
     : "Not saved";
   const currentFilePath = getCurrentFilePath();
-  inspector.append(
+  const savedGameSection = element("section", "inspector-section");
+  savedGameSection.append(
     element("p", "eyebrow", "Saved Game"),
     metric("State", getDocumentState()),
     metric("Mode", getStorageModeLabel()),
     metric("Last Save", savedAt)
   );
   if (currentFilePath) {
-    inspector.append(metric("Path", currentFilePath));
+    savedGameSection.append(metric("Path", currentFilePath));
   }
+  inspector.append(savedGameSection);
   inspector.append(element("pre", "scenario-preview", scenarioToJson(scenario)));
 
   view.append(sidebar, boardStage, inspector);
@@ -281,7 +294,9 @@ function createOpenScenarioInput(): HTMLInputElement {
   return fileInput;
 }
 
-function createEditorCommands(fileInput: HTMLInputElement): EditorCommands {
+function createEditorCommands(fileInput: HTMLInputElement, route: Route): EditorCommands {
+  const selectedMarker = getSelectedMarker();
+
   return createCommandRegistry<EditorCommandId>([
     {
       id: "new",
@@ -310,6 +325,13 @@ function createEditorCommands(fileInput: HTMLInputElement): EditorCommands {
       enabled: true,
       shortcut: "Shift+Mod+S",
       run: saveScenarioAs
+    },
+    {
+      id: "delete-selected-marker",
+      label: "Delete Marker",
+      enabled: route === "editor" && Boolean(selectedMarker),
+      shortcut: "Delete",
+      run: deleteSelectedMarker
     }
   ]);
 }
@@ -419,6 +441,15 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
     return;
   }
 
+  if (isDeleteSelectionKeyEvent(event)) {
+    const deleteCommand = commandRegistry["delete-selected-marker"];
+    if (deleteCommand?.enabled) {
+      event.preventDefault();
+      executeCommand(deleteCommand);
+    }
+    return;
+  }
+
   const command = findCommandByShortcut(commandRegistry, event);
   if (!command) {
     return;
@@ -426,6 +457,27 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
 
   event.preventDefault();
   executeCommand(command);
+}
+
+function isDeleteSelectionKeyEvent(event: KeyboardEvent): boolean {
+  if (event.key === "Delete") {
+    return true;
+  }
+
+  return event.key === "Backspace" && !isEditableEventTarget(event.target);
+}
+
+function isEditableEventTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const tagName = target.tagName;
+  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
 }
 
 function createRuntimeView(): HTMLElement {
@@ -491,6 +543,8 @@ function createBoard(options: {
   readonly: boolean;
   mode: Route;
   state: BoardViewportState;
+  selectedMarkerId?: string | null;
+  onPieceSelect?: (pieceId: string | null) => void;
   onMarkerDrop?: (x: number, y: number) => void;
 }): HTMLElement {
   const space = scenario.space;
@@ -503,9 +557,48 @@ function createBoard(options: {
     readonly: options.readonly,
     space,
     pieces: scenario.pieces,
+    selectedPieceId: options.selectedMarkerId ?? null,
     state: options.state,
+    onPieceSelect: options.onPieceSelect,
     onMarkerDrop: options.onMarkerDrop
   });
+}
+
+function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | null): HTMLElement {
+  const section = element("section", "inspector-section");
+  const deleteButton = createInspectorCommandButton(
+    "delete-selected-marker",
+    "delete-selected-marker",
+    "action-button destructive-action"
+  );
+
+  section.append(element("p", "eyebrow", "Selection"));
+  if (!scenario.space) {
+    const empty = element(
+      "p",
+      "inspector-empty",
+      "Create a board and place a marker to inspect it."
+    );
+    empty.dataset.testid = "selected-marker-empty";
+    section.append(empty, deleteButton);
+    return section;
+  }
+
+  if (!selectedMarker) {
+    const empty = element("p", "inspector-empty", "No marker selected.");
+    empty.dataset.testid = "selected-marker-empty";
+    section.append(empty, deleteButton);
+    return section;
+  }
+
+  section.append(
+    metric("Kind", "Marker", "selected-marker-kind"),
+    metric("Id", selectedMarker.id, "selected-marker-id"),
+    metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
+    deleteButton
+  );
+
+  return section;
 }
 
 function createMarkerPalette(): HTMLElement {
@@ -818,6 +911,48 @@ function createBlankBoardMessage(): HTMLElement {
   return blank;
 }
 
+function createInspectorCommandButton(
+  commandId: EditorCommandId,
+  testId: string,
+  className: string
+): HTMLButtonElement {
+  const command = getCommand(commandId);
+  const button = buttonElement(
+    command.label,
+    () => executeCommandById(commandId),
+    testId,
+    !command.enabled
+  );
+  button.className = className;
+  button.title = command.label;
+  return button;
+}
+
+function handleSelectedMarkerChange(pieceId: string | null): void {
+  if (selectedMarkerId === pieceId) {
+    return;
+  }
+
+  selectedMarkerId = pieceId;
+  render();
+}
+
+function deleteSelectedMarker(): void {
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker) {
+    return;
+  }
+
+  scenario = {
+    ...scenario,
+    pieces: scenario.pieces.filter((piece) => piece.id !== selectedMarker.id)
+  };
+  selectedMarkerId = null;
+  dirty = true;
+  statusMessage = "Marker deleted";
+  render();
+}
+
 function placeDefaultMarker(x: number, y: number): void {
   if (!scenario.space) {
     return;
@@ -825,17 +960,20 @@ function placeDefaultMarker(x: number, y: number): void {
 
   const existing = scenario.pieces.find((piece) => piece.x === x && piece.y === y);
   if (existing) {
+    selectedMarkerId = existing.id;
     statusMessage = "Marker already present";
     render();
     return;
   }
+
+  const markerId = createMarkerId(x, y);
 
   scenario = {
     ...scenario,
     pieces: [
       ...scenario.pieces,
       {
-        id: createMarkerId(x, y),
+        id: markerId,
         kind: "marker" as const,
         side: "neutral" as const,
         x,
@@ -843,6 +981,7 @@ function placeDefaultMarker(x: number, y: number): void {
       }
     ]
   };
+  selectedMarkerId = markerId;
   dirty = true;
   statusMessage = "Marker placed";
   render();
@@ -854,6 +993,7 @@ async function createNewScenario(): Promise<void> {
   }
 
   scenario = createEmptyScenario();
+  selectedMarkerId = null;
   clearCurrentFilePath();
   resetBoardViewportStates();
   boardSetupDraft = createDefaultBoardSetupDraft();
@@ -941,6 +1081,7 @@ function createTileGrid(options: {
     }),
     pieces: []
   };
+  selectedMarkerId = null;
   resetBoardViewportStates();
   dirty = true;
   statusMessage = `${getTileSpaceLabel(options.type)} created: ${width} x ${height}`;
@@ -1003,6 +1144,7 @@ function createFreeCoordinateBoard(options: {
     }),
     pieces: []
   };
+  selectedMarkerId = null;
   resetBoardViewportStates();
   dirty = true;
   statusMessage = `Free-coordinate board created: ${width} x ${height}`;
@@ -1050,6 +1192,7 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
 
   if (result.scenario) {
     scenario = result.scenario;
+    selectedMarkerId = null;
     if (!scenario.space) {
       boardSetupDraft = createDefaultBoardSetupDraft(getActiveTheme());
     }
@@ -1304,6 +1447,20 @@ function syncBoardSetupDraftThemeDefaults(previousTheme: Theme, nextTheme: Theme
       nextDefaults.boardBackgroundColor
     )
   };
+}
+
+function getSelectedMarker(): Scenario["pieces"][number] | null {
+  if (!selectedMarkerId) {
+    return null;
+  }
+
+  return scenario.pieces.find((piece) => piece.id === selectedMarkerId) ?? null;
+}
+
+function syncSelectedMarkerWithScenario(): void {
+  if (!scenario.space || !getSelectedMarker()) {
+    selectedMarkerId = null;
+  }
 }
 
 function replaceDefaultThemeColor(
@@ -1569,6 +1726,14 @@ function getBoardLabel(): string {
   return `${scenario.space.width} x ${scenario.space.height} ${gridType}, ${scenario.space.tileSize}px, ${scale}`;
 }
 
+function getMarkerPositionLabel(piece: Scenario["pieces"][number]): string {
+  if (scenario.space && isTileScenarioSpace(scenario.space)) {
+    return `Tile ${piece.x}, ${piece.y}`;
+  }
+
+  return `${formatCoordinate(piece.x)}, ${formatCoordinate(piece.y)}`;
+}
+
 function getDocumentState(): string {
   if (dirty) {
     return "Unsaved changes";
@@ -1678,6 +1843,10 @@ function createMarkerId(x: number, y: number): string {
 
 function formatCoordinateForId(value: number): string {
   return String(value).replace("-", "neg").replace(".", "p");
+}
+
+function formatCoordinate(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(value);
 }
 
 function createDefaultBoardSetupDraft(theme: Theme = getActiveTheme()): BoardSetupDraft {

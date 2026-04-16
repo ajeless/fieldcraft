@@ -19,6 +19,8 @@
   --viewport-fill: #e8edf0;
   --marker: #d24b3f;
   --marker-ring: #61221e;
+  --marker-selection-glow: rgba(31, 122, 104, 0.18);
+  --marker-selection-ring: #0f7c68;
   --shell-accent-wash: rgba(31, 122, 104, 0.08);
   --topbar-bg: rgba(255, 255, 255, 0.86);
   --menu-shadow: 0 18px 38px rgba(23, 32, 42, 0.16);
@@ -54,6 +56,8 @@
   --viewport-fill: #0d141a;
   --marker: #ef7a6e;
   --marker-ring: #ffd6d1;
+  --marker-selection-glow: rgba(184, 243, 227, 0.22);
+  --marker-selection-ring: #b8f3e3;
   --shell-accent-wash: rgba(87, 182, 158, 0.12);
   --topbar-bg: rgba(19, 27, 34, 0.9);
   --menu-shadow: 0 18px 38px rgba(0, 0, 0, 0.4);
@@ -324,6 +328,7 @@ button:disabled {
 .right-panel {
   display: flex;
   flex-direction: column;
+  gap: 18px;
 }
 
 .eyebrow {
@@ -383,6 +388,21 @@ button:disabled {
   margin-top: 18px;
 }
 
+.inspector-section {
+  display: grid;
+  gap: 12px;
+}
+
+.inspector-section .eyebrow {
+  margin-bottom: 0;
+}
+
+.inspector-empty {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .action-button {
   width: 100%;
   min-height: 42px;
@@ -403,6 +423,29 @@ button:disabled {
 .action-button:disabled:hover {
   background: var(--action-disabled);
   color: var(--muted);
+}
+
+.destructive-action {
+  background: #8c3b2f;
+}
+
+.destructive-action:hover,
+.destructive-action:focus-visible {
+  background: #733125;
+}
+
+.destructive-action:disabled,
+.destructive-action:disabled:hover {
+  background: var(--action-disabled);
+}
+
+:root[data-theme="dark"] .destructive-action {
+  background: #8f4c41;
+}
+
+:root[data-theme="dark"] .destructive-action:hover,
+:root[data-theme="dark"] .destructive-action:focus-visible {
+  background: #a55a4d;
 }
 
 .action-button:focus-visible,

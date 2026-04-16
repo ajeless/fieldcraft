@@ -182,15 +182,37 @@ try {
   await clickTile(page, "board-surface", 2, 3);
   await page.waitForTimeout(100);
   await expectMarkerCount(page, "0");
+  await expectNoSelectedMarker(page);
   await placeMarkerFromPalette(page, "board-surface", 32, 32);
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "32-32");
+  await expectSelectedMarker(page, {
+    id: "marker-32-32",
+    position: "Tile 32, 32"
+  });
   await placeMarkerFromPalette(page, "board-surface", 0, 0);
   await expectMarkerCount(page, "2");
   await waitForMarker(page, "board-surface", "0-0");
   await placeMarkerFromPalette(page, "board-surface", 63, 63);
   await expectMarkerCount(page, "3");
   await waitForMarker(page, "board-surface", "63-63");
+  await clickTile(page, "board-surface", 32, 32, { x: 8, y: 0 });
+  await expectSelectedMarker(page, {
+    id: "marker-32-32",
+    position: "Tile 32, 32"
+  });
+  await clickTile(page, "board-surface", 2, 3);
+  await expectNoSelectedMarker(page);
+  await clickTile(page, "board-surface", 63, 63);
+  await expectSelectedMarker(page, {
+    id: "marker-63-63",
+    position: "Tile 63, 63"
+  });
+  await page.keyboard.press("Delete");
+  await expectStatusLine(page, "Marker deleted");
+  await expectNoSelectedMarker(page);
+  await expectMarkerCount(page, "2");
+  await expectMarkerMissing(page, "board-surface", "63-63");
 
   await panSurface(page, "board-surface");
   const pannedTransform = await getTransform(page, "board-surface");
@@ -237,12 +259,12 @@ try {
     backgroundColor: "#f4faf7"
   });
   if (
-    parsedScenario.pieces.length !== 3 ||
+    parsedScenario.pieces.length !== 2 ||
     !parsedScenario.pieces.some((piece) => piece.id === "marker-32-32") ||
     !parsedScenario.pieces.some((piece) => piece.id === "marker-0-0") ||
-    !parsedScenario.pieces.some((piece) => piece.id === "marker-63-63")
+    parsedScenario.pieces.some((piece) => piece.id === "marker-63-63")
   ) {
-    throw new Error("Saved scenario did not preserve dragged markers.");
+    throw new Error("Saved scenario did not preserve marker deletion.");
   }
 
   await expectScenarioDownload(page, () => clickMenuItem(page, "file", "menu-save-as-scenario"));
@@ -256,7 +278,7 @@ try {
   await page.waitForSelector('[data-view="runtime"]');
   await waitForMarker(page, "runtime-board-surface", "32-32");
   await waitForMarker(page, "runtime-board-surface", "0-0");
-  await waitForMarker(page, "runtime-board-surface", "63-63");
+  await expectMarkerMissing(page, "runtime-board-surface", "63-63");
   await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
 
@@ -278,6 +300,10 @@ try {
   await placeMarkerFromPalette(page, "board-surface", 9, 7);
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "9-7");
+  await expectSelectedMarker(page, {
+    id: "marker-9-7",
+    position: "Tile 9, 7"
+  });
   await placeMarkerFromPalette(page, "board-surface", 0, 0);
   await expectMarkerCount(page, "2");
   await waitForMarker(page, "board-surface", "0-0");
@@ -287,6 +313,16 @@ try {
   await placeMarkerFromPalette(page, "board-surface", 0, 13);
   await expectMarkerCount(page, "4");
   await waitForMarker(page, "board-surface", "0-13");
+  await clickTile(page, "board-surface", 9, 7, { x: 7, y: 0 });
+  await expectSelectedMarker(page, {
+    id: "marker-9-7",
+    position: "Tile 9, 7"
+  });
+  await clickTile(page, "board-surface", 17, 13);
+  await expectSelectedMarker(page, {
+    id: "marker-17-13",
+    position: "Tile 17, 13"
+  });
   await panBoardToBottomRightSliver(page, "board-surface");
   const extremePannedTransform = await getTransform(page, "board-surface");
   const extremeDropTile = await getVisibleUnmarkedTile(page, "board-surface");
@@ -294,6 +330,11 @@ try {
   await placeMarkerFromPalette(page, "board-surface", extremeDropTile.x, extremeDropTile.y);
   await expectMarkerCount(page, "5");
   await waitForMarker(page, "board-surface", extremeDropMarker);
+  await clickTile(page, "board-surface", extremeDropTile.x, extremeDropTile.y);
+  await expectSelectedMarker(page, {
+    id: `marker-${extremeDropMarker}`,
+    position: `Tile ${extremeDropTile.x}, ${extremeDropTile.y}`
+  });
   const afterExtremeDropTransform = await getTransform(page, "board-surface");
   if (!transformsAreClose(afterExtremeDropTransform, extremePannedTransform)) {
     throw new Error("Marker drop reset an extreme panned hex board.");
@@ -387,6 +428,9 @@ try {
   await placeMarkerAtFreeCoordinate(page, "board-surface", 0, 0);
   await expectMarkerCount(page, "1");
   await waitForFreeMarkerNear(page, "board-surface", 0, 0);
+  await expectSelectedMarker(page, {
+    near: { x: 0, y: 0, tolerance: 0.75 }
+  });
   await placeMarkerAtFreeCoordinate(page, "board-surface", 73.25, 18.5);
   await expectMarkerCount(page, "2");
   await waitForFreeMarkerNear(page, "board-surface", 73.25, 18.5);
@@ -407,6 +451,10 @@ try {
   if (Math.abs(freeZoomedTransform.scale - freePannedTransform.scale) < 0.001) {
     throw new Error("Mouse wheel did not zoom the free-coordinate board.");
   }
+  await clickFreeCoordinate(page, "board-surface", 73.25, 18.5);
+  await expectSelectedMarker(page, {
+    near: { x: 73.25, y: 18.5, tolerance: 0.75 }
+  });
   await page.click('[data-testid="reset-board-view"]');
   await waitForTransform(page, "board-surface", freeHomeTransform);
 
@@ -727,13 +775,18 @@ function closeTo(value, target, tolerance) {
   return Number.isFinite(value) && Math.abs(value - target) <= tolerance;
 }
 
-async function clickTile(page, surfaceTestId, x, y) {
+async function clickTile(page, surfaceTestId, x, y, offset = { x: 0, y: 0 }) {
   await waitForSurfaceReady(page, surfaceTestId);
   const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
   await surface.waitFor({ state: "visible" });
   const point = await getTileViewportPoint(page, surfaceTestId, x, y);
 
-  await surface.click({ position: point });
+  await surface.click({
+    position: {
+      x: point.x + offset.x,
+      y: point.y + offset.y
+    }
+  });
 }
 
 async function placeMarkerFromPalette(page, surfaceTestId, x, y) {
@@ -752,6 +805,14 @@ async function placeMarkerAtFreeCoordinate(page, surfaceTestId, x, y) {
   await page.dragAndDrop('[data-testid="palette-marker"]', `[data-testid="${surfaceTestId}"]`, {
     targetPosition: point
   });
+}
+
+async function clickFreeCoordinate(page, surfaceTestId, x, y) {
+  await waitForSurfaceReady(page, surfaceTestId);
+  const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
+  const point = await getFreeCoordinateViewportPoint(page, surfaceTestId, x, y);
+
+  await surface.click({ position: point });
 }
 
 async function panBoardToBottomRightSliver(page, surfaceTestId) {
@@ -979,6 +1040,64 @@ async function expectMarkerCount(page, count) {
   }, count);
 }
 
+async function expectSelectedMarker(page, expected = {}) {
+  await page.waitForFunction(({ id, position, near }) => {
+    const emptyState = document.querySelector('[data-testid="selected-marker-empty"]');
+    const kind = document.querySelector('[data-testid="selected-marker-kind"]')?.textContent;
+    const selectedId = document.querySelector('[data-testid="selected-marker-id"]')?.textContent;
+    const selectedPosition = document.querySelector(
+      '[data-testid="selected-marker-position"]'
+    )?.textContent;
+    const deleteButton = document.querySelector('[data-testid="delete-selected-marker"]');
+    const matchesNearPosition =
+      near === null ||
+      matchesCoordinateText(selectedPosition, near.x, near.y, near.tolerance);
+
+    return (
+      !emptyState &&
+      kind === "Marker" &&
+      (id === null || selectedId === id) &&
+      (position === null || selectedPosition === position) &&
+      matchesNearPosition &&
+      deleteButton instanceof HTMLButtonElement &&
+      !deleteButton.disabled
+    );
+
+    function matchesCoordinateText(text, x, y, tolerance) {
+      if (typeof text !== "string") {
+        return false;
+      }
+
+      const match = text.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+      if (!match) {
+        return false;
+      }
+
+      return (
+        Math.abs(Number(match[1]) - x) <= tolerance &&
+        Math.abs(Number(match[2]) - y) <= tolerance
+      );
+    }
+  }, {
+    id: expected.id ?? null,
+    position: expected.position ?? null,
+    near: expected.near ?? null
+  });
+}
+
+async function expectNoSelectedMarker(page) {
+  await page.waitForFunction(() => {
+    const emptyState = document.querySelector('[data-testid="selected-marker-empty"]');
+    const deleteButton = document.querySelector('[data-testid="delete-selected-marker"]');
+
+    return (
+      emptyState instanceof HTMLElement &&
+      deleteButton instanceof HTMLButtonElement &&
+      deleteButton.disabled
+    );
+  });
+}
+
 async function panSurface(page, surfaceTestId) {
   const box = await getSurfaceBox(page, surfaceTestId);
   const start = {
@@ -1080,6 +1199,34 @@ async function waitForMarker(page, surfaceTestId, markerPosition) {
         hasFiniteAttribute(surface, "data-view-pan-x") &&
         hasFiniteAttribute(surface, "data-view-pan-y") &&
         positions?.split(" ").includes(marker)
+      );
+
+      function hasFiniteAttribute(element, name) {
+        const value = element?.getAttribute(name);
+
+        return value !== null && Number.isFinite(Number(value));
+      }
+    },
+    {
+      testId: surfaceTestId,
+      marker: markerPosition
+    }
+  );
+}
+
+async function expectMarkerMissing(page, surfaceTestId, markerPosition) {
+  await page.waitForFunction(
+    ({ testId, marker }) => {
+      const surface = document.querySelector(`[data-testid="${testId}"]`);
+      const positions = (surface?.getAttribute("data-marker-positions") ?? "")
+        .split(" ")
+        .filter(Boolean);
+
+      return (
+        hasFiniteAttribute(surface, "data-view-scale") &&
+        hasFiniteAttribute(surface, "data-view-pan-x") &&
+        hasFiniteAttribute(surface, "data-view-pan-y") &&
+        !positions.includes(marker)
       );
 
       function hasFiniteAttribute(element, name) {

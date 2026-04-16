@@ -68,8 +68,9 @@ type BoardViewportOptions = {
   readonly: boolean;
   space: ScenarioSpace;
   pieces: ScenarioPiece[];
+  selectedPieceId?: string | null;
   state: BoardViewportState;
-  onBoardClick?: (x: number, y: number) => void;
+  onPieceSelect?: (pieceId: string | null) => void;
   onMarkerDrop?: (x: number, y: number) => void;
 };
 
@@ -81,6 +82,8 @@ const homePadding = 40;
 const minZoom = 0.04;
 const maxZoom = 5;
 const resizeRecoveryVisibleRatio = 0.08;
+const pointerClickMovementThreshold = 8;
+const markerHitSlopPixels = 8;
 
 export const markerDragDataType = "application/x-fieldcraft-marker";
 
@@ -171,8 +174,9 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
     state: options.state,
     readonly: options.readonly,
     geometry,
+    pieces: options.pieces,
     draw,
-    onBoardClick: options.onBoardClick
+    onPieceSelect: options.onPieceSelect
   });
   const markerDropController = createMarkerDropController({
     surface,
@@ -282,6 +286,12 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
     };
     const markerFill = cssVariable(styles, "--marker", "#d24b3f");
     const markerRing = cssVariable(styles, "--marker-ring", "#61221e");
+    const markerSelectionGlow = cssVariable(
+      styles,
+      "--marker-selection-glow",
+      "rgba(31, 122, 104, 0.18)"
+    );
+    const markerSelectionRing = cssVariable(styles, "--marker-selection-ring", "#0f7c68");
     const viewportFill = cssVariable(styles, "--viewport-fill", "#e7ecef");
     const devicePixelRatio = window.devicePixelRatio || 1;
 
@@ -292,10 +302,23 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
     context.save();
     applyViewportTransform(context, transform);
     geometry.draw(context, colors, transform.scale);
-    drawMarkers(context, geometry, options.pieces, transform.scale, markerFill, markerRing);
+    drawMarkers(context, geometry, options.pieces, {
+      scale: transform.scale,
+      markerFill,
+      markerRing,
+      selectionGlow: markerSelectionGlow,
+      selectionRing: markerSelectionRing,
+      selectedPieceId: options.selectedPieceId ?? null
+    });
     context.restore();
 
-    updateSurfaceData(surface, geometry, transform, options.pieces);
+    updateSurfaceData(
+      surface,
+      geometry,
+      transform,
+      options.pieces,
+      options.selectedPieceId ?? null
+    );
     zoomLabel.textContent = `${Math.round(transform.scale * 100)}%`;
   }
 }
@@ -544,8 +567,9 @@ function createPointerController(options: {
   state: BoardViewportState;
   readonly: boolean;
   geometry: GridGeometry;
+  pieces: ScenarioPiece[];
   draw: () => void;
-  onBoardClick?: (x: number, y: number) => void;
+  onPieceSelect?: (pieceId: string | null) => void;
 }): {
   handlePointerDown: (event: PointerEvent) => void;
   handlePointerMove: (event: PointerEvent) => void;
@@ -614,7 +638,10 @@ function createPointerController(options: {
         y: currentPoint.y - drag.startPoint.y
       };
 
-      if (!drag.moved && Math.hypot(totalDelta.x, totalDelta.y) < 4) {
+      if (
+        !drag.moved &&
+        Math.hypot(totalDelta.x, totalDelta.y) < pointerClickMovementThreshold
+      ) {
         return;
       }
 
@@ -647,17 +674,21 @@ function createPointerController(options: {
       options.surface.classList.remove("is-panning");
       drag = null;
 
-      if (dragMode === "pan" || !wasClick || options.readonly || !options.onBoardClick) {
+      if (dragMode === "pan" || !wasClick || options.readonly || !options.onPieceSelect) {
         return;
       }
 
       const worldPoint = viewportPointToWorldPoint(currentPoint, options.state.transform);
-      const boardPoint = worldPoint
-        ? options.geometry.worldToPlacementPoint(worldPoint)
-        : null;
-      if (boardPoint) {
-        options.onBoardClick(boardPoint.x, boardPoint.y);
-      }
+      const selectedPieceId =
+        worldPoint && options.state.transform
+          ? findPieceAtWorldPoint(
+              options.pieces,
+              worldPoint,
+              options.geometry,
+              options.state.transform.scale
+            )?.id ?? null
+          : null;
+      options.onPieceSelect(selectedPieceId);
     },
     handlePointerCancel: (event) => {
       if (drag?.pointerId === event.pointerId) {
@@ -966,20 +997,35 @@ function drawMarkers(
   context: CanvasRenderingContext2D,
   geometry: GridGeometry,
   pieces: ScenarioPiece[],
-  scale: number,
-  markerFill: string,
-  markerRing: string
+  options: {
+    scale: number;
+    markerFill: string;
+    markerRing: string;
+    selectionGlow: string;
+    selectionRing: string;
+    selectedPieceId: string | null;
+  }
 ): void {
   for (const piece of pieces) {
     const center = geometry.pieceToWorldPoint(piece);
-    const radius = geometry.markerRadius(scale);
+    const radius = geometry.markerRadius(options.scale);
+
+    if (piece.id === options.selectedPieceId) {
+      context.beginPath();
+      context.arc(center.x, center.y, radius + Math.max(4 / options.scale, 2), 0, Math.PI * 2);
+      context.fillStyle = options.selectionGlow;
+      context.fill();
+      context.lineWidth = Math.max(3 / options.scale, 2);
+      context.strokeStyle = options.selectionRing;
+      context.stroke();
+    }
 
     context.beginPath();
     context.arc(center.x, center.y, radius, 0, Math.PI * 2);
-    context.fillStyle = markerFill;
+    context.fillStyle = options.markerFill;
     context.fill();
-    context.lineWidth = Math.max(2 / scale, 1.5);
-    context.strokeStyle = markerRing;
+    context.lineWidth = Math.max(2 / options.scale, 1.5);
+    context.strokeStyle = options.markerRing;
     context.stroke();
     context.beginPath();
     context.arc(center.x, center.y, radius * 0.58, 0, Math.PI * 2);
@@ -1008,7 +1054,8 @@ function updateSurfaceData(
   surface: HTMLElement,
   geometry: GridGeometry,
   transform: ViewportTransform,
-  pieces: ScenarioPiece[]
+  pieces: ScenarioPiece[],
+  selectedPieceId: string | null
 ): void {
   surface.dataset.viewReady = "true";
   surface.dataset.viewScale = String(transform.scale);
@@ -1028,6 +1075,37 @@ function updateSurfaceData(
     surface.dataset.boardRows = String(geometry.rows);
   }
   surface.dataset.markerPositions = getMarkerPositions(pieces, geometry.spaceType);
+  if (selectedPieceId) {
+    surface.dataset.selectedMarkerId = selectedPieceId;
+  } else {
+    delete surface.dataset.selectedMarkerId;
+  }
+}
+
+function findPieceAtWorldPoint(
+  pieces: ScenarioPiece[],
+  worldPoint: Point,
+  geometry: GridGeometry,
+  scale: number
+): ScenarioPiece | null {
+  const radius = geometry.markerRadius(scale);
+  const hitRadius = radius + markerHitSlopPixels / Math.max(scale, minZoom);
+  let closestPiece: ScenarioPiece | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const piece = pieces[index];
+    const center = geometry.pieceToWorldPoint(piece);
+    const distance = Math.hypot(worldPoint.x - center.x, worldPoint.y - center.y);
+    if (distance > hitRadius || distance >= closestDistance) {
+      continue;
+    }
+
+    closestPiece = piece;
+    closestDistance = distance;
+  }
+
+  return closestPiece;
 }
 
 function getMarkerPositions(pieces: ScenarioPiece[], spaceType: ScenarioSpace["type"]): string {
