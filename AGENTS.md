@@ -65,7 +65,7 @@ Choose changes that make the project more:
 - interactive in the editor
 - testable by authoring and playing a scenario
 - readable in both code and authored data
-- adaptable to new grid types, rule mechanics, and export targets
+- adaptable to new space models, grid types, rule mechanics, and export targets
 - useful to the next scenario authoring loop
 
 ## What to avoid

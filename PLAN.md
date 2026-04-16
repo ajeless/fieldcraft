@@ -133,7 +133,7 @@ Free-coordinate follow-ons:
 - add continuous-space terrain, zones, obstacles, or movement-cost hooks after basic placement and entity/rules pressure justify them
 - keep map imagery, georeferenced backgrounds, and huge continuous-map performance work out of the foundation branch unless they become trust-blocking
 - keep persisted camera/home views, exact coordinate entry, board view rotation, and snap angles as later board-view refinements
-- treat source-editor and export polish for mixed tile/free-coordinate scenarios as follow-on work unless needed to preserve valid round-trips in the foundation branch
+- treat additional source-editor and export polish for free-coordinate scenarios as follow-on work unless needed to preserve valid round-trips in the foundation branch
 
 Assets and author media:
 - defer a built-in sprite creator until the editor has real asset workflows and authoring pressure justifies it
