@@ -6,52 +6,47 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; unsaved-change confirmation before destructive `New` and `Open` flows replace dirty work; persisted `System`/`Light`/`Dark` theme support; dark-theme board defaults for new boards; and a read-only runtime view.
+Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; unsaved-change confirmation before destructive `New` and `Open` flows replace dirty work; persisted `System`/`Light`/`Dark` theme support; dark-theme board defaults for new boards; draft recovery autosave; marker selection through the canvas viewport; a small marker inspector; keyboard and inspector deletion for selected markers; and a read-only runtime view.
 
-Manual testing and review now point to session trust and recovery as the next pressure. Theme support and the recent trust cleanup both landed cleanly, so the next branches should build on that steadier baseline instead of reopening editor shell polish. Autosave, selection, and undo still make sense as the next small, manually testable layers on top of the now-tested command-registry seam.
+Manual testing and review now point to undo, occupancy semantics, and source editing as the next pressure. Theme support, autosave, and the recent selection/deletion work landed cleanly, so the next branches should build on that steadier baseline instead of reopening editor shell polish. Undo still makes sense as the next small, manually testable layer on top of the now-tested command-registry seam, but occupancy semantics now need to land before source editing and the first real entity model so the editor does not harden around a false one-object-per-location assumption.
 
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/draft-autosave`
-   - Add draft recovery autosave for the editor session.
-   - Do not silently overwrite scenario files.
-   - Keep explicit Save and Save As as the durable file actions.
-
-2. `codex/board-object-selection-inspector`
-   - Add marker selection through the canvas viewport coordinate flow across tile and free-coordinate boards.
-   - Provide a small inspector for the selected marker.
-   - Support marker deletion/removal from the inspector and command model.
-   - Preserve marker persistence and runtime read-only rendering.
-   - Keep selection independent of rule targeting and richer entity properties until concrete play-test workflows need that connection.
-
-3. `codex/undo-redo`
+1. `codex/undo-redo`
    - Introduce undo and redo for editor state mutations.
    - Cover board setup, tile marker placement, free-coordinate marker placement, marker deletion, and inspector edits as the first undoable actions.
    - Keep undo history in memory; do not persist it across sessions.
    - Keep file save/load semantics separate from undo history.
    - Wire undo and redo through the command registry and keyboard shortcuts: Ctrl+Z and Ctrl+Shift+Z.
 
-4. `codex/validation-unification`
+2. `codex/validation-unification`
    - Share board-size and tile-size validation predicates between editor setup and scenario-file loading.
    - Keep supported limits identical across visual setup, opened files, and future source edits.
    - Accept the intentional behavior change that oversized tile-grid scenarios now fail validation instead of entering unsupported editor states.
    - Add focused negative coverage only if it keeps the smoke path readable.
 
-5. `codex/source-editor`
+3. `codex/object-occupancy-semantics`
+   - Allow tile-based markers to share the same tile instead of treating one tile as one object slot.
+   - Do not treat rounded free-coordinate values as a collision or deduplication rule; stored precision is for readable authoring, not occupancy semantics.
+   - Keep the marker model permissive and editor-first; do not encode game-rule legality for stacking or proximity yet.
+   - Add the minimum editor/runtime rendering and selection behavior needed to inspect and delete colocated markers without reopening a broad entity-system design.
+
+4. `codex/source-editor`
    - Turn the scenario JSON panel into an editable source view.
    - Validate edits before applying them to the visual editor.
    - Provide a safe way to recover from invalid JSON.
    - Apply the same supported board-size and space-model limits to source edits and opened files, or surface unsupported cases explicitly instead of letting scenarios enter a partially supported state.
+   - Preserve occupancy semantics established for tile and free-coordinate markers instead of reintroducing one-object-per-location assumptions in source edits.
 
-6. `codex/asset-library-imports`
+5. `codex/asset-library-imports`
    - Add the first scenario asset model for imported images.
    - Prefer a project/package asset library with stable relative references over base64-heavy scenario JSON.
    - Start with board background images before token images so temporary markers do not accidentally become the durable asset model.
    - Treat sprite sheets, board tile images, and tile/sprite placement workflows as follow-on pressure after basic image imports.
 
-7. `codex/export-runtime-spike`
+6. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
    - Prove export assumptions against both tile-based and free-coordinate scenarios before treating the runtime bundle shape as settled.
@@ -61,36 +56,37 @@ Current manual testing pressure points are captured in the branch sequence below
 
 These are not committed near-term order. They hold open design work that should stay out of `DECISIONS.md` until concrete implementation and manual testing settle it.
 
-8. `codex/scenario-format-hardening`
+7. `codex/scenario-format-hardening`
    - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
    - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
    - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
    - Define the migration contract in this branch; implement actual migration tooling only for format changes that already exist or split it into a follow-up if it grows beyond the scenario-file hardening slice.
 
-9. `codex/rules-expression-spike`
+8. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-10. `codex/standalone-runtime-export`
+9. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.
 
-11. `codex/unit-entity-model`
+10. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
+   - Build on the earlier occupancy-semantics slice instead of reintroducing one-entity-per-location assumptions for tile or free-coordinate scenarios.
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-12. `codex/token-styling`
+11. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-13. `codex/rules-authoring-system`
+12. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
@@ -102,6 +98,7 @@ Large boards and map styling:
 - free-coordinate boards now have a foundation slice; keep only follow-on refinements here
 - refine authored scale semantics for tiled and free-coordinate boards after the first free-coordinate editor/runtime slice proves the basic model
 - decide how marker/token visual size relates to board/world scale, authored units, and eventual token/entity configuration; the foundation marker currently uses viewport-friendly temporary sizing, not durable physical scale
+- decide how stacked tile objects should render and how authors disambiguate selection, cycling, or list-based inspection once multiple colocated objects become common
 - decide whether token placement validity is based on center point only or on the full token footprint; manual testing showed edge placements can intentionally or unintentionally hang outside free-coordinate board bounds
 - add concise setup help or tooltip hints once labels like distance per tile, scale unit, tile size, and free-coordinate bounds need to carry real authoring meaning
 - add inline board setup validation once setup grows past the first slice: keep invalid draft values visible, mark invalid fields, and show field-local range messages instead of relying only on the status line
@@ -115,6 +112,7 @@ Free-coordinate follow-ons:
 - add measurement and ruler tools after free-coordinate placement proves the world-coordinate model
 - add snapping, guides, bearing widgets, and authored coordinate overlays only after concrete authoring pressure shows which aids matter
 - clarify origin/bounds semantics in the UI, including what top-left `x`/`y` means relative to `width`/`height`, before relying on offset free-coordinate maps in author workflows
+- decide how coincident or near-coincident free-coordinate objects should be visualized and disambiguated in the editor without treating rounded display precision as physical occupancy
 - add object facing or bearing editing with the first real entity workflow, not with temporary markers
 - add free-space movement, order plotting, and resolution only when the plotted-turn play-test slice needs them
 - add continuous-space terrain, zones, obstacles, or movement-cost hooks after basic placement and entity/rules pressure justify them
