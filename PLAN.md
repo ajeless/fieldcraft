@@ -123,7 +123,7 @@ Free-coordinate follow-ons:
 - treat additional source-editor and export polish for free-coordinate scenarios as follow-on work unless needed to preserve valid round-trips in the foundation branch
 
 Assets and author media:
-- defer a built-in sprite creator until the editor has real asset workflows and authoring pressure justifies it
+- a built-in sprite creator becomes relevant after `codex/asset-library-imports` proves the basic asset model and authoring pressure justifies it
 
 Command model:
 - use the command-registry slice as the base before adding broader command surfaces
@@ -131,7 +131,7 @@ Command model:
 - leave native Tauri menus for later after the in-app registry proves itself
 
 Editor layout customization:
-- defer draggable/dockable panels until the main panel set stabilizes
+- draggable/dockable panels become relevant after the main panel set stabilizes through selection, source editing, and inspector work
 - design toward a small container/widget system rather than one-off panel code
 - likely concepts: panel registry, layout containers, persisted layouts, and reset-to-default
 - avoid turning this into a plugin system until at least two real editor workflows need it
@@ -139,7 +139,7 @@ Editor layout customization:
 Board view and orientation:
 - consider editable exact zoom entry, such as making the zoom label/control accept a percentage, after the basic pan/zoom/reset controls are stable
 - add board view rotation controls only after pan, zoom, reset, and placement remain trustworthy across board types
-- defer authored hex orientation choice until a concrete scenario needs flat-top; the current setup treats pointy-top as the hardcoded orientation
+- authored hex orientation choice waits for a concrete scenario that needs flat-top; the current setup treats pointy-top as the hardcoded orientation
 - consider snap angles and persisted view/orientation state only when manual testing shows authoring value
 
 Turns, phases, and play-testing:
@@ -154,7 +154,7 @@ Export, packaging, and network play:
 
 Animation authoring:
 - in-game animation is important for digital board game feel, such as weapon fire, torpedoes, movement previews, and resolution effects
-- defer animation tools until board viewport, runtime playback, and scenario rule resolution have more shape
+- animation tools wait for board viewport, runtime playback, and scenario rule resolution to have more shape
 - likely future need: timeline or event-effect authoring that remains data-driven and inspectable by the editor
 
 ## Operating Notes
