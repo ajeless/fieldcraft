@@ -63,6 +63,17 @@ try {
   await createGrid(page, "square", 6, 5);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
   await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectCommandEnabled(page, "undo-scenario");
+  await expectCommandDisabled(page, "redo-scenario");
+  await page.click('[data-testid="undo-scenario"]');
+  await expectBoardSetupVisible(page);
+  await expectInputValue(page, '[data-testid="grid-width-input"]', "6");
+  await expectInputValue(page, '[data-testid="grid-height-input"]', "5");
+  await expectCommandDisabled(page, "undo-scenario");
+  await expectCommandEnabled(page, "redo-scenario");
+  await page.click('[data-testid="redo-scenario"]');
+  await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
   await placeMarkerFromPalette(page, "board-surface", 2, 1);
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "2-1");
@@ -72,6 +83,8 @@ try {
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "2-1");
+  await expectCommandDisabled(page, "undo-scenario");
+  await expectCommandDisabled(page, "redo-scenario");
   await page.click('[data-testid="save-scenario"]');
   await expectStatusLine(page, "Scenario saved");
   const firstRecoveredSave = await page.evaluate(() =>
@@ -190,6 +203,37 @@ try {
     id: "marker-32-32",
     position: "Tile 32, 32"
   });
+  await page.keyboard.press("Control+Z");
+  await expectMarkerCount(page, "0");
+  await expectMarkerMissing(page, "board-surface", "32-32");
+  await expectNoSelectedMarker(page);
+  await page.keyboard.press("Control+Shift+Z");
+  await expectMarkerCount(page, "1");
+  await waitForMarker(page, "board-surface", "32-32");
+  await expectSelectedMarker(page, {
+    id: "marker-32-32",
+    position: "Tile 32, 32"
+  });
+  await updateSelectedMarkerId(page, "lead-marker");
+  await expectSelectedMarker(page, {
+    id: "lead-marker",
+    position: "Tile 32, 32"
+  });
+  await page.keyboard.press("Control+Z");
+  await expectSelectedMarker(page, {
+    id: "marker-32-32",
+    position: "Tile 32, 32"
+  });
+  await page.keyboard.press("Control+Shift+Z");
+  await expectSelectedMarker(page, {
+    id: "lead-marker",
+    position: "Tile 32, 32"
+  });
+  await page.keyboard.press("Control+Z");
+  await expectSelectedMarker(page, {
+    id: "marker-32-32",
+    position: "Tile 32, 32"
+  });
   await placeMarkerFromPalette(page, "board-surface", 0, 0);
   await expectMarkerCount(page, "2");
   await waitForMarker(page, "board-surface", "0-0");
@@ -213,6 +257,17 @@ try {
   await expectNoSelectedMarker(page);
   await expectMarkerCount(page, "2");
   await expectMarkerMissing(page, "board-surface", "63-63");
+  await page.click('[data-testid="undo-scenario"]');
+  await expectMarkerCount(page, "3");
+  await waitForMarker(page, "board-surface", "63-63");
+  await expectSelectedMarker(page, {
+    id: "marker-63-63",
+    position: "Tile 63, 63"
+  });
+  await page.click('[data-testid="redo-scenario"]');
+  await expectMarkerCount(page, "2");
+  await expectMarkerMissing(page, "board-surface", "63-63");
+  await expectNoSelectedMarker(page);
 
   await panSurface(page, "board-surface");
   const pannedTransform = await getTransform(page, "board-surface");
@@ -425,6 +480,18 @@ try {
   await expectCanvasHasRenderedBoard(page, "board-canvas");
   const freeHomeTransform = await getTransform(page, "board-surface");
 
+  await placeMarkerAtFreeCoordinate(page, "board-surface", 10, 10);
+  await expectMarkerCount(page, "1");
+  await waitForFreeMarkerNear(page, "board-surface", 10, 10);
+  await page.click('[data-testid="undo-scenario"]');
+  await expectMarkerCount(page, "0");
+  await expectMarkerMissing(page, "board-surface", "10,10");
+  await page.click('[data-testid="redo-scenario"]');
+  await expectMarkerCount(page, "1");
+  await waitForFreeMarkerNear(page, "board-surface", 10, 10);
+  await page.click('[data-testid="undo-scenario"]');
+  await expectMarkerCount(page, "0");
+  await expectNoSelectedMarker(page);
   await placeMarkerAtFreeCoordinate(page, "board-surface", 0, 0);
   await expectMarkerCount(page, "1");
   await waitForFreeMarkerNear(page, "board-surface", 0, 0);
@@ -605,7 +672,7 @@ async function expectInvalidSetupPreservesDraft(page) {
   await page.fill('[data-testid="grid-width-input"]', "18");
   await page.fill('[data-testid="grid-height-input"]', "14");
   await page.fill('[data-testid="scale-unit-input"]', "km");
-  await page.fill('[data-testid="tile-size-input"]', "");
+  await setInputValue(page, '[data-testid="tile-size-input"]', "");
   await page.click('[data-testid="create-board"]');
   await page.waitForFunction(() => {
     return document.querySelector(".status-line")?.textContent === "Board setup values are out of range";
@@ -1040,6 +1107,25 @@ async function expectMarkerCount(page, count) {
   }, count);
 }
 
+async function expectCommandEnabled(page, testId) {
+  await page.waitForFunction((commandTestId) => {
+    const button = document.querySelector(`[data-testid="${commandTestId}"]`);
+    return button instanceof HTMLButtonElement && !button.disabled;
+  }, testId);
+}
+
+async function expectCommandDisabled(page, testId) {
+  await page.waitForFunction((commandTestId) => {
+    const button = document.querySelector(`[data-testid="${commandTestId}"]`);
+    return button instanceof HTMLButtonElement && button.disabled;
+  }, testId);
+}
+
+async function expectBoardSetupVisible(page) {
+  await page.waitForSelector('[data-testid="create-board"]');
+  await page.waitForFunction(() => !document.querySelector('[data-testid="board-surface"]'));
+}
+
 async function expectSelectedMarker(page, expected = {}) {
   await page.waitForFunction(({ id, position, near }) => {
     const emptyState = document.querySelector('[data-testid="selected-marker-empty"]');
@@ -1096,6 +1182,12 @@ async function expectNoSelectedMarker(page) {
       deleteButton.disabled
     );
   });
+}
+
+async function updateSelectedMarkerId(page, value) {
+  const input = page.locator('[data-testid="selected-marker-id-input"]');
+  await input.fill(value);
+  await input.blur();
 }
 
 async function panSurface(page, surfaceTestId) {
