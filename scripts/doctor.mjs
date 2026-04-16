@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
 import fsp from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import { checkPort, pnpmCommand, repoRoot } from "./process-utils.mjs";
+import { checkPort, pnpmCommand, repoRoot, withCargoBin } from "./process-utils.mjs";
 
 const tauriConfigPath = path.join(repoRoot, "apps", "editor", "src-tauri", "tauri.conf.json");
 const tauriConfig = JSON.parse(await fsp.readFile(tauriConfigPath, "utf8"));
@@ -167,33 +165,4 @@ function versionAtLeast(actual, minimum) {
   }
 
   return true;
-}
-
-function withCargoBin(baseEnv) {
-  const env = { ...baseEnv };
-  const cargoBin = getCargoBin();
-  if (!cargoBin || !fs.existsSync(cargoBin)) {
-    return env;
-  }
-
-  const pathKey = getPathKey(env);
-  const currentPath = env[pathKey] ?? "";
-  const entries = currentPath.split(path.delimiter).filter(Boolean);
-  if (!entries.includes(cargoBin)) {
-    env[pathKey] = [cargoBin, ...entries].join(path.delimiter);
-  }
-  return env;
-}
-
-function getCargoBin() {
-  if (process.platform === "win32") {
-    const profile = process.env.USERPROFILE;
-    return profile ? path.join(profile, ".cargo", "bin") : null;
-  }
-
-  return path.join(os.homedir(), ".cargo", "bin");
-}
-
-function getPathKey(env) {
-  return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 }

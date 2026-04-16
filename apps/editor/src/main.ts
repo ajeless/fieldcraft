@@ -1,4 +1,6 @@
 import "./styles.css";
+import { isTauri } from "@tauri-apps/api/core";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import {
   type BoardViewportState,
   createBoardViewport,
@@ -784,7 +786,11 @@ function placeDefaultMarker(x: number, y: number): void {
   render();
 }
 
-function createNewScenario(): void {
+async function createNewScenario(): Promise<void> {
+  if (!(await confirmDiscardUnsavedChanges())) {
+    return;
+  }
+
   scenario = createEmptyScenario();
   clearCurrentFilePath();
   resetBoardViewportStates();
@@ -942,6 +948,10 @@ function createFreeCoordinateBoard(options: {
 }
 
 async function openScenario(fileInput: HTMLInputElement): Promise<void> {
+  if (!(await confirmDiscardUnsavedChanges())) {
+    return;
+  }
+
   try {
     applyStorageResult(await openScenarioFile(fileInput));
   } catch (error) {
@@ -1005,8 +1015,28 @@ function getRoute(): Route {
 }
 
 function navigate(route: Route): void {
-  window.location.hash = route === "runtime" ? "#/play" : "#/editor";
-  render();
+  const nextHash = route === "runtime" ? "#/play" : "#/editor";
+  if (window.location.hash === nextHash) {
+    render();
+    return;
+  }
+
+  window.location.hash = nextHash;
+}
+
+async function confirmDiscardUnsavedChanges(): Promise<boolean> {
+  if (!dirty) {
+    return true;
+  }
+
+  if (!isTauri()) {
+    return window.confirm("Discard unsaved changes?");
+  }
+
+  return confirmDialog("Discard unsaved changes?", {
+    kind: "warning",
+    title: "Unsaved Changes"
+  });
 }
 
 function labeledInput(

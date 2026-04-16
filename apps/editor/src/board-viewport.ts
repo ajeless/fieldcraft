@@ -321,7 +321,7 @@ function createSquareGridGeometry(space: ScenarioTileSpace): GridGeometry {
   };
 
   return {
-    key: `${space.type}:${space.width}x${space.height}`,
+    key: `${space.type}:${space.width}x${space.height}:${tileSize}`,
     spaceType: space.type,
     bounds,
     columns: space.width,
@@ -393,7 +393,7 @@ function createHexGridGeometry(space: ScenarioTileSpace): GridGeometry {
   });
 
   return {
-    key: `${space.type}:${space.width}x${space.height}`,
+    key: `${space.type}:${space.width}x${space.height}:${hexRadius}`,
     spaceType: space.type,
     bounds,
     columns: space.width,

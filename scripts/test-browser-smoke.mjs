@@ -49,6 +49,18 @@ try {
   });
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
 
+  await createGrid(page, "square", 6, 5);
+  await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await dismissConfirm(page, () => page.click('[data-testid="new-scenario"]'));
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectNoFileChooser(page, () =>
+    dismissConfirm(page, () => page.click('[data-testid="open-scenario"]'))
+  );
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await acceptConfirm(page, () => page.click('[data-testid="new-scenario"]'));
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+
   await openScenarioFromShortcut(page, menuOpenFixturePath);
   await expectMarkerCount(page, "1");
   await expectSurfaceSpace(page, "board-surface", "square-grid");
@@ -502,6 +514,43 @@ async function expectInputValue(page, selector, expectedValue) {
   const value = await page.locator(selector).inputValue();
   if (value !== expectedValue) {
     throw new Error(`${selector} was reset to ${JSON.stringify(value)}.`);
+  }
+}
+
+async function acceptConfirm(page, action) {
+  await Promise.all([
+    page.waitForEvent("dialog").then(async (dialog) => {
+      if (dialog.type() !== "confirm") {
+        throw new Error(`Expected confirm dialog, got ${dialog.type()}.`);
+      }
+      await dialog.accept();
+    }),
+    action()
+  ]);
+}
+
+async function dismissConfirm(page, action) {
+  await Promise.all([
+    page.waitForEvent("dialog").then(async (dialog) => {
+      if (dialog.type() !== "confirm") {
+        throw new Error(`Expected confirm dialog, got ${dialog.type()}.`);
+      }
+      await dialog.dismiss();
+    }),
+    action()
+  ]);
+}
+
+async function expectNoFileChooser(page, action) {
+  const fileChooserOpened = page
+    .waitForEvent("filechooser", { timeout: 300 })
+    .then(() => true)
+    .catch(() => false);
+
+  await action();
+
+  if (await fileChooserOpened) {
+    throw new Error("File chooser opened unexpectedly.");
   }
 }
 

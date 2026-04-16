@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
-import fs from "node:fs/promises";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,7 +19,7 @@ export function wait(ms) {
 
 export async function readState() {
   try {
-    return JSON.parse(await fs.readFile(statePath, "utf8"));
+    return JSON.parse(await fsp.readFile(statePath, "utf8"));
   } catch (error) {
     if (error && error.code === "ENOENT") {
       return null;
@@ -27,12 +29,12 @@ export async function readState() {
 }
 
 export async function writeState(state) {
-  await fs.mkdir(runtimeDir, { recursive: true });
-  await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
+  await fsp.mkdir(runtimeDir, { recursive: true });
+  await fsp.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
 export async function removeState() {
-  await fs.rm(statePath, { force: true });
+  await fsp.rm(statePath, { force: true });
 }
 
 export function isProcessRunning(pid) {
@@ -167,4 +169,33 @@ export function pnpmCommand(args) {
     command: "corepack",
     args: ["pnpm", ...args]
   };
+}
+
+export function withCargoBin(baseEnv) {
+  const env = { ...baseEnv };
+  const cargoBin = getCargoBin();
+  if (!cargoBin || !fs.existsSync(cargoBin)) {
+    return env;
+  }
+
+  const pathKey = getPathKey(env);
+  const currentPath = env[pathKey] ?? "";
+  const entries = currentPath.split(path.delimiter).filter(Boolean);
+  if (!entries.includes(cargoBin)) {
+    env[pathKey] = [cargoBin, ...entries].join(path.delimiter);
+  }
+  return env;
+}
+
+function getCargoBin() {
+  if (process.platform === "win32") {
+    const profile = process.env.USERPROFILE;
+    return profile ? path.join(profile, ".cargo", "bin") : null;
+  }
+
+  return path.join(os.homedir(), ".cargo", "bin");
+}
+
+function getPathKey(env) {
+  return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 }
