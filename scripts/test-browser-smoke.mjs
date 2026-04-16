@@ -44,10 +44,12 @@ try {
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
   await page.waitForSelector('[data-view="editor"]');
+  await page.waitForSelector('[data-testid="document-command-bar"]');
   await page.waitForFunction(() => {
     return document.querySelector('[data-testid="marker-count"]')?.textContent === "0";
   });
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await expectCommandDisabled(page, "palette-marker");
   await page.click('[data-testid="theme-dark"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
   await expectStoredTheme(page, "dark");
@@ -74,6 +76,7 @@ try {
   await page.click('[data-testid="redo-scenario"]');
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
   await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectCommandEnabled(page, "palette-marker");
   await placeMarkerFromPalette(page, "board-surface", 2, 1);
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "2-1");
@@ -81,6 +84,7 @@ try {
   await page.waitForSelector('[data-view="editor"]');
   await expectStatusLine(page, "Recovered session draft");
   await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectCommandEnabled(page, "palette-marker");
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "2-1");
   await expectCommandDisabled(page, "undo-scenario");
@@ -264,7 +268,7 @@ try {
     id: "marker-63-63",
     position: "Tile 63, 63"
   });
-  await page.click('[data-testid="redo-scenario"]');
+  await page.keyboard.press("Control+Y");
   await expectMarkerCount(page, "2");
   await expectMarkerMissing(page, "board-surface", "63-63");
   await expectNoSelectedMarker(page);
@@ -1130,7 +1134,7 @@ async function expectSelectedMarker(page, expected = {}) {
   await page.waitForFunction(({ id, position, near }) => {
     const emptyState = document.querySelector('[data-testid="selected-marker-empty"]');
     const kind = document.querySelector('[data-testid="selected-marker-kind"]')?.textContent;
-    const selectedId = document.querySelector('[data-testid="selected-marker-id"]')?.textContent;
+    const selectedIdInput = document.querySelector('[data-testid="selected-marker-id-input"]');
     const selectedPosition = document.querySelector(
       '[data-testid="selected-marker-position"]'
     )?.textContent;
@@ -1142,7 +1146,8 @@ async function expectSelectedMarker(page, expected = {}) {
     return (
       !emptyState &&
       kind === "Marker" &&
-      (id === null || selectedId === id) &&
+      selectedIdInput instanceof HTMLInputElement &&
+      (id === null || selectedIdInput.value === id) &&
       (position === null || selectedPosition === position) &&
       matchesNearPosition &&
       deleteButton instanceof HTMLButtonElement &&

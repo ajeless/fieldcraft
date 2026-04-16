@@ -115,6 +115,11 @@ type EditorSnapshot = {
   selectedMarkerId: string | null;
 };
 
+const documentCommandGroups = [
+  ["undo", "redo"],
+  ["new", "open", "save", "save-as"]
+] as const satisfies ReadonlyArray<ReadonlyArray<EditorCommandId>>;
+
 const themeStorageKey = "fieldcraft:theme";
 const editorSessionDraftStorageKey = "fieldcraft:editor-session-draft";
 const systemThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
@@ -183,7 +188,10 @@ function createShell(route: Route): HTMLElement {
     modeButton("Runtime", "runtime", route, launchRuntime, !scenario.space)
   );
 
-  header.append(brand, menuBar, themeSwitch, routeSwitch);
+  const topbarPrimary = element("div", "topbar-primary");
+  topbarPrimary.append(menuBar, createDocumentCommandBar());
+
+  header.append(brand, topbarPrimary, themeSwitch, routeSwitch);
   shell.append(
     header,
     fileInput,
@@ -234,18 +242,15 @@ function createEditorView(): HTMLElement {
   const selectedMarker = getSelectedMarker();
 
   const sidebar = element("aside", "panel left-panel");
-  const sidebarItems: HTMLElement[] = [
+  sidebar.append(
     element("p", "eyebrow", "Scenario"),
     labeledInput("Title", scenario.title, updateScenarioTitle, "scenario-title-input"),
     metric("Board", getBoardLabel()),
     metric("Markers", String(scenario.pieces.length), "marker-count"),
-    metric("File", getFileLabel(), "current-file")
-  ];
-  if (scenario.space) {
-    sidebarItems.push(createMarkerPalette());
-  }
-  sidebarItems.push(createActionStack());
-  sidebar.append(...sidebarItems);
+    metric("File", getFileLabel(), "current-file"),
+    createContextToolSection(),
+    createStatusSection()
+  );
 
   const boardStage = element("section", "board-stage");
   boardStage.append(
@@ -424,18 +429,19 @@ function createMenu(label: string, id: string, entries: MenuEntry[]): HTMLElemen
 
 function createMenuCommandButton(commandId: EditorCommandId): HTMLButtonElement {
   const command = getCommand(commandId);
+  const shortcuts = getCommandShortcuts(commandId);
   const button = document.createElement("button");
   const label = element("span", "menu-item-label", command.label);
-  const shortcut = command.shortcut
-    ? element("span", "menu-item-shortcut", formatShortcutHint(command.shortcut))
+  const shortcut = shortcuts.length > 0
+    ? element("span", "menu-item-shortcut", formatShortcutHints(shortcuts))
     : null;
   button.type = "button";
   button.className = "menu-item";
   button.disabled = !command.enabled;
   button.dataset.testid = getMenuCommandTestId(commandId);
   button.title = getCommandTitle(commandId);
-  if (command.shortcut) {
-    button.setAttribute("aria-keyshortcuts", formatShortcutAria(command.shortcut));
+  if (shortcuts.length > 0) {
+    button.setAttribute("aria-keyshortcuts", formatShortcutAriaSet(shortcuts));
   }
   button.append(label);
   if (shortcut) {
@@ -484,6 +490,15 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
     return;
   }
 
+  if (isRedoAliasKeyEvent(event)) {
+    const redoCommand = commandRegistry["redo"];
+    if (redoCommand?.enabled) {
+      event.preventDefault();
+      executeCommand(redoCommand);
+    }
+    return;
+  }
+
   const command = findCommandByShortcut(commandRegistry, event);
   if (!command) {
     return;
@@ -506,6 +521,18 @@ function isDeleteSelectionKeyEvent(event: KeyboardEvent): boolean {
   }
 
   return event.key === "Backspace";
+}
+
+function isRedoAliasKeyEvent(event: KeyboardEvent): boolean {
+  return (
+    !isMacPlatform() &&
+    !isEditableEventTarget(event.target) &&
+    event.key.toLowerCase() === "y" &&
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey
+  );
 }
 
 function isEditableEventTarget(target: EventTarget | null): boolean {
@@ -549,35 +576,35 @@ function createRuntimeView(): HTMLElement {
   return view;
 }
 
-function createActionStack(): HTMLElement {
-  const actions = element("div", "action-stack");
-  const status = element("p", "status-line", statusMessage);
-  status.title = statusMessage;
+function createDocumentCommandBar(): HTMLElement {
+  const bar = element("nav", "document-command-bar");
+  bar.dataset.testid = "document-command-bar";
+  bar.setAttribute("aria-label", "Document commands");
 
-  actions.append(
-    commandActionButton("undo"),
-    commandActionButton("redo"),
-    commandActionButton("new"),
-    commandActionButton("open"),
-    commandActionButton("save"),
-    commandActionButton("save-as"),
-    status
-  );
+  for (const group of documentCommandGroups) {
+    const groupElement = element("div", "document-command-group");
+    for (const commandId of group) {
+      groupElement.append(createDocumentCommandButton(commandId));
+    }
+    bar.append(groupElement);
+  }
 
-  return actions;
+  return bar;
 }
 
-function commandActionButton(commandId: EditorCommandId): HTMLButtonElement {
+function createDocumentCommandButton(commandId: EditorCommandId): HTMLButtonElement {
   const command = getCommand(commandId);
+  const shortcuts = getCommandShortcuts(commandId);
   const button = buttonElement(
-    getSidebarCommandLabel(commandId),
+    getCommandLabel(commandId),
     () => executeCommandById(commandId),
     getCommandTestId(commandId),
     !command.enabled
   );
+  button.className = "document-command-button";
   button.title = getCommandTitle(commandId);
-  if (command.shortcut) {
-    button.setAttribute("aria-keyshortcuts", formatShortcutAria(command.shortcut));
+  if (shortcuts.length > 0) {
+    button.setAttribute("aria-keyshortcuts", formatShortcutAriaSet(shortcuts));
   }
   return button;
 }
@@ -612,10 +639,13 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
   const deleteButton = createInspectorCommandButton(
     "delete-selected-marker",
     "delete-selected-marker",
-    "action-button destructive-action"
+    "action-button compact-action destructive-action",
+    "Delete"
   );
+  const header = element("div", "inspector-section-header");
+  header.append(element("p", "eyebrow", "Selection"), deleteButton);
 
-  section.append(element("p", "eyebrow", "Selection"));
+  section.append(header);
   if (!scenario.space) {
     const empty = element(
       "p",
@@ -623,23 +653,21 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
       "Create a board and place a marker to inspect it."
     );
     empty.dataset.testid = "selected-marker-empty";
-    section.append(empty, deleteButton);
+    section.append(empty);
     return section;
   }
 
   if (!selectedMarker) {
     const empty = element("p", "inspector-empty", "No marker selected.");
     empty.dataset.testid = "selected-marker-empty";
-    section.append(empty, deleteButton);
+    section.append(empty);
     return section;
   }
 
   section.append(
-    metric("Kind", "Marker", "selected-marker-kind"),
-    metric("Id", selectedMarker.id, "selected-marker-id"),
     createMarkerIdInput(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
-    deleteButton
+    metric("Kind", "Marker", "selected-marker-kind")
   );
 
   return section;
@@ -651,35 +679,58 @@ function createMarkerIdInput(selectedMarker: Scenario["pieces"][number]): HTMLEl
   return field.label;
 }
 
-function createMarkerPalette(): HTMLElement {
+function createContextToolSection(): HTMLElement {
   const palette = element("section", "marker-palette");
+  const markerEnabled = Boolean(scenario.space);
   const marker = document.createElement("button");
   const swatch = element("span", "palette-marker-swatch");
   const label = element("span", "palette-marker-label", "Marker");
+  const helper = element(
+    "p",
+    "tool-hint",
+    markerEnabled
+      ? "Drag the marker onto the board to place it."
+      : "Create a board to unlock marker placement."
+  );
 
   marker.type = "button";
   marker.className = "palette-marker";
-  marker.draggable = true;
+  marker.draggable = markerEnabled;
+  marker.disabled = !markerEnabled;
   marker.dataset.testid = "palette-marker";
-  marker.setAttribute("aria-label", "Default marker");
-  marker.title = "Default marker";
-  marker.addEventListener("dragstart", (event) => {
-    if (!event.dataTransfer) {
-      return;
-    }
+  marker.setAttribute(
+    "aria-label",
+    markerEnabled ? "Default marker" : "Create a board to enable marker placement"
+  );
+  marker.title = markerEnabled ? "Default marker" : "Create a board to enable marker placement";
+  if (markerEnabled) {
+    marker.addEventListener("dragstart", (event) => {
+      if (!event.dataTransfer) {
+        return;
+      }
 
-    event.dataTransfer.effectAllowed = "copy";
-    event.dataTransfer.setData(markerDragDataType, "default-marker");
-    event.dataTransfer.setData("text/plain", "Fieldcraft marker");
-    event.dataTransfer.setDragImage(
-      swatch,
-      swatch.offsetWidth / 2,
-      swatch.offsetHeight / 2
-    );
-  });
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData(markerDragDataType, "default-marker");
+      event.dataTransfer.setData("text/plain", "Fieldcraft marker");
+      event.dataTransfer.setDragImage(
+        swatch,
+        swatch.offsetWidth / 2,
+        swatch.offsetHeight / 2
+      );
+    });
+  }
   marker.append(swatch, label);
-  palette.append(element("p", "eyebrow", "Palette"), marker);
+  palette.append(element("p", "eyebrow", "Tools"), helper, marker);
   return palette;
+}
+
+function createStatusSection(): HTMLElement {
+  const section = element("section", "status-section");
+  const status = element("p", "status-line", statusMessage);
+  status.dataset.testid = "status-line";
+  status.title = statusMessage;
+  section.append(element("p", "eyebrow", "Status"), status);
+  return section;
 }
 
 function createBoardSetup(): HTMLElement {
@@ -964,17 +1015,22 @@ function createBlankBoardMessage(): HTMLElement {
 function createInspectorCommandButton(
   commandId: EditorCommandId,
   testId: string,
-  className: string
+  className: string,
+  label?: string
 ): HTMLButtonElement {
   const command = getCommand(commandId);
+  const shortcuts = getCommandShortcuts(commandId);
   const button = buttonElement(
-    command.label,
+    label ?? command.label,
     () => executeCommandById(commandId),
     testId,
     !command.enabled
   );
   button.className = className;
-  button.title = command.label;
+  button.title = getCommandTitle(commandId);
+  if (shortcuts.length > 0) {
+    button.setAttribute("aria-keyshortcuts", formatShortcutAriaSet(shortcuts));
+  }
   return button;
 }
 
@@ -1839,22 +1895,35 @@ function getMenuCommandTestId(commandId: EditorCommandId): string {
   return `menu-${getCommandTestId(commandId)}`;
 }
 
-function getSidebarCommandLabel(commandId: EditorCommandId): string {
+function getCommandLabel(commandId: EditorCommandId): string {
+  return getCommand(commandId).label;
+}
+
+function getCommandShortcuts(commandId: EditorCommandId): string[] {
   const command = getCommand(commandId);
-  if (commandId === "save-as" || commandId === "undo" || commandId === "redo") {
-    return command.label;
+  const shortcuts = command.shortcut ? [command.shortcut] : [];
+  if (commandId === "redo" && !isMacPlatform()) {
+    shortcuts.push("Mod+Y");
   }
 
-  return `${command.label} Scenario`;
+  return shortcuts;
 }
 
 function getCommandTitle(commandId: EditorCommandId): string {
-  const command = getCommand(commandId);
-  if (!command.shortcut) {
-    return getSidebarCommandLabel(commandId);
+  const shortcuts = getCommandShortcuts(commandId);
+  if (shortcuts.length === 0) {
+    return getCommandLabel(commandId);
   }
 
-  return `${getSidebarCommandLabel(commandId)} (${formatShortcutHint(command.shortcut)})`;
+  return `${getCommandLabel(commandId)} (${formatShortcutHints(shortcuts)})`;
+}
+
+function formatShortcutHints(shortcuts: ReadonlyArray<string>): string {
+  return shortcuts.map((shortcut) => formatShortcutHint(shortcut)).join(" / ");
+}
+
+function formatShortcutAriaSet(shortcuts: ReadonlyArray<string>): string {
+  return shortcuts.map((shortcut) => formatShortcutAria(shortcut)).join(" ");
 }
 
 function formatShortcutHint(shortcut: string): string {
