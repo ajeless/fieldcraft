@@ -8,16 +8,21 @@ import {
 } from "./board-viewport";
 import {
   type Scenario,
+  type ScenarioSpaceType,
   type ScenarioTileSpaceType,
+  createFreeCoordinateScenarioSpace,
   createEmptyScenario,
   createTileScenarioSpace,
   defaultBoardBackgroundColor,
+  defaultFreeCoordinateDistancePerWorldUnit,
+  defaultFreeCoordinateScaleUnit,
   defaultGridLineColor,
   defaultGridLineOpacity,
   defaultScaleDistancePerTile,
   defaultScaleUnit,
   getDefaultTileSize,
   isTileScenarioSpace,
+  maxFreeCoordinateBoardSize,
   maxTileGridSize,
   scenarioToJson
 } from "./scenario";
@@ -57,7 +62,7 @@ type MenuEntry =
     };
 
 type BoardSetupDraft = {
-  type: ScenarioTileSpaceType;
+  type: ScenarioSpaceType;
   widthValue: string;
   heightValue: string;
   tileSizeValue: string;
@@ -66,6 +71,13 @@ type BoardSetupDraft = {
   gridLineColorValue: string;
   gridLineOpacityValue: string;
   backgroundColorValue: string;
+  freeXValue: string;
+  freeYValue: string;
+  freeWidthValue: string;
+  freeHeightValue: string;
+  freeDistancePerWorldUnitValue: string;
+  freeScaleUnitValue: string;
+  freeBackgroundColorValue: string;
   tileSizeEdited: boolean;
 };
 
@@ -107,7 +119,7 @@ function createShell(route: Route): HTMLElement {
   routeSwitch.setAttribute("aria-label", "Mode");
   routeSwitch.append(
     modeButton("Editor", "editor", route, () => navigate("editor")),
-    modeButton("Runtime", "runtime", route, launchRuntime, !isTileScenarioSpace(scenario.space))
+    modeButton("Runtime", "runtime", route, launchRuntime, !scenario.space)
   );
 
   header.append(brand, menuBar, routeSwitch);
@@ -148,7 +160,7 @@ function createEditorView(commands: EditorCommands): HTMLElement {
     metric("Markers", String(scenario.pieces.length), "marker-count"),
     metric("File", getFileLabel(), "current-file")
   ];
-  if (isTileScenarioSpace(scenario.space)) {
+  if (scenario.space) {
     sidebarItems.push(createMarkerPalette());
   }
   sidebarItems.push(createActionStack(commands));
@@ -402,7 +414,7 @@ function createBoard(options: {
   onMarkerDrop?: (x: number, y: number) => void;
 }): HTMLElement {
   const space = scenario.space;
-  if (!isTileScenarioSpace(space)) {
+  if (!space) {
     return createBlankBoardMessage();
   }
 
@@ -449,17 +461,155 @@ function createMarkerPalette(): HTMLElement {
 
 function createBoardSetup(): HTMLElement {
   const setup = element("section", "board-setup");
-  const squareOption = tileSpaceOption(
+  const selectedType = boardSetupDraft.type;
+  const squareOption = spaceOption(
     "Square grid",
     "square-grid",
-    boardSetupDraft.type === "square-grid"
+    selectedType === "square-grid"
   );
-  const hexOption = tileSpaceOption(
+  const hexOption = spaceOption(
     "Hex grid",
     "hex-grid",
-    boardSetupDraft.type === "hex-grid"
+    selectedType === "hex-grid"
+  );
+  const freeOption = spaceOption(
+    "Free-coordinate",
+    "free-coordinate",
+    selectedType === "free-coordinate"
   );
   const spaceChoice = element("fieldset", "space-choice");
+
+  for (const option of [squareOption, hexOption, freeOption]) {
+    option.input.addEventListener("change", () => {
+      if (!option.input.checked) {
+        return;
+      }
+
+      boardSetupDraft = {
+        ...boardSetupDraft,
+        type: option.type,
+        tileSizeValue:
+          isTileSetupType(option.type) && !boardSetupDraft.tileSizeEdited
+            ? String(getDefaultTileSize(option.type))
+            : boardSetupDraft.tileSizeValue
+      };
+      render();
+    });
+  }
+
+  spaceChoice.append(
+    element("legend", "", "Space"),
+    squareOption.label,
+    hexOption.label,
+    freeOption.label
+  );
+  setup.append(element("p", "eyebrow", "New Board"), spaceChoice);
+
+  if (!isTileSetupType(selectedType)) {
+    const xInput = numberInput("Left X", boardSetupDraft.freeXValue, "free-x-input", {
+      min: String(-maxFreeCoordinateBoardSize),
+      max: String(maxFreeCoordinateBoardSize),
+      step: "0.01"
+    });
+    const yInput = numberInput("Top Y", boardSetupDraft.freeYValue, "free-y-input", {
+      min: String(-maxFreeCoordinateBoardSize),
+      max: String(maxFreeCoordinateBoardSize),
+      step: "0.01"
+    });
+    const widthInput = numberInput(
+      "Width",
+      boardSetupDraft.freeWidthValue,
+      "free-width-input",
+      {
+        min: "0.01",
+        max: String(maxFreeCoordinateBoardSize),
+        step: "0.01"
+      }
+    );
+    const heightInput = numberInput(
+      "Height",
+      boardSetupDraft.freeHeightValue,
+      "free-height-input",
+      {
+        min: "0.01",
+        max: String(maxFreeCoordinateBoardSize),
+        step: "0.01"
+      }
+    );
+    const scaleDistanceInput = numberInput(
+      "Distance per world unit",
+      boardSetupDraft.freeDistancePerWorldUnitValue,
+      "free-scale-distance-input",
+      {
+        min: "0.01",
+        max: "9999",
+        step: "0.01"
+      }
+    );
+    const scaleUnitInput = textInput(
+      "Scale unit",
+      boardSetupDraft.freeScaleUnitValue,
+      "free-scale-unit-input"
+    );
+    const backgroundColorInput = colorInput(
+      "Board background",
+      boardSetupDraft.freeBackgroundColorValue,
+      "free-background-input"
+    );
+    const updateFreeDraft = () => {
+      boardSetupDraft = {
+        ...boardSetupDraft,
+        type: "free-coordinate",
+        freeXValue: xInput.input.value,
+        freeYValue: yInput.input.value,
+        freeWidthValue: widthInput.input.value,
+        freeHeightValue: heightInput.input.value,
+        freeDistancePerWorldUnitValue: scaleDistanceInput.input.value,
+        freeScaleUnitValue: scaleUnitInput.input.value,
+        freeBackgroundColorValue: backgroundColorInput.input.value
+      };
+    };
+
+    for (const input of [
+      xInput.input,
+      yInput.input,
+      widthInput.input,
+      heightInput.input,
+      scaleDistanceInput.input,
+      scaleUnitInput.input,
+      backgroundColorInput.input
+    ]) {
+      input.addEventListener("input", updateFreeDraft);
+      input.addEventListener("change", updateFreeDraft);
+    }
+
+    setup.append(
+      xInput.label,
+      yInput.label,
+      widthInput.label,
+      heightInput.label,
+      scaleDistanceInput.label,
+      scaleUnitInput.label,
+      backgroundColorInput.label,
+      buttonElement(
+        "Create Board",
+        () =>
+          createFreeCoordinateBoard({
+            xValue: xInput.input.value,
+            yValue: yInput.input.value,
+            widthValue: widthInput.input.value,
+            heightValue: heightInput.input.value,
+            distancePerWorldUnitValue: scaleDistanceInput.input.value,
+            scaleUnitValue: scaleUnitInput.input.value,
+            backgroundColorValue: backgroundColorInput.input.value
+          }),
+        "create-board"
+      )
+    );
+
+    return setup;
+  }
+
   const widthInput = numberInput("Columns", boardSetupDraft.widthValue, "grid-width-input", {
     max: String(maxTileGridSize),
     step: "1"
@@ -513,10 +663,10 @@ function createBoardSetup(): HTMLElement {
     boardSetupDraft.backgroundColorValue,
     "board-background-input"
   );
-
   const updateDraft = () => {
     boardSetupDraft = {
-      type: hexOption.input.checked ? "hex-grid" : "square-grid",
+      ...boardSetupDraft,
+      type: selectedType,
       widthValue: widthInput.input.value,
       heightValue: heightInput.input.value,
       tileSizeValue: tileSizeInput.input.value,
@@ -545,23 +695,8 @@ function createBoardSetup(): HTMLElement {
     input.addEventListener("input", updateDraft);
     input.addEventListener("change", updateDraft);
   }
-  for (const option of [squareOption, hexOption]) {
-    option.input.addEventListener("change", () => {
-      if (!boardSetupDraft.tileSizeEdited && option.input.checked) {
-        tileSizeInput.input.value = String(getDefaultTileSize(option.type));
-      }
-      updateDraft();
-    });
-  }
 
-  spaceChoice.append(
-    element("legend", "", "Space"),
-    squareOption.label,
-    hexOption.label
-  );
   setup.append(
-    element("p", "eyebrow", "New Board"),
-    spaceChoice,
     widthInput.label,
     heightInput.label,
     tileSizeInput.label,
@@ -574,7 +709,7 @@ function createBoardSetup(): HTMLElement {
       "Create Board",
       () =>
         createTileGrid({
-          type: hexOption.input.checked ? "hex-grid" : "square-grid",
+          type: selectedType,
           widthValue: widthInput.input.value,
           heightValue: heightInput.input.value,
           tileSizeValue: tileSizeInput.input.value,
@@ -601,7 +736,7 @@ function createBlankBoardMessage(): HTMLElement {
 }
 
 function placeDefaultMarker(x: number, y: number): void {
-  if (!isTileScenarioSpace(scenario.space)) {
+  if (!scenario.space) {
     return;
   }
 
@@ -617,7 +752,7 @@ function placeDefaultMarker(x: number, y: number): void {
     pieces: [
       ...scenario.pieces,
       {
-        id: `marker-${x}-${y}`,
+        id: createMarkerId(x, y),
         kind: "marker" as const,
         side: "neutral" as const,
         x,
@@ -641,7 +776,7 @@ function createNewScenario(): void {
 }
 
 function launchRuntime(): void {
-  if (!isTileScenarioSpace(scenario.space)) {
+  if (!scenario.space) {
     statusMessage = "Create a board before launching runtime.";
     render();
     return;
@@ -663,7 +798,16 @@ function createTileGrid(options: {
   backgroundColorValue: string;
 }): void {
   boardSetupDraft = {
-    ...options,
+    ...boardSetupDraft,
+    type: options.type,
+    widthValue: options.widthValue,
+    heightValue: options.heightValue,
+    tileSizeValue: options.tileSizeValue,
+    distancePerTileValue: options.distancePerTileValue,
+    scaleUnitValue: options.scaleUnitValue,
+    gridLineColorValue: options.gridLineColorValue,
+    gridLineOpacityValue: options.gridLineOpacityValue,
+    backgroundColorValue: options.backgroundColorValue,
     tileSizeEdited: boardSetupDraft.tileSizeEdited
   };
 
@@ -713,6 +857,68 @@ function createTileGrid(options: {
   resetBoardViewportStates();
   dirty = true;
   statusMessage = `${getTileSpaceLabel(options.type)} created: ${width} x ${height}`;
+  render();
+}
+
+function createFreeCoordinateBoard(options: {
+  xValue: string;
+  yValue: string;
+  widthValue: string;
+  heightValue: string;
+  distancePerWorldUnitValue: string;
+  scaleUnitValue: string;
+  backgroundColorValue: string;
+}): void {
+  boardSetupDraft = {
+    ...boardSetupDraft,
+    type: "free-coordinate",
+    freeXValue: options.xValue,
+    freeYValue: options.yValue,
+    freeWidthValue: options.widthValue,
+    freeHeightValue: options.heightValue,
+    freeDistancePerWorldUnitValue: options.distancePerWorldUnitValue,
+    freeScaleUnitValue: options.scaleUnitValue,
+    freeBackgroundColorValue: options.backgroundColorValue
+  };
+
+  const x = parseFiniteNumber(options.xValue);
+  const y = parseFiniteNumber(options.yValue);
+  const width = parseFreeCoordinateBoardSize(options.widthValue);
+  const height = parseFreeCoordinateBoardSize(options.heightValue);
+  const distancePerWorldUnit = parsePositiveNumber(options.distancePerWorldUnitValue);
+  const backgroundColor = parseHexColor(options.backgroundColorValue);
+  const scaleUnit = options.scaleUnitValue.trim();
+
+  if (
+    x === null ||
+    y === null ||
+    !width ||
+    !height ||
+    !distancePerWorldUnit ||
+    !backgroundColor ||
+    !scaleUnit
+  ) {
+    statusMessage = "Free-coordinate setup values are out of range";
+    render();
+    return;
+  }
+
+  scenario = {
+    ...scenario,
+    space: createFreeCoordinateScenarioSpace({
+      x,
+      y,
+      width,
+      height,
+      distancePerWorldUnit,
+      scaleUnit,
+      backgroundColor
+    }),
+    pieces: []
+  };
+  resetBoardViewportStates();
+  dirty = true;
+  statusMessage = `Free-coordinate board created: ${width} x ${height}`;
   render();
 }
 
@@ -854,14 +1060,14 @@ function colorInput(labelText: string, value: string, testId: string): {
   return { label, input };
 }
 
-function tileSpaceOption(
+function spaceOption(
   labelText: string,
-  type: ScenarioTileSpaceType,
+  type: ScenarioSpaceType,
   checked: boolean
 ): {
   label: HTMLElement;
   input: HTMLInputElement;
-  type: ScenarioTileSpaceType;
+  type: ScenarioSpaceType;
 } {
   const label = element("label", "space-option");
   const input = document.createElement("input");
@@ -918,7 +1124,10 @@ function getBoardLabel(): string {
   }
 
   if (!isTileScenarioSpace(scenario.space)) {
-    return `${scenario.space.bounds.width} x ${scenario.space.bounds.height} free`;
+    const bounds = scenario.space.bounds;
+    const scale = `${scenario.space.scale.distancePerWorldUnit} ${scenario.space.scale.unit}/unit`;
+
+    return `${bounds.width} x ${bounds.height} free @ ${bounds.x},${bounds.y}, ${scale}`;
   }
 
   const gridType = scenario.space.type === "hex-grid" ? "hex" : "square";
@@ -945,8 +1154,14 @@ function resetBoardViewportStates(): void {
 }
 
 function getScenarioBoardKey(value: Scenario): string | null {
-  if (!isTileScenarioSpace(value.space)) {
+  if (!value.space) {
     return null;
+  }
+
+  if (!isTileScenarioSpace(value.space)) {
+    const bounds = value.space.bounds;
+
+    return `${value.space.type}:${bounds.x},${bounds.y}:${bounds.width}x${bounds.height}`;
   }
 
   return `${value.space.type}:${value.space.width}x${value.space.height}:${value.space.tileSize}`;
@@ -966,6 +1181,22 @@ function parseTileSize(value: string): number | null {
   const size = Number.parseFloat(value);
 
   if (!Number.isFinite(size) || size < 8 || size > 160) {
+    return null;
+  }
+
+  return size;
+}
+
+function parseFiniteNumber(value: string): number | null {
+  const number = Number.parseFloat(value);
+
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseFreeCoordinateBoardSize(value: string): number | null {
+  const size = Number.parseFloat(value);
+
+  if (!Number.isFinite(size) || size <= 0 || size > maxFreeCoordinateBoardSize) {
     return null;
   }
 
@@ -992,6 +1223,22 @@ function getTileSpaceLabel(type: ScenarioTileSpaceType): string {
   return type === "hex-grid" ? "Hex grid" : "Square grid";
 }
 
+function isTileSetupType(type: ScenarioSpaceType): type is ScenarioTileSpaceType {
+  return type === "square-grid" || type === "hex-grid";
+}
+
+function createMarkerId(x: number, y: number): string {
+  if (Number.isInteger(x) && Number.isInteger(y)) {
+    return `marker-${x}-${y}`;
+  }
+
+  return `marker-${formatCoordinateForId(x)}-${formatCoordinateForId(y)}`;
+}
+
+function formatCoordinateForId(value: number): string {
+  return String(value).replace("-", "neg").replace(".", "p");
+}
+
 function createDefaultBoardSetupDraft(): BoardSetupDraft {
   return {
     type: "square-grid",
@@ -1003,6 +1250,13 @@ function createDefaultBoardSetupDraft(): BoardSetupDraft {
     gridLineColorValue: defaultGridLineColor,
     gridLineOpacityValue: String(defaultGridLineOpacity),
     backgroundColorValue: defaultBoardBackgroundColor,
+    freeXValue: "0",
+    freeYValue: "0",
+    freeWidthValue: "100",
+    freeHeightValue: "100",
+    freeDistancePerWorldUnitValue: String(defaultFreeCoordinateDistancePerWorldUnit),
+    freeScaleUnitValue: defaultFreeCoordinateScaleUnit,
+    freeBackgroundColorValue: defaultBoardBackgroundColor,
     tileSizeEdited: false
   };
 }

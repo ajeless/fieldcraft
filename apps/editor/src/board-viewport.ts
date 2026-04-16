@@ -1,4 +1,14 @@
-import type { ScenarioPiece, ScenarioTileSpace } from "./scenario";
+import {
+  isTileScenarioSpace,
+  type ScenarioFreeCoordinateSpace,
+  type ScenarioPiece,
+  type ScenarioSpace,
+  type ScenarioTileSpace
+} from "./scenario";
+import {
+  isPointInFreeCoordinateBounds,
+  roundFreeCoordinatePoint
+} from "./spatial";
 
 type Point = {
   x: number;
@@ -13,6 +23,11 @@ type Size = {
 type Bounds = Point & Size;
 
 type TileCoordinate = {
+  x: number;
+  y: number;
+};
+
+type BoardCoordinate = {
   x: number;
   y: number;
 };
@@ -38,23 +53,23 @@ type GridColors = {
 
 type GridGeometry = {
   key: string;
-  spaceType: ScenarioTileSpace["type"];
+  spaceType: ScenarioSpace["type"];
   bounds: Bounds;
-  columns: number;
-  rows: number;
+  columns: number | null;
+  rows: number | null;
   draw: (context: CanvasRenderingContext2D, colors: GridColors, scale: number) => void;
   markerRadius: (scale: number) => number;
-  tileToWorldCenter: (tile: TileCoordinate) => Point;
-  worldToTile: (point: Point) => TileCoordinate | null;
+  pieceToWorldPoint: (piece: ScenarioPiece) => Point;
+  worldToPlacementPoint: (point: Point) => BoardCoordinate | null;
 };
 
 type BoardViewportOptions = {
   mode: "editor" | "runtime";
   readonly: boolean;
-  space: ScenarioTileSpace;
+  space: ScenarioSpace;
   pieces: ScenarioPiece[];
   state: BoardViewportState;
-  onTileClick?: (x: number, y: number) => void;
+  onBoardClick?: (x: number, y: number) => void;
   onMarkerDrop?: (x: number, y: number) => void;
 };
 
@@ -119,7 +134,7 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
   surface.className = "board-surface";
   surface.dataset.testid =
     options.mode === "runtime" ? "runtime-board-surface" : "board-surface";
-  surface.dataset.markerPositions = getMarkerPositions(options.pieces);
+  surface.dataset.markerPositions = getMarkerPositions(options.pieces, geometry.spaceType);
 
   canvas.className = "board-canvas";
   canvas.dataset.testid =
@@ -157,7 +172,7 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
     readonly: options.readonly,
     geometry,
     draw,
-    onTileClick: options.onTileClick
+    onBoardClick: options.onBoardClick
   });
   const markerDropController = createMarkerDropController({
     surface,
@@ -258,9 +273,12 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
     const colors = {
       boardFill:
         options.space.background.color || cssVariable(styles, "--board-fill", "#f9fbfb"),
-      boardLine:
-        options.space.grid.lineColor || cssVariable(styles, "--board-line", "#aeb8c1"),
-      boardLineOpacity: options.space.grid.lineOpacity
+      boardLine: isTileScenarioSpace(options.space)
+        ? options.space.grid.lineColor || cssVariable(styles, "--board-line", "#aeb8c1")
+        : cssVariable(styles, "--board-edge", "#8794a0"),
+      boardLineOpacity: isTileScenarioSpace(options.space)
+        ? options.space.grid.lineOpacity
+        : 1
     };
     const markerFill = cssVariable(styles, "--marker", "#d24b3f");
     const markerRing = cssVariable(styles, "--marker-ring", "#61221e");
@@ -282,12 +300,14 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
   }
 }
 
-function createGridGeometry(space: ScenarioTileSpace): GridGeometry {
+function createGridGeometry(space: ScenarioSpace): GridGeometry {
   switch (space.type) {
     case "square-grid":
       return createSquareGridGeometry(space);
     case "hex-grid":
       return createHexGridGeometry(space);
+    case "free-coordinate":
+      return createFreeCoordinateGeometry(space);
   }
 }
 
@@ -329,11 +349,11 @@ function createSquareGridGeometry(space: ScenarioTileSpace): GridGeometry {
     },
     markerRadius: (scale) =>
       Math.min(tileSize * 0.42, Math.max(tileSize * 0.24, 5 / scale)),
-    tileToWorldCenter: (tile) => ({
+    pieceToWorldPoint: (tile) => ({
       x: (tile.x + 0.5) * tileSize,
       y: (tile.y + 0.5) * tileSize
     }),
-    worldToTile: (point) => {
+    worldToPlacementPoint: (point) => {
       if (
         point.x < bounds.x ||
         point.y < bounds.y ||
@@ -396,8 +416,8 @@ function createHexGridGeometry(space: ScenarioTileSpace): GridGeometry {
     },
     markerRadius: (scale) =>
       Math.min(hexRadius * 0.56, Math.max(hexRadius * 0.34, 5 / scale)),
-    tileToWorldCenter,
-    worldToTile: (point) => {
+    pieceToWorldPoint: tileToWorldCenter,
+    worldToPlacementPoint: (point) => {
       if (
         point.x < bounds.x ||
         point.y < bounds.y ||
@@ -430,6 +450,43 @@ function createHexGridGeometry(space: ScenarioTileSpace): GridGeometry {
 
       return null;
     }
+  };
+}
+
+function createFreeCoordinateGeometry(space: ScenarioFreeCoordinateSpace): GridGeometry {
+  const bounds = {
+    x: space.bounds.x,
+    y: space.bounds.y,
+    width: space.bounds.width,
+    height: space.bounds.height
+  };
+  const shortestSide = Math.min(bounds.width, bounds.height);
+  const naturalMarkerRadius = Math.max(shortestSide * 0.018, 1);
+  const maxMarkerRadius = Math.max(shortestSide * 0.04, 2);
+
+  return {
+    key: `${space.type}:${bounds.x},${bounds.y}:${bounds.width}x${bounds.height}`,
+    spaceType: space.type,
+    bounds,
+    columns: null,
+    rows: null,
+    draw: (context, colors, scale) => {
+      context.fillStyle = colors.boardFill;
+      context.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+      context.strokeStyle = colorWithOpacity(colors.boardLine, colors.boardLineOpacity);
+      context.lineWidth = Math.max(1.5 / scale, 0.75);
+      context.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+    },
+    markerRadius: (scale) =>
+      Math.min(maxMarkerRadius, Math.max(naturalMarkerRadius, 5 / scale)),
+    pieceToWorldPoint: (piece) => ({
+      x: piece.x,
+      y: piece.y
+    }),
+    worldToPlacementPoint: (point) =>
+      isPointInFreeCoordinateBounds(point, bounds)
+        ? roundFreeCoordinatePoint(point)
+        : null
   };
 }
 
@@ -488,7 +545,7 @@ function createPointerController(options: {
   readonly: boolean;
   geometry: GridGeometry;
   draw: () => void;
-  onTileClick?: (x: number, y: number) => void;
+  onBoardClick?: (x: number, y: number) => void;
 }): {
   handlePointerDown: (event: PointerEvent) => void;
   handlePointerMove: (event: PointerEvent) => void;
@@ -590,14 +647,16 @@ function createPointerController(options: {
       options.surface.classList.remove("is-panning");
       drag = null;
 
-      if (dragMode === "pan" || !wasClick || options.readonly || !options.onTileClick) {
+      if (dragMode === "pan" || !wasClick || options.readonly || !options.onBoardClick) {
         return;
       }
 
       const worldPoint = viewportPointToWorldPoint(currentPoint, options.state.transform);
-      const tile = worldPoint ? options.geometry.worldToTile(worldPoint) : null;
-      if (tile) {
-        options.onTileClick(tile.x, tile.y);
+      const boardPoint = worldPoint
+        ? options.geometry.worldToPlacementPoint(worldPoint)
+        : null;
+      if (boardPoint) {
+        options.onBoardClick(boardPoint.x, boardPoint.y);
       }
     },
     handlePointerCancel: (event) => {
@@ -658,9 +717,11 @@ function createMarkerDropController(options: {
         options.surface
       );
       const worldPoint = viewportPointToWorldPoint(viewportPoint, options.state.transform);
-      const tile = worldPoint ? options.geometry.worldToTile(worldPoint) : null;
-      if (tile) {
-        options.onMarkerDrop?.(tile.x, tile.y);
+      const boardPoint = worldPoint
+        ? options.geometry.worldToPlacementPoint(worldPoint)
+        : null;
+      if (boardPoint) {
+        options.onMarkerDrop?.(boardPoint.x, boardPoint.y);
       }
     }
   };
@@ -910,7 +971,7 @@ function drawMarkers(
   markerRing: string
 ): void {
   for (const piece of pieces) {
-    const center = geometry.tileToWorldCenter(piece);
+    const center = geometry.pieceToWorldPoint(piece);
     const radius = geometry.markerRadius(scale);
 
     context.beginPath();
@@ -955,16 +1016,25 @@ function updateSurfaceData(
   surface.dataset.viewPanX = String(transform.panX);
   surface.dataset.viewPanY = String(transform.panY);
   surface.dataset.boardSpaceType = geometry.spaceType;
+  surface.dataset.boardBoundsX = String(geometry.bounds.x);
+  surface.dataset.boardBoundsY = String(geometry.bounds.y);
   surface.dataset.boardWorldWidth = String(geometry.bounds.width);
   surface.dataset.boardWorldHeight = String(geometry.bounds.height);
-  surface.dataset.boardColumns = String(geometry.columns);
-  surface.dataset.boardRows = String(geometry.rows);
-  surface.dataset.markerPositions = getMarkerPositions(pieces);
+  if (geometry.columns === null || geometry.rows === null) {
+    delete surface.dataset.boardColumns;
+    delete surface.dataset.boardRows;
+  } else {
+    surface.dataset.boardColumns = String(geometry.columns);
+    surface.dataset.boardRows = String(geometry.rows);
+  }
+  surface.dataset.markerPositions = getMarkerPositions(pieces, geometry.spaceType);
 }
 
-function getMarkerPositions(pieces: ScenarioPiece[]): string {
+function getMarkerPositions(pieces: ScenarioPiece[], spaceType: ScenarioSpace["type"]): string {
   return pieces
-    .map((piece) => `${piece.x}-${piece.y}`)
+    .map((piece) =>
+      spaceType === "free-coordinate" ? `${piece.x},${piece.y}` : `${piece.x}-${piece.y}`
+    )
     .sort((a, b) => a.localeCompare(b))
     .join(" ");
 }
@@ -980,13 +1050,21 @@ function viewportButton(label: string, ariaLabel: string, testId: string): HTMLB
   return button;
 }
 
-function getCanvasLabel(space: ScenarioTileSpace, readonly: boolean): string {
+function getCanvasLabel(space: ScenarioSpace, readonly: boolean): string {
   const mode = readonly ? "read-only board" : "interactive board";
+
+  if (space.type === "free-coordinate") {
+    return `${space.bounds.width} by ${space.bounds.height} free-coordinate ${mode}`;
+  }
 
   return `${space.width} by ${space.height} ${space.type} ${mode}`;
 }
 
-function getBoardSizeLabel(space: ScenarioTileSpace): string {
+function getBoardSizeLabel(space: ScenarioSpace): string {
+  if (space.type === "free-coordinate") {
+    return `${space.bounds.width} x ${space.bounds.height} free, ${space.scale.distancePerWorldUnit} ${space.scale.unit}/unit`;
+  }
+
   const gridType = space.type === "hex-grid" ? "hex" : "square";
 
   return `${space.width} x ${space.height} ${gridType}, ${space.tileSize}px`;

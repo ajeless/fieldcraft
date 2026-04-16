@@ -276,7 +276,83 @@ try {
   await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
 
-  console.log("Browser smoke passed: square and hex editor placement, persistence, and runtime checks passed.");
+  await page.click('[data-testid="new-scenario"]');
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await createFreeCoordinateBoard(page, {
+    x: -50,
+    y: -25,
+    width: 200,
+    height: 120,
+    scaleDistance: 10,
+    scaleUnit: "m",
+    backgroundColor: "#f6fbf3"
+  });
+  await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
+  await expectSurfaceSpace(page, "board-surface", "free-coordinate");
+  await expectCanvasHasRenderedBoard(page, "board-canvas");
+  const freeHomeTransform = await getTransform(page, "board-surface");
+
+  await placeMarkerAtFreeCoordinate(page, "board-surface", 0, 0);
+  await expectMarkerCount(page, "1");
+  await waitForFreeMarkerNear(page, "board-surface", 0, 0);
+  await placeMarkerAtFreeCoordinate(page, "board-surface", 73.25, 18.5);
+  await expectMarkerCount(page, "2");
+  await waitForFreeMarkerNear(page, "board-surface", 73.25, 18.5);
+  await placeMarkerAtFreeCoordinate(page, "board-surface", -49.5, 94.75);
+  await expectMarkerCount(page, "3");
+  await waitForFreeMarkerNear(page, "board-surface", -49.5, 94.75);
+
+  await panSurface(page, "board-surface");
+  const freePannedTransform = await getTransform(page, "board-surface");
+  if (
+    Math.abs(freePannedTransform.panX - freeHomeTransform.panX) < 1 &&
+    Math.abs(freePannedTransform.panY - freeHomeTransform.panY) < 1
+  ) {
+    throw new Error("Ctrl-drag did not pan the free-coordinate board.");
+  }
+  await zoomSurface(page, "board-surface");
+  const freeZoomedTransform = await getTransform(page, "board-surface");
+  if (Math.abs(freeZoomedTransform.scale - freePannedTransform.scale) < 0.001) {
+    throw new Error("Mouse wheel did not zoom the free-coordinate board.");
+  }
+  await page.click('[data-testid="reset-board-view"]');
+  await waitForTransform(page, "board-surface", freeHomeTransform);
+
+  await page.click('[data-testid="save-scenario"]');
+  const savedFreeScenario = await page.evaluate(() => window.localStorage.getItem("fieldcraft:last-scenario"));
+  if (!savedFreeScenario) {
+    throw new Error("Free-coordinate scenario was not saved to browser storage.");
+  }
+  const parsedFreeScenario = JSON.parse(savedFreeScenario);
+  expectFreeCoordinateSetup(parsedFreeScenario.space, {
+    x: -50,
+    y: -25,
+    width: 200,
+    height: 120,
+    distancePerWorldUnit: 10,
+    scaleUnit: "m",
+    backgroundColor: "#f6fbf3"
+  });
+  const freeMarkerKeys = [
+    freeMarkerKey(expectFreePieceNear(parsedFreeScenario.pieces, 0, 0)),
+    freeMarkerKey(expectFreePieceNear(parsedFreeScenario.pieces, 73.25, 18.5)),
+    freeMarkerKey(expectFreePieceNear(parsedFreeScenario.pieces, -49.5, 94.75))
+  ];
+  if (parsedFreeScenario.pieces.length !== 3) {
+    throw new Error("Saved free-coordinate scenario did not preserve dragged markers.");
+  }
+
+  await page.click('[data-testid="mode-runtime"]');
+  await page.waitForSelector('[data-view="runtime"]');
+  await expectSurfaceSpace(page, "runtime-board-surface", "free-coordinate");
+  await expectCanvasHasRenderedBoard(page, "runtime-board-canvas");
+  for (const markerKey of freeMarkerKeys) {
+    await waitForMarker(page, "runtime-board-surface", markerKey);
+  }
+  await page.click('[data-testid="mode-editor"]');
+  await page.waitForSelector('[data-view="editor"]');
+
+  console.log("Browser smoke passed: square, hex, and free-coordinate editor placement, persistence, and runtime checks passed.");
 } finally {
   if (browser) {
     await browser.close();
@@ -371,6 +447,19 @@ async function createGrid(page, gridType, width, height, options = {}) {
   await page.click('[data-testid="create-board"]');
 }
 
+async function createFreeCoordinateBoard(page, options) {
+  await page.check('[data-testid="space-free-coordinate"]');
+  await page.waitForSelector('[data-testid="free-x-input"]');
+  await page.fill('[data-testid="free-x-input"]', String(options.x));
+  await page.fill('[data-testid="free-y-input"]', String(options.y));
+  await page.fill('[data-testid="free-width-input"]', String(options.width));
+  await page.fill('[data-testid="free-height-input"]', String(options.height));
+  await page.fill('[data-testid="free-scale-distance-input"]', String(options.scaleDistance));
+  await page.fill('[data-testid="free-scale-unit-input"]', String(options.scaleUnit));
+  await setInputValue(page, '[data-testid="free-background-input"]', options.backgroundColor);
+  await page.click('[data-testid="create-board"]');
+}
+
 async function expectInvalidSetupPreservesDraft(page) {
   await page.check('[data-testid="space-hex-grid"]');
   await page.fill('[data-testid="grid-width-input"]', "18");
@@ -454,6 +543,41 @@ function expectTileSpaceSetup(space, expected) {
   }
 }
 
+function expectFreeCoordinateSetup(space, expected) {
+  if (
+    space?.type !== "free-coordinate" ||
+    space.bounds?.x !== expected.x ||
+    space.bounds?.y !== expected.y ||
+    space.bounds?.width !== expected.width ||
+    space.bounds?.height !== expected.height ||
+    space.scale?.distancePerWorldUnit !== expected.distancePerWorldUnit ||
+    space.scale?.unit !== expected.scaleUnit ||
+    space.background?.color !== expected.backgroundColor
+  ) {
+    throw new Error(`Free-coordinate setup was not saved readably: ${JSON.stringify(space)}`);
+  }
+}
+
+function expectFreePieceNear(pieces, x, y, tolerance = 0.75) {
+  const piece = pieces.find((candidate) =>
+    closeTo(candidate.x, x, tolerance) && closeTo(candidate.y, y, tolerance)
+  );
+
+  if (!piece) {
+    throw new Error(`Expected a free-coordinate marker near ${x},${y}: ${JSON.stringify(pieces)}`);
+  }
+
+  return piece;
+}
+
+function freeMarkerKey(piece) {
+  return `${piece.x},${piece.y}`;
+}
+
+function closeTo(value, target, tolerance) {
+  return Number.isFinite(value) && Math.abs(value - target) <= tolerance;
+}
+
 async function clickTile(page, surfaceTestId, x, y) {
   await waitForSurfaceReady(page, surfaceTestId);
   const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
@@ -466,6 +590,15 @@ async function clickTile(page, surfaceTestId, x, y) {
 async function placeMarkerFromPalette(page, surfaceTestId, x, y) {
   await waitForSurfaceReady(page, surfaceTestId);
   const point = await getTileViewportPoint(page, surfaceTestId, x, y);
+
+  await page.dragAndDrop('[data-testid="palette-marker"]', `[data-testid="${surfaceTestId}"]`, {
+    targetPosition: point
+  });
+}
+
+async function placeMarkerAtFreeCoordinate(page, surfaceTestId, x, y) {
+  await waitForSurfaceReady(page, surfaceTestId);
+  const point = await getFreeCoordinateViewportPoint(page, surfaceTestId, x, y);
 
   await page.dragAndDrop('[data-testid="palette-marker"]', `[data-testid="${surfaceTestId}"]`, {
     targetPosition: point
@@ -588,6 +721,54 @@ async function getTileViewportPoint(page, surfaceTestId, x, y) {
     return {
       x: worldX * scale * cos - worldY * scale * sin + panX,
       y: worldX * scale * sin + worldY * scale * cos + panY
+    };
+  }, { x, y });
+}
+
+async function getFreeCoordinateViewportPoint(page, surfaceTestId, x, y) {
+  const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
+
+  return surface.evaluate((node, point) => {
+    const element = node;
+    const scale = Number(element.dataset.viewScale);
+    const rotation = Number(element.dataset.viewRotation);
+    const panX = Number(element.dataset.viewPanX);
+    const panY = Number(element.dataset.viewPanY);
+    const worldWidth = Number(element.dataset.boardWorldWidth);
+    const worldHeight = Number(element.dataset.boardWorldHeight);
+    const boundsX = Number(element.dataset.boardBoundsX);
+    const boundsY = Number(element.dataset.boardBoundsY);
+    const spaceType = element.dataset.boardSpaceType;
+
+    if (
+      spaceType !== "free-coordinate" ||
+      !Number.isFinite(scale) ||
+      !Number.isFinite(rotation) ||
+      !Number.isFinite(panX) ||
+      !Number.isFinite(panY) ||
+      !Number.isFinite(worldWidth) ||
+      !Number.isFinite(worldHeight) ||
+      !Number.isFinite(boundsX) ||
+      !Number.isFinite(boundsY)
+    ) {
+      throw new Error("Free-coordinate board viewport did not expose coordinate metadata.");
+    }
+
+    if (
+      point.x < boundsX ||
+      point.y < boundsY ||
+      point.x > boundsX + worldWidth ||
+      point.y > boundsY + worldHeight
+    ) {
+      throw new Error(`Free-coordinate point is outside board bounds: ${JSON.stringify(point)}`);
+    }
+
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+
+    return {
+      x: point.x * scale * cos - point.y * scale * sin + panX,
+      y: point.x * scale * sin + point.y * scale * cos + panY
     };
   }, { x, y });
 }
@@ -765,20 +946,61 @@ async function waitForMarker(page, surfaceTestId, markerPosition) {
   );
 }
 
+async function waitForFreeMarkerNear(page, surfaceTestId, x, y, tolerance = 0.75) {
+  await page.waitForFunction(
+    ({ testId, point, allowedDrift }) => {
+      const surface = document.querySelector(`[data-testid="${testId}"]`);
+      const positions = (surface?.getAttribute("data-marker-positions") ?? "")
+        .split(" ")
+        .filter(Boolean)
+        .map((position) => {
+          const [markerX, markerY] = position.split(",").map(Number);
+
+          return { x: markerX, y: markerY };
+        });
+
+      return (
+        hasFiniteAttribute(surface, "data-view-scale") &&
+        hasFiniteAttribute(surface, "data-view-pan-x") &&
+        hasFiniteAttribute(surface, "data-view-pan-y") &&
+        positions.some((marker) =>
+          Number.isFinite(marker.x) &&
+          Number.isFinite(marker.y) &&
+          Math.abs(marker.x - point.x) <= allowedDrift &&
+          Math.abs(marker.y - point.y) <= allowedDrift
+        )
+      );
+
+      function hasFiniteAttribute(element, name) {
+        const value = element?.getAttribute(name);
+
+        return value !== null && Number.isFinite(Number(value));
+      }
+    },
+    {
+      testId: surfaceTestId,
+      point: { x, y },
+      allowedDrift: tolerance
+    }
+  );
+}
+
 async function waitForSurfaceReady(page, surfaceTestId) {
   await page.waitForFunction((testId) => {
     const surface = document.querySelector(`[data-testid="${testId}"]`);
+    const spaceType = surface?.getAttribute("data-board-space-type");
 
     return (
       hasFiniteAttribute(surface, "data-view-scale") &&
       hasFiniteAttribute(surface, "data-view-rotation") &&
       hasFiniteAttribute(surface, "data-view-pan-x") &&
       hasFiniteAttribute(surface, "data-view-pan-y") &&
-      hasKnownSpaceType(surface) &&
+      hasKnownSpaceType(spaceType) &&
+      hasFiniteAttribute(surface, "data-board-bounds-x") &&
+      hasFiniteAttribute(surface, "data-board-bounds-y") &&
       hasFiniteAttribute(surface, "data-board-world-width") &&
       hasFiniteAttribute(surface, "data-board-world-height") &&
-      hasFiniteAttribute(surface, "data-board-columns") &&
-      hasFiniteAttribute(surface, "data-board-rows")
+      hasExpectedGridMetadata(surface, spaceType)
     );
 
     function hasFiniteAttribute(element, name) {
@@ -787,10 +1009,19 @@ async function waitForSurfaceReady(page, surfaceTestId) {
       return value !== null && Number.isFinite(Number(value));
     }
 
-    function hasKnownSpaceType(element) {
-      const value = element?.getAttribute("data-board-space-type");
+    function hasKnownSpaceType(value) {
+      return value === "square-grid" || value === "hex-grid" || value === "free-coordinate";
+    }
 
-      return value === "square-grid" || value === "hex-grid";
+    function hasExpectedGridMetadata(element, value) {
+      if (value === "free-coordinate") {
+        return true;
+      }
+
+      return (
+        hasFiniteAttribute(element, "data-board-columns") &&
+        hasFiniteAttribute(element, "data-board-rows")
+      );
     }
   }, surfaceTestId);
 }

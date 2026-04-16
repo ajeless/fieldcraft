@@ -119,8 +119,12 @@ Large boards and map styling:
 - support triangle and other tile grids only when a concrete scenario pushes beyond square and hex; the current square/hex work is enough for the initial geometry seam proof
 - free-coordinate boards are near-term planned work in `codex/free-coordinate-space-foundation`; keep only follow-on refinements here
 - refine authored scale semantics for tiled and free-coordinate boards after the first free-coordinate editor/runtime slice proves the basic model
+- decide how marker/token visual size relates to board/world scale, authored units, and eventual token/entity configuration; the foundation marker currently uses viewport-friendly temporary sizing, not durable physical scale
+- decide whether token placement validity is based on center point only or on the full token footprint; manual testing showed edge placements can intentionally or unintentionally hang outside free-coordinate board bounds
 - add concise setup help or tooltip hints once labels like distance per tile, scale unit, tile size, and free-coordinate bounds need to carry real authoring meaning
+- add inline board setup validation once setup grows past the first slice: keep invalid draft values visible, mark invalid fields, and show field-local range messages instead of relying only on the status line
 - add a live board setup preview that updates the board as setup values change, with clear rules for whether placed objects are preserved or cleared; this becomes relevant once board setup is revisited or an inspector allows post-creation setup edits
+- define practical minimum board dimensions and initial zoom behavior for very small free-coordinate boards if manual testing shows placement becomes too finicky
 - introduce a scenario-level home view only if there is a clear authoring or runtime need to persist view state
 - test large-map viewport performance under real authoring pressure, including draw cost, culling, and whether any lazy rendering or tile virtualization is needed
 - add terrain concepts only after placement and setup are credible: tile properties, terrain types, movement-cost hooks, and visual terrain styling
@@ -128,6 +132,7 @@ Large boards and map styling:
 Free-coordinate follow-ons:
 - add measurement and ruler tools after free-coordinate placement proves the world-coordinate model
 - add snapping, guides, bearing widgets, and authored coordinate overlays only after concrete authoring pressure shows which aids matter
+- clarify origin/bounds semantics in the UI, including what top-left `x`/`y` means relative to `width`/`height`, before relying on offset free-coordinate maps in author workflows
 - add object facing or bearing editing with the first real entity workflow, not with temporary markers
 - add free-space movement, order plotting, and resolution only when the plotted-turn play-test slice needs them
 - add continuous-space terrain, zones, obstacles, or movement-cost hooks after basic placement and entity/rules pressure justify them
