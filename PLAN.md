@@ -6,20 +6,21 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; unsaved-change confirmation before destructive `New` and `Open` flows replace dirty work; persisted `System`/`Light`/`Dark` theme support; dark-theme board defaults for new boards; draft recovery autosave; marker selection through the canvas viewport; a small marker inspector; keyboard and inspector deletion for selected markers; and a read-only runtime view.
+Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; unsaved-change confirmation before destructive `New` and `Open` flows replace dirty work; persisted `System`/`Light`/`Dark` theme support; dark-theme board defaults for new boards; draft recovery autosave; marker selection through the canvas viewport; a small marker inspector; keyboard and inspector deletion for selected markers; in-memory undo/redo for editor mutations; and a read-only runtime view.
 
-Manual testing and review now point to undo, occupancy semantics, and source editing as the next pressure. Theme support, autosave, and the recent selection/deletion work landed cleanly, so the next branches should build on that steadier baseline instead of reopening editor shell polish. Undo still makes sense as the next small, manually testable layer on top of the now-tested command-registry seam, but occupancy semantics now need to land before source editing and the first real entity model so the editor does not harden around a false one-object-per-location assumption.
+Manual testing and review now point to command-surface cleanup, occupancy semantics, and source editing as the next pressure. Undo landed cleanly on top of the command-registry seam, but it also made command placement and redundant inspector affordances feel more trust-blocking: core document actions, contextual tools, and destructive controls are sharing unstable sidebar space and shifting around as board state changes. A small command-surface branch now makes more sense before validation and occupancy follow-ons, while occupancy semantics still need to land before source editing and the first real entity model so the editor does not harden around a false one-object-per-location assumption.
 
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/undo-redo`
-   - Introduce undo and redo for editor state mutations.
-   - Cover board setup, tile marker placement, free-coordinate marker placement, marker deletion, and inspector edits as the first undoable actions.
-   - Keep undo history in memory; do not persist it across sessions.
-   - Keep file save/load semantics separate from undo history.
-   - Wire undo and redo through the command registry and keyboard shortcuts: Ctrl+Z and Ctrl+Shift+Z.
+1. `codex/editor-command-surfaces`
+   - Move core document commands such as undo, redo, new, open, save, and save-as into a stable top command bar instead of stacking large buttons inside the scenario sidebar.
+   - Keep contextual tools visually separate from document commands, with a stable palette/tool slot so board creation and marker-selection state do not shift unrelated controls around.
+   - Replace redundant selection affordances such as the separate read-only marker `Id` metric plus editable `Marker ID` field with one clear editing surface.
+   - Compact destructive selection actions into a smaller affordance that still reads clearly and preserves keyboard deletion.
+   - Preserve current keyboard paths, keep Ctrl/Cmd+Shift+Z redo support, and accept Ctrl+Y as a Windows/Linux redo alias if that does not complicate platform-specific shortcut hints.
+   - Do not broaden this branch into right-click context menus, drag-selection, or a general editor layout system redesign.
 
 2. `codex/validation-unification`
    - Share board-size and tile-size validation predicates between editor setup and scenario-file loading.
