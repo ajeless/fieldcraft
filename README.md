@@ -8,7 +8,7 @@ Fieldcraft aims to be an editor-first environment for designing, play-testing, a
 
 ## Status
 
-First vertical slices in progress: the editor can create square-grid and pointy-top hex boards, configure basic board scale and styling, place markers through a canvas-backed viewport, pan/zoom/reset the board view, save and open human-readable scenario JSON documents, and launch a read-only runtime view from the current scenario. Free-coordinate board authoring is the next planned space-model slice; see `PLAN.md` for current branch sequencing.
+First vertical slices are in place: the editor can create square-grid, pointy-top hex, and free-coordinate boards, configure basic board scale and styling, place markers through a canvas-backed viewport, pan/zoom/reset the board view, save and open human-readable scenario JSON documents, and launch a read-only runtime view from the current scenario. The next near-term slice is editor trust and maintenance cleanup ahead of theme support; see `PLAN.md` for current branch sequencing.
 
 ## Stack
 
@@ -108,7 +108,7 @@ Run the browser smoke test:
 corepack pnpm test:smoke
 ```
 
-The smoke test starts the tracked dev server if needed, exercises browser file/menu commands, creates square and hex boards, verifies canvas-backed rendering, drags palette markers onto the board, checks pan/zoom/reset behavior, saves scenario JSON, launches the runtime, verifies markers render there, and stops any server it started.
+The smoke test starts the tracked dev server if needed, exercises browser file/menu commands, creates square, hex, and free-coordinate boards, verifies canvas-backed rendering, places markers across those board types, checks pan/zoom/reset behavior, saves scenario JSON, launches the runtime, verifies markers render there, and stops any server it started.
 
 Run the Tauri desktop shell for development:
 

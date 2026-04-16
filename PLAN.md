@@ -8,49 +8,62 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; and a read-only runtime view.
 
-The next near-term pressure is editor polish that improves daily use without broadening the command model again yet. Theme support is the next smallest visible slice, while autosave, selection, and undo can build on the now-tested command-registry seam afterward.
+Manual testing and review now point to a small editor trust and maintenance pass before the next polish feature. The current trust gap is still destructive file actions on dirty work, and there are a few low-risk internal cleanups that are better handled before broader editor work lands again. Theme support can follow immediately afterward, while autosave, selection, and undo continue to build on the now-tested command-registry seam.
 
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/theme-toggle`
+1. `codex/editor-trust-cleanup`
+   - Add unsaved-change confirmation before destructive New and Open flows replace a dirty scenario.
+   - Remove redundant route re-rendering after hash navigation.
+   - Make viewport state keys reflect all board-defining values so setup edits cannot accidentally reuse stale transforms.
+   - Deduplicate duplicated Cargo PATH setup in desktop-support scripts.
+   - Keep board creation, placement, save/load, and runtime behavior otherwise unchanged.
+
+2. `codex/theme-toggle`
    - Add light and dark editor themes using CSS variables.
    - Persist the chosen theme.
    - Default from system preference when no choice exists.
 
-2. `codex/draft-autosave`
+3. `codex/draft-autosave`
    - Add draft recovery autosave for the editor session.
    - Do not silently overwrite scenario files.
    - Keep explicit Save and Save As as the durable file actions.
 
-3. `codex/board-object-selection-inspector`
+4. `codex/board-object-selection-inspector`
    - Add marker selection through the canvas viewport coordinate flow across tile and free-coordinate boards.
    - Provide a small inspector for the selected marker.
    - Support marker deletion/removal from the inspector and command model.
    - Preserve marker persistence and runtime read-only rendering.
    - Keep selection independent of rule targeting and richer entity properties until concrete play-test workflows need that connection.
 
-4. `codex/undo-redo`
+5. `codex/undo-redo`
    - Introduce undo and redo for editor state mutations.
    - Cover board setup, tile marker placement, free-coordinate marker placement, marker deletion, and inspector edits as the first undoable actions.
    - Keep undo history in memory; do not persist it across sessions.
    - Keep file save/load semantics separate from undo history.
    - Wire undo and redo through the command registry and keyboard shortcuts: Ctrl+Z and Ctrl+Shift+Z.
 
-5. `codex/source-editor`
+6. `codex/validation-unification`
+   - Share board-size and tile-size validation predicates between editor setup and scenario-file loading.
+   - Keep supported limits identical across visual setup, opened files, and future source edits.
+   - Accept the intentional behavior change that oversized tile-grid scenarios now fail validation instead of entering unsupported editor states.
+   - Add focused negative coverage only if it keeps the smoke path readable.
+
+7. `codex/source-editor`
    - Turn the scenario JSON panel into an editable source view.
    - Validate edits before applying them to the visual editor.
    - Provide a safe way to recover from invalid JSON.
    - Apply the same supported board-size and space-model limits to source edits and opened files, or surface unsupported cases explicitly instead of letting scenarios enter a partially supported state.
 
-6. `codex/asset-library-imports`
+8. `codex/asset-library-imports`
    - Add the first scenario asset model for imported images.
    - Prefer a project/package asset library with stable relative references over base64-heavy scenario JSON.
    - Start with board background images before token images so temporary markers do not accidentally become the durable asset model.
    - Treat sprite sheets, board tile images, and tile/sprite placement workflows as follow-on pressure after basic image imports.
 
-7. `codex/export-runtime-spike`
+9. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
    - Prove export assumptions against both tile-based and free-coordinate scenarios before treating the runtime bundle shape as settled.
