@@ -48,6 +48,17 @@ try {
     return document.querySelector('[data-testid="marker-count"]')?.textContent === "0";
   });
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await page.click('[data-testid="theme-dark"]');
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+  await expectStoredTheme(page, "dark");
+  await expectInputValue(page, '[data-testid="grid-line-color-input"]', "#536576");
+  await expectInputValue(page, '[data-testid="board-background-input"]', "#162129");
+  await page.reload();
+  await page.waitForSelector('[data-view="editor"]');
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await expectInputValue(page, '[data-testid="grid-line-color-input"]', "#536576");
+  await expectInputValue(page, '[data-testid="board-background-input"]', "#162129");
 
   await createGrid(page, "square", 6, 5);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
@@ -279,9 +290,9 @@ try {
     tileSize: 28,
     distancePerTile: 1,
     scaleUnit: "tile",
-    gridLineColor: "#aeb8c1",
+    gridLineColor: "#536576",
     gridLineOpacity: 1,
-    backgroundColor: "#f9fbfb"
+    backgroundColor: "#162129"
   });
   if (
     parsedHexScenario.space?.type !== "hex-grid" ||
@@ -514,6 +525,13 @@ async function expectInputValue(page, selector, expectedValue) {
   const value = await page.locator(selector).inputValue();
   if (value !== expectedValue) {
     throw new Error(`${selector} was reset to ${JSON.stringify(value)}.`);
+  }
+}
+
+async function expectStoredTheme(page, expectedTheme) {
+  const storedTheme = await page.evaluate(() => window.localStorage.getItem("fieldcraft:theme"));
+  if (storedTheme !== expectedTheme) {
+    throw new Error(`Theme preference was ${JSON.stringify(storedTheme)}.`);
   }
 }
 

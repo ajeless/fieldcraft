@@ -55,6 +55,8 @@ type EditorCommandId = "new" | "open" | "save" | "save-as";
 type EditorCommand = CommandDefinition<EditorCommandId>;
 type EditorCommands = CommandRegistry<EditorCommandId>;
 type MenuEntry = EditorCommandId | "separator";
+type Theme = "light" | "dark";
+type ThemePreference = Theme | null;
 
 type BoardSetupDraft = {
   type: ScenarioSpaceType;
@@ -76,6 +78,18 @@ type BoardSetupDraft = {
   tileSizeEdited: boolean;
 };
 
+type ThemeBoardDefaults = {
+  gridLineColor: string;
+  boardBackgroundColor: string;
+};
+
+const themeStorageKey = "fieldcraft:theme";
+const systemThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+const darkThemeBoardDefaults: ThemeBoardDefaults = {
+  gridLineColor: "#536576",
+  boardBackgroundColor: "#162129"
+};
+
 const appRoot = document.querySelector<HTMLDivElement>("#app");
 
 if (!appRoot) {
@@ -86,7 +100,9 @@ const app = appRoot;
 let scenario = createEmptyScenario();
 let dirty = false;
 let statusMessage = "Ready";
-let boardSetupDraft = createDefaultBoardSetupDraft();
+let themePreference = readStoredThemePreference();
+applyTheme();
+let boardSetupDraft = createDefaultBoardSetupDraft(getActiveTheme());
 let commandRegistry: EditorCommands | null = null;
 const boardViewportStates: Record<Route, BoardViewportState> = {
   editor: createBoardViewportState(),
@@ -95,6 +111,7 @@ const boardViewportStates: Record<Route, BoardViewportState> = {
 
 window.addEventListener("hashchange", render);
 window.addEventListener("keydown", handleCommandShortcutKeyDown);
+systemThemeMedia.addEventListener("change", handleSystemThemeChange);
 
 render();
 
@@ -111,6 +128,7 @@ function createShell(route: Route): HTMLElement {
   const brand = element("div", "brand");
   brand.append(element("span", "brand-mark", "FC"), element("strong", "", "Fieldcraft"));
   const menuBar = createMenuBar();
+  const themeSwitch = createThemeSwitch();
 
   const routeSwitch = element("nav", "route-switch");
   routeSwitch.setAttribute("aria-label", "Mode");
@@ -119,7 +137,7 @@ function createShell(route: Route): HTMLElement {
     modeButton("Runtime", "runtime", route, launchRuntime, !scenario.space)
   );
 
-  header.append(brand, menuBar, routeSwitch);
+  header.append(brand, menuBar, themeSwitch, routeSwitch);
   shell.append(
     header,
     fileInput,
@@ -137,6 +155,29 @@ function modeButton(
 ): HTMLButtonElement {
   const button = buttonElement(label, onClick, `mode-${targetRoute}`, disabled);
   button.className = targetRoute === activeRoute ? "mode-button active" : "mode-button";
+  button.type = "button";
+  return button;
+}
+
+function createThemeSwitch(): HTMLElement {
+  const switcher = element("nav", "theme-switch");
+  switcher.setAttribute("aria-label", "Theme");
+  switcher.append(
+    themeButton("System", null, "theme-system"),
+    themeButton("Light", "light", "theme-light"),
+    themeButton("Dark", "dark", "theme-dark")
+  );
+  return switcher;
+}
+
+function themeButton(
+  label: string,
+  preference: ThemePreference,
+  testId: string
+): HTMLButtonElement {
+  const button = buttonElement(label, () => setThemePreference(preference), testId);
+  button.className =
+    themePreference === preference ? "theme-button active" : "theme-button";
   button.type = "button";
   return button;
 }
@@ -989,7 +1030,7 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
   if (result.scenario) {
     scenario = result.scenario;
     if (!scenario.space) {
-      boardSetupDraft = createDefaultBoardSetupDraft();
+      boardSetupDraft = createDefaultBoardSetupDraft(getActiveTheme());
     }
     shouldResetViewport =
       previousBoardKey !== getScenarioBoardKey(scenario) ||
@@ -1022,6 +1063,98 @@ function navigate(route: Route): void {
   }
 
   window.location.hash = nextHash;
+}
+
+function readStoredThemePreference(): ThemePreference {
+  try {
+    const storedTheme = window.localStorage.getItem(themeStorageKey);
+    return storedTheme === "light" || storedTheme === "dark" ? storedTheme : null;
+  } catch {
+    return null;
+  }
+}
+
+function getActiveTheme(): Theme {
+  return themePreference ?? (systemThemeMedia.matches ? "dark" : "light");
+}
+
+function getThemeBoardDefaults(theme: Theme): ThemeBoardDefaults {
+  return theme === "dark"
+    ? darkThemeBoardDefaults
+    : {
+        gridLineColor: defaultGridLineColor,
+        boardBackgroundColor: defaultBoardBackgroundColor
+      };
+}
+
+function applyTheme(): void {
+  const activeTheme = getActiveTheme();
+  document.documentElement.dataset.theme = activeTheme;
+  document.documentElement.style.colorScheme = activeTheme;
+}
+
+function setThemePreference(preference: ThemePreference): void {
+  const previousTheme = getActiveTheme();
+  themePreference = preference;
+  try {
+    if (preference) {
+      window.localStorage.setItem(themeStorageKey, preference);
+    } else {
+      window.localStorage.removeItem(themeStorageKey);
+    }
+  } catch {
+    // Ignore storage persistence failures and still apply the chosen theme in-memory.
+  }
+
+  applyTheme();
+  syncBoardSetupDraftThemeDefaults(previousTheme, getActiveTheme());
+  render();
+}
+
+function handleSystemThemeChange(): void {
+  if (themePreference !== null) {
+    return;
+  }
+
+  const previousTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  applyTheme();
+  syncBoardSetupDraftThemeDefaults(previousTheme, getActiveTheme());
+  render();
+}
+
+function syncBoardSetupDraftThemeDefaults(previousTheme: Theme, nextTheme: Theme): void {
+  if (previousTheme === nextTheme) {
+    return;
+  }
+
+  const previousDefaults = getThemeBoardDefaults(previousTheme);
+  const nextDefaults = getThemeBoardDefaults(nextTheme);
+  boardSetupDraft = {
+    ...boardSetupDraft,
+    gridLineColorValue: replaceDefaultThemeColor(
+      boardSetupDraft.gridLineColorValue,
+      previousDefaults.gridLineColor,
+      nextDefaults.gridLineColor
+    ),
+    backgroundColorValue: replaceDefaultThemeColor(
+      boardSetupDraft.backgroundColorValue,
+      previousDefaults.boardBackgroundColor,
+      nextDefaults.boardBackgroundColor
+    ),
+    freeBackgroundColorValue: replaceDefaultThemeColor(
+      boardSetupDraft.freeBackgroundColorValue,
+      previousDefaults.boardBackgroundColor,
+      nextDefaults.boardBackgroundColor
+    )
+  };
+}
+
+function replaceDefaultThemeColor(
+  currentValue: string,
+  previousDefault: string,
+  nextDefault: string
+): string {
+  return currentValue === previousDefault ? nextDefault : currentValue;
 }
 
 async function confirmDiscardUnsavedChanges(): Promise<boolean> {
@@ -1357,7 +1490,9 @@ function formatCoordinateForId(value: number): string {
   return String(value).replace("-", "neg").replace(".", "p");
 }
 
-function createDefaultBoardSetupDraft(): BoardSetupDraft {
+function createDefaultBoardSetupDraft(theme: Theme = getActiveTheme()): BoardSetupDraft {
+  const themeBoardDefaults = getThemeBoardDefaults(theme);
+
   return {
     type: "square-grid",
     widthValue: "8",
@@ -1365,16 +1500,16 @@ function createDefaultBoardSetupDraft(): BoardSetupDraft {
     tileSizeValue: String(getDefaultTileSize("square-grid")),
     distancePerTileValue: String(defaultScaleDistancePerTile),
     scaleUnitValue: defaultScaleUnit,
-    gridLineColorValue: defaultGridLineColor,
+    gridLineColorValue: themeBoardDefaults.gridLineColor,
     gridLineOpacityValue: String(defaultGridLineOpacity),
-    backgroundColorValue: defaultBoardBackgroundColor,
+    backgroundColorValue: themeBoardDefaults.boardBackgroundColor,
     freeXValue: "0",
     freeYValue: "0",
     freeWidthValue: "100",
     freeHeightValue: "100",
     freeDistancePerWorldUnitValue: String(defaultFreeCoordinateDistancePerWorldUnit),
     freeScaleUnitValue: defaultFreeCoordinateScaleUnit,
-    freeBackgroundColorValue: defaultBoardBackgroundColor,
+    freeBackgroundColorValue: themeBoardDefaults.boardBackgroundColor,
     tileSizeEdited: false
   };
 }
