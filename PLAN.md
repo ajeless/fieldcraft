@@ -6,64 +6,52 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; and a read-only runtime view.
+Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; unsaved-change confirmation before destructive `New` and `Open` flows replace dirty work; persisted `System`/`Light`/`Dark` theme support; dark-theme board defaults for new boards; and a read-only runtime view.
 
-Manual testing and review now point to a small editor trust and maintenance pass before the next polish feature. The current trust gap is still destructive file actions on dirty work, and there are a few low-risk internal cleanups that are better handled before broader editor work lands again. Theme support can follow immediately afterward, while autosave, selection, and undo continue to build on the now-tested command-registry seam.
+Manual testing and review now point to session trust and recovery as the next pressure. Theme support and the recent trust cleanup both landed cleanly, so the next branches should build on that steadier baseline instead of reopening editor shell polish. Autosave, selection, and undo still make sense as the next small, manually testable layers on top of the now-tested command-registry seam.
 
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/editor-trust-cleanup`
-   - Add unsaved-change confirmation before destructive New and Open flows replace a dirty scenario.
-   - Remove redundant route re-rendering after hash navigation.
-   - Make viewport state keys reflect all board-defining values so setup edits cannot accidentally reuse stale transforms.
-   - Deduplicate duplicated Cargo PATH setup in desktop-support scripts.
-   - Keep board creation, placement, save/load, and runtime behavior otherwise unchanged.
-
-2. `codex/theme-toggle`
-   - Add light and dark editor themes using CSS variables.
-   - Persist the chosen theme.
-   - Default from system preference when no choice exists.
-
-3. `codex/draft-autosave`
+1. `codex/draft-autosave`
    - Add draft recovery autosave for the editor session.
    - Do not silently overwrite scenario files.
    - Keep explicit Save and Save As as the durable file actions.
 
-4. `codex/board-object-selection-inspector`
+2. `codex/board-object-selection-inspector`
    - Add marker selection through the canvas viewport coordinate flow across tile and free-coordinate boards.
    - Provide a small inspector for the selected marker.
    - Support marker deletion/removal from the inspector and command model.
    - Preserve marker persistence and runtime read-only rendering.
    - Keep selection independent of rule targeting and richer entity properties until concrete play-test workflows need that connection.
 
-5. `codex/undo-redo`
+3. `codex/undo-redo`
    - Introduce undo and redo for editor state mutations.
    - Cover board setup, tile marker placement, free-coordinate marker placement, marker deletion, and inspector edits as the first undoable actions.
    - Keep undo history in memory; do not persist it across sessions.
    - Keep file save/load semantics separate from undo history.
    - Wire undo and redo through the command registry and keyboard shortcuts: Ctrl+Z and Ctrl+Shift+Z.
 
-6. `codex/validation-unification`
+4. `codex/validation-unification`
    - Share board-size and tile-size validation predicates between editor setup and scenario-file loading.
    - Keep supported limits identical across visual setup, opened files, and future source edits.
    - Accept the intentional behavior change that oversized tile-grid scenarios now fail validation instead of entering unsupported editor states.
    - Add focused negative coverage only if it keeps the smoke path readable.
 
-7. `codex/source-editor`
+5. `codex/source-editor`
    - Turn the scenario JSON panel into an editable source view.
    - Validate edits before applying them to the visual editor.
    - Provide a safe way to recover from invalid JSON.
    - Apply the same supported board-size and space-model limits to source edits and opened files, or surface unsupported cases explicitly instead of letting scenarios enter a partially supported state.
 
-8. `codex/asset-library-imports`
+6. `codex/asset-library-imports`
    - Add the first scenario asset model for imported images.
    - Prefer a project/package asset library with stable relative references over base64-heavy scenario JSON.
    - Start with board background images before token images so temporary markers do not accidentally become the durable asset model.
    - Treat sprite sheets, board tile images, and tile/sprite placement workflows as follow-on pressure after basic image imports.
 
-9. `codex/export-runtime-spike`
+7. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
    - Prove export assumptions against both tile-based and free-coordinate scenarios before treating the runtime bundle shape as settled.
@@ -73,36 +61,36 @@ Current manual testing pressure points are captured in the branch sequence below
 
 These are not committed near-term order. They hold open design work that should stay out of `DECISIONS.md` until concrete implementation and manual testing settle it.
 
-10. `codex/scenario-format-hardening`
+8. `codex/scenario-format-hardening`
    - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
    - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
    - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
    - Define the migration contract in this branch; implement actual migration tooling only for format changes that already exist or split it into a follow-up if it grows beyond the scenario-file hardening slice.
 
-11. `codex/rules-expression-spike`
+9. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-12. `codex/standalone-runtime-export`
+10. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.
 
-13. `codex/unit-entity-model`
+11. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-14. `codex/token-styling`
+12. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-15. `codex/rules-authoring-system`
+13. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
