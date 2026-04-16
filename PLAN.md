@@ -6,70 +6,51 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Make board authoring credible before expanding into broader editor systems. The current baseline has the first canvas-backed board viewport, palette marker placement, square and pointy-top hex tile geometry, explicit tile board setup fields, browser/desktop file commands, and a read-only runtime view.
+Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; and a read-only runtime view.
 
-Free-coordinate space is now the next architectural pressure point. It is a required project capability, not optional design space, and it should be pulled forward before selection, undo, source editing, assets, export, or rules work harden around tile-only assumptions.
-
-The free-coordinate branch must stay tightly scoped. Pulling it forward means proving the space-model seam in the editor, not absorbing every continuous-space feature. Any free-coordinate follow-on discovered during that branch should be recorded in this file as a later branch candidate or deferred design space instead of expanding the foundation branch.
+The next near-term pressure is editor polish that improves daily use without broadening the command model again yet. Theme support is the next smallest visible slice, while autosave, selection, and undo can build on the now-tested command-registry seam afterward.
 
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/free-coordinate-space-foundation`
-   - Promote free-coordinate space from data-model room to a visible, manually testable editor mode.
-   - Add setup UI for no-grid free-coordinate boards with explicit bounds, authored scale, and background.
-   - Add a free-coordinate renderer and pointer interaction path through the same viewport model without forcing it through tile geometry.
-   - Support simple free-space marker placement and persistence with floating-point positions.
-   - Establish coordinate, distance, and 360-degree bearing helpers for later movement, targeting, and rules work.
-   - Render free-coordinate boards and placed markers in the runtime view.
-   - Keep the scope strict: no plotted orders, movement engine, terrain, zones, snapping/guides, ruler tools, asset imports, large-map virtualization, source editor expansion, export packaging, unit/entity model, or full rules model in this branch.
-
-2. `codex/command-registry`
-   - Extract the existing hardcoded command definitions into a small command registry.
-   - Make commands addressable by id from the menu bar, sidebar action stack, and keyboard shortcuts.
-   - Keep command metadata minimal: id, label, enabled state, handler, and optional shortcut hint.
-   - Wire existing commands: new, open, save, and save-as.
-   - Handle clipped or overflowing sidebar content gracefully, including long file paths, status lines, and dense metrics.
-   - Do not add right-click context menus or native Tauri menus in this branch.
-
-3. `codex/theme-toggle`
+1. `codex/theme-toggle`
    - Add light and dark editor themes using CSS variables.
    - Persist the chosen theme.
    - Default from system preference when no choice exists.
 
-4. `codex/draft-autosave`
+2. `codex/draft-autosave`
    - Add draft recovery autosave for the editor session.
    - Do not silently overwrite scenario files.
    - Keep explicit Save and Save As as the durable file actions.
 
-5. `codex/board-object-selection-inspector`
+3. `codex/board-object-selection-inspector`
    - Add marker selection through the canvas viewport coordinate flow across tile and free-coordinate boards.
    - Provide a small inspector for the selected marker.
    - Support marker deletion/removal from the inspector and command model.
    - Preserve marker persistence and runtime read-only rendering.
    - Keep selection independent of rule targeting and richer entity properties until concrete play-test workflows need that connection.
 
-6. `codex/undo-redo`
+4. `codex/undo-redo`
    - Introduce undo and redo for editor state mutations.
    - Cover board setup, tile marker placement, free-coordinate marker placement, marker deletion, and inspector edits as the first undoable actions.
    - Keep undo history in memory; do not persist it across sessions.
    - Keep file save/load semantics separate from undo history.
    - Wire undo and redo through the command registry and keyboard shortcuts: Ctrl+Z and Ctrl+Shift+Z.
 
-7. `codex/source-editor`
+5. `codex/source-editor`
    - Turn the scenario JSON panel into an editable source view.
    - Validate edits before applying them to the visual editor.
    - Provide a safe way to recover from invalid JSON.
    - Apply the same supported board-size and space-model limits to source edits and opened files, or surface unsupported cases explicitly instead of letting scenarios enter a partially supported state.
 
-8. `codex/asset-library-imports`
+6. `codex/asset-library-imports`
    - Add the first scenario asset model for imported images.
    - Prefer a project/package asset library with stable relative references over base64-heavy scenario JSON.
    - Start with board background images before token images so temporary markers do not accidentally become the durable asset model.
    - Treat sprite sheets, board tile images, and tile/sprite placement workflows as follow-on pressure after basic image imports.
 
-9. `codex/export-runtime-spike`
+7. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
    - Prove export assumptions against both tile-based and free-coordinate scenarios before treating the runtime bundle shape as settled.
@@ -117,7 +98,7 @@ These are not committed near-term order. They hold open design work that should 
 
 Large boards and map styling:
 - support triangle and other tile grids only when a concrete scenario pushes beyond square and hex; the current square/hex work is enough for the initial geometry seam proof
-- free-coordinate boards are near-term planned work in `codex/free-coordinate-space-foundation`; keep only follow-on refinements here
+- free-coordinate boards now have a foundation slice; keep only follow-on refinements here
 - refine authored scale semantics for tiled and free-coordinate boards after the first free-coordinate editor/runtime slice proves the basic model
 - decide how marker/token visual size relates to board/world scale, authored units, and eventual token/entity configuration; the foundation marker currently uses viewport-friendly temporary sizing, not durable physical scale
 - decide whether token placement validity is based on center point only or on the full token footprint; manual testing showed edge placements can intentionally or unintentionally hang outside free-coordinate board bounds
@@ -144,7 +125,7 @@ Assets and author media:
 - defer a built-in sprite creator until the editor has real asset workflows and authoring pressure justifies it
 
 Command model:
-- use the planned `codex/command-registry` branch as the base before adding broader command surfaces
+- use the command-registry slice as the base before adding broader command surfaces
 - consider right-click context menus for board objects and empty board space once selection, deletion, and object inspectors exist
 - leave native Tauri menus for later after the in-app registry proves itself
 

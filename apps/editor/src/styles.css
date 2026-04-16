@@ -146,6 +146,10 @@ button:disabled {
 .menu-item {
   width: 100%;
   min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   border: 0;
   border-radius: 6px;
   padding: 0 12px;
@@ -155,10 +159,27 @@ button:disabled {
   text-align: left;
 }
 
+.menu-item-label {
+  min-width: 0;
+}
+
+.menu-item-shortcut {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .menu-item:hover,
 .menu-item:focus-visible {
   background: var(--field);
   color: var(--accent-dark);
+}
+
+.menu-item:hover .menu-item-shortcut,
+.menu-item:focus-visible .menu-item-shortcut {
+  color: currentColor;
 }
 
 .menu-item:disabled,
@@ -270,24 +291,29 @@ button:disabled {
 
 .metric {
   min-width: 0;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
 }
 
+.metric span,
 .metric strong {
   min-width: 0;
+}
+
+.metric strong {
   color: var(--ink);
   text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .action-stack {
+  min-width: 0;
   display: grid;
   gap: 10px;
   margin-top: 18px;
@@ -334,12 +360,12 @@ button:disabled {
   min-width: 0;
   min-height: 22px;
   margin: 2px 0 0;
-  overflow: hidden;
   color: var(--warning);
   font-size: 0.88rem;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .marker-palette {

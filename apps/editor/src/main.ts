@@ -7,6 +7,12 @@ import {
   resetBoardViewportState
 } from "./board-viewport";
 import {
+  type CommandDefinition,
+  type CommandRegistry,
+  createCommandRegistry,
+  findCommandByShortcut
+} from "./commands";
+import {
   type Scenario,
   type ScenarioSpaceType,
   type ScenarioTileSpaceType,
@@ -44,22 +50,9 @@ type Route = "editor" | "runtime";
 
 type EditorCommandId = "new" | "open" | "save" | "save-as";
 
-type EditorCommand = {
-  id: EditorCommandId;
-  menuLabel: string;
-  sidebarLabel: string;
-  testId: string;
-  enabled: boolean;
-  run: () => void | Promise<void>;
-};
-
-type EditorCommands = Record<EditorCommandId, EditorCommand>;
-
-type MenuEntry =
-  | EditorCommand
-  | {
-      kind: "separator";
-    };
+type EditorCommand = CommandDefinition<EditorCommandId>;
+type EditorCommands = CommandRegistry<EditorCommandId>;
+type MenuEntry = EditorCommandId | "separator";
 
 type BoardSetupDraft = {
   type: ScenarioSpaceType;
@@ -92,12 +85,14 @@ let scenario = createEmptyScenario();
 let dirty = false;
 let statusMessage = "Ready";
 let boardSetupDraft = createDefaultBoardSetupDraft();
+let commandRegistry: EditorCommands | null = null;
 const boardViewportStates: Record<Route, BoardViewportState> = {
   editor: createBoardViewportState(),
   runtime: createBoardViewportState()
 };
 
 window.addEventListener("hashchange", render);
+window.addEventListener("keydown", handleCommandShortcutKeyDown);
 
 render();
 
@@ -109,11 +104,11 @@ function render(): void {
 function createShell(route: Route): HTMLElement {
   const shell = element("main", "shell");
   const fileInput = createOpenScenarioInput();
-  const commands = createEditorCommands(fileInput);
+  commandRegistry = createEditorCommands(fileInput);
   const header = element("header", "topbar");
   const brand = element("div", "brand");
   brand.append(element("span", "brand-mark", "FC"), element("strong", "", "Fieldcraft"));
-  const menuBar = createMenuBar(commands);
+  const menuBar = createMenuBar();
 
   const routeSwitch = element("nav", "route-switch");
   routeSwitch.setAttribute("aria-label", "Mode");
@@ -126,7 +121,7 @@ function createShell(route: Route): HTMLElement {
   shell.append(
     header,
     fileInput,
-    route === "runtime" ? createRuntimeView() : createEditorView(commands)
+    route === "runtime" ? createRuntimeView() : createEditorView()
   );
   return shell;
 }
@@ -144,7 +139,7 @@ function modeButton(
   return button;
 }
 
-function createEditorView(commands: EditorCommands): HTMLElement {
+function createEditorView(): HTMLElement {
   const view = element("section", "workspace");
   view.dataset.view = "editor";
 
@@ -163,7 +158,7 @@ function createEditorView(commands: EditorCommands): HTMLElement {
   if (scenario.space) {
     sidebarItems.push(createMarkerPalette());
   }
-  sidebarItems.push(createActionStack(commands));
+  sidebarItems.push(createActionStack());
   sidebar.append(...sidebarItems);
 
   const boardStage = element("section", "board-stage");
@@ -226,54 +221,42 @@ function createOpenScenarioInput(): HTMLInputElement {
 }
 
 function createEditorCommands(fileInput: HTMLInputElement): EditorCommands {
-  return {
-    new: {
+  return createCommandRegistry<EditorCommandId>([
+    {
       id: "new",
-      menuLabel: "New",
-      sidebarLabel: "New Scenario",
-      testId: "new-scenario",
+      label: "New",
       enabled: true,
+      shortcut: "Mod+N",
       run: createNewScenario
     },
-    open: {
+    {
       id: "open",
-      menuLabel: "Open",
-      sidebarLabel: "Open Scenario",
-      testId: "open-scenario",
+      label: "Open",
       enabled: true,
+      shortcut: "Mod+O",
       run: () => openScenario(fileInput)
     },
-    save: {
+    {
       id: "save",
-      menuLabel: "Save",
-      sidebarLabel: "Save Scenario",
-      testId: "save-scenario",
+      label: "Save",
       enabled: true,
+      shortcut: "Mod+S",
       run: saveScenario
     },
-    "save-as": {
+    {
       id: "save-as",
-      menuLabel: getSaveAsLabel(),
-      sidebarLabel: getSaveAsLabel(),
-      testId: "save-as-scenario",
+      label: getSaveAsLabel(),
       enabled: true,
+      shortcut: "Shift+Mod+S",
       run: saveScenarioAs
     }
-  };
+  ]);
 }
 
-function createMenuBar(commands: EditorCommands): HTMLElement {
+function createMenuBar(): HTMLElement {
   const menuBar = element("nav", "app-menu-bar");
   menuBar.setAttribute("aria-label", "Application menu");
-  menuBar.append(
-    createMenu("File", "file", [
-      commands.new,
-      commands.open,
-      { kind: "separator" },
-      commands.save,
-      commands["save-as"]
-    ])
-  );
+  menuBar.append(createMenu("File", "file", ["new", "open", "separator", "save", "save-as"]));
   return menuBar;
 }
 
@@ -287,7 +270,7 @@ function createMenu(label: string, id: string, entries: MenuEntry[]): HTMLElemen
   popover.setAttribute("role", "menu");
 
   for (const entry of entries) {
-    if ("kind" in entry) {
+    if (entry === "separator") {
       popover.append(element("div", "menu-separator"));
       continue;
     }
@@ -322,20 +305,32 @@ function createMenu(label: string, id: string, entries: MenuEntry[]): HTMLElemen
   return details;
 }
 
-function createMenuCommandButton(command: EditorCommand): HTMLButtonElement {
+function createMenuCommandButton(commandId: EditorCommandId): HTMLButtonElement {
+  const command = getCommand(commandId);
   const button = document.createElement("button");
+  const label = element("span", "menu-item-label", command.label);
+  const shortcut = command.shortcut
+    ? element("span", "menu-item-shortcut", formatShortcutHint(command.shortcut))
+    : null;
   button.type = "button";
   button.className = "menu-item";
-  button.textContent = command.menuLabel;
   button.disabled = !command.enabled;
-  button.dataset.testid = `menu-${command.testId}`;
+  button.dataset.testid = getMenuCommandTestId(commandId);
+  button.title = getCommandTitle(commandId);
+  if (command.shortcut) {
+    button.setAttribute("aria-keyshortcuts", formatShortcutAria(command.shortcut));
+  }
+  button.append(label);
+  if (shortcut) {
+    button.append(shortcut);
+  }
   button.addEventListener("click", () => {
     const menu = button.closest("details");
     if (menu instanceof HTMLDetailsElement) {
       menu.open = false;
     }
 
-    executeCommand(command);
+    executeCommandById(commandId);
   });
   return button;
 }
@@ -352,6 +347,24 @@ function executeCommand(command: EditorCommand): void {
       render();
     });
   }
+}
+
+function executeCommandById(commandId: EditorCommandId): void {
+  executeCommand(getCommand(commandId));
+}
+
+function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
+  if (event.defaultPrevented || event.repeat || !commandRegistry) {
+    return;
+  }
+
+  const command = findCommandByShortcut(commandRegistry, event);
+  if (!command) {
+    return;
+  }
+
+  event.preventDefault();
+  executeCommand(command);
 }
 
 function createRuntimeView(): HTMLElement {
@@ -382,29 +395,35 @@ function createRuntimeView(): HTMLElement {
   return view;
 }
 
-function createActionStack(commands: EditorCommands): HTMLElement {
+function createActionStack(): HTMLElement {
   const actions = element("div", "action-stack");
   const status = element("p", "status-line", statusMessage);
   status.title = statusMessage;
 
   actions.append(
-    commandActionButton(commands.new),
-    commandActionButton(commands.open),
-    commandActionButton(commands.save),
-    commandActionButton(commands["save-as"]),
+    commandActionButton("new"),
+    commandActionButton("open"),
+    commandActionButton("save"),
+    commandActionButton("save-as"),
     status
   );
 
   return actions;
 }
 
-function commandActionButton(command: EditorCommand): HTMLButtonElement {
-  return buttonElement(
-    command.sidebarLabel,
-    command.run,
-    command.testId,
+function commandActionButton(commandId: EditorCommandId): HTMLButtonElement {
+  const command = getCommand(commandId);
+  const button = buttonElement(
+    getSidebarCommandLabel(commandId),
+    () => executeCommandById(commandId),
+    getCommandTestId(commandId),
     !command.enabled
   );
+  button.title = getCommandTitle(commandId);
+  if (command.shortcut) {
+    button.setAttribute("aria-keyshortcuts", formatShortcutAria(command.shortcut));
+  }
+  return button;
 }
 
 function createBoard(options: {
@@ -1090,6 +1109,75 @@ function metric(label: string, value: string, testId?: string): HTMLElement {
   }
   item.append(element("span", "", label), valueElement);
   return item;
+}
+
+function getCommand(commandId: EditorCommandId): EditorCommand {
+  const command = commandRegistry?.[commandId];
+  if (!command) {
+    throw new Error(`Missing command: ${commandId}`);
+  }
+
+  return command;
+}
+
+function getCommandTestId(commandId: EditorCommandId): string {
+  return `${commandId}-scenario`;
+}
+
+function getMenuCommandTestId(commandId: EditorCommandId): string {
+  return `menu-${getCommandTestId(commandId)}`;
+}
+
+function getSidebarCommandLabel(commandId: EditorCommandId): string {
+  const command = getCommand(commandId);
+  if (commandId === "save-as") {
+    return command.label;
+  }
+
+  return `${command.label} Scenario`;
+}
+
+function getCommandTitle(commandId: EditorCommandId): string {
+  const command = getCommand(commandId);
+  if (!command.shortcut) {
+    return getSidebarCommandLabel(commandId);
+  }
+
+  return `${getSidebarCommandLabel(commandId)} (${formatShortcutHint(command.shortcut)})`;
+}
+
+function formatShortcutHint(shortcut: string): string {
+  const modifierLabel = isMacPlatform() ? "Cmd" : "Ctrl";
+
+  return shortcut
+    .split("+")
+    .map((part) => {
+      if (part === "Mod") {
+        return modifierLabel;
+      }
+
+      return part.length === 1 ? part.toUpperCase() : part;
+    })
+    .join("+");
+}
+
+function formatShortcutAria(shortcut: string): string {
+  const modifierLabel = isMacPlatform() ? "Meta" : "Control";
+
+  return shortcut
+    .split("+")
+    .map((part) => {
+      if (part === "Mod") {
+        return modifierLabel;
+      }
+
+      return part.length === 1 ? part.toUpperCase() : part;
+    })
+    .join("+");
+}
+
+function isMacPlatform(): boolean {
+  return navigator.platform.toLowerCase().includes("mac");
 }
 
 function buttonElement(

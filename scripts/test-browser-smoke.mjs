@@ -49,6 +49,24 @@ try {
   });
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
 
+  await openScenarioFromShortcut(page, menuOpenFixturePath);
+  await expectMarkerCount(page, "1");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await waitForMarker(page, "board-surface", "1-2");
+  await page.keyboard.press("Control+S");
+  await page.waitForFunction(() => {
+    return document.querySelector(".status-line")?.textContent === "Scenario saved";
+  });
+  const shortcutSavedScenario = await page.evaluate(() =>
+    window.localStorage.getItem("fieldcraft:last-scenario")
+  );
+  if (!shortcutSavedScenario || !shortcutSavedScenario.includes('"title": "Menu Open Fixture"')) {
+    throw new Error("Ctrl+S did not save the opened scenario.");
+  }
+  await page.keyboard.press("Control+N");
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await expectMarkerCount(page, "0");
+
   await openScenarioFromSidebar(page, menuOpenFixturePath);
   await expectMarkerCount(page, "1");
   await expectSurfaceSpace(page, "board-surface", "square-grid");
@@ -156,6 +174,7 @@ try {
 
   await expectScenarioDownload(page, () => clickMenuItem(page, "file", "menu-save-as-scenario"));
   await expectScenarioDownload(page, () => page.click('[data-testid="save-as-scenario"]'));
+  await expectScenarioDownload(page, () => page.keyboard.press("Control+Shift+S"));
   await page.waitForFunction(() => {
     return document.querySelector(".status-line")?.textContent === "Scenario downloaded";
   });
@@ -494,6 +513,13 @@ async function clickMenuItem(page, menuId, itemTestId) {
 async function openScenarioFromMenu(page, filePath) {
   const fileChooserPromise = page.waitForEvent("filechooser");
   await clickMenuItem(page, "file", "menu-open-scenario");
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(filePath);
+}
+
+async function openScenarioFromShortcut(page, filePath) {
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.keyboard.press("Control+O");
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles(filePath);
 }
