@@ -15,6 +15,15 @@ import {
   findCommandByShortcut
 } from "./commands";
 import {
+  canRedoHistory,
+  canUndoHistory,
+  clearHistory,
+  createHistoryState,
+  popRedoHistory,
+  popUndoHistory,
+  pushHistoryEntry
+} from "./history";
+import {
   type Scenario,
   type ScenarioSpaceType,
   type ScenarioTileSpaceType,
@@ -53,6 +62,8 @@ import {
 type Route = "editor" | "runtime";
 
 type EditorCommandId =
+  | "undo"
+  | "redo"
   | "new"
   | "open"
   | "save"
@@ -98,6 +109,12 @@ type StoredEditorSessionDraft = {
   currentFilePath: string | null;
 };
 
+type EditorSnapshot = {
+  scenario: Scenario;
+  boardSetupDraft: BoardSetupDraft;
+  selectedMarkerId: string | null;
+};
+
 const themeStorageKey = "fieldcraft:theme";
 const editorSessionDraftStorageKey = "fieldcraft:editor-session-draft";
 const systemThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
@@ -126,6 +143,10 @@ let boardSetupDraft =
   recoveredSessionDraft?.boardSetupDraft ?? createDefaultBoardSetupDraft(getActiveTheme());
 let selectedMarkerId: string | null = null;
 let commandRegistry: EditorCommands | null = null;
+const editorHistory = createHistoryState<EditorSnapshot>();
+let cleanScenarioSnapshot: Scenario | null = recoveredSessionDraft?.dirty
+  ? null
+  : cloneScenarioValue(scenario);
 const boardViewportStates: Record<Route, BoardViewportState> = {
   editor: createBoardViewportState(),
   runtime: createBoardViewportState()
@@ -215,11 +236,7 @@ function createEditorView(): HTMLElement {
   const sidebar = element("aside", "panel left-panel");
   const sidebarItems: HTMLElement[] = [
     element("p", "eyebrow", "Scenario"),
-    labeledInput("Title", scenario.title, (value) => {
-      scenario = { ...scenario, title: value || createEmptyScenario().title };
-      dirty = true;
-      render();
-    }),
+    labeledInput("Title", scenario.title, updateScenarioTitle, "scenario-title-input"),
     metric("Board", getBoardLabel()),
     metric("Markers", String(scenario.pieces.length), "marker-count"),
     metric("File", getFileLabel(), "current-file")
@@ -299,6 +316,20 @@ function createEditorCommands(fileInput: HTMLInputElement, route: Route): Editor
 
   return createCommandRegistry<EditorCommandId>([
     {
+      id: "undo",
+      label: "Undo",
+      enabled: route === "editor" && canUndoHistory(editorHistory),
+      shortcut: "Mod+Z",
+      run: undoEditorMutation
+    },
+    {
+      id: "redo",
+      label: "Redo",
+      enabled: route === "editor" && canRedoHistory(editorHistory),
+      shortcut: "Shift+Mod+Z",
+      run: redoEditorMutation
+    },
+    {
       id: "new",
       label: "New",
       enabled: true,
@@ -339,7 +370,10 @@ function createEditorCommands(fileInput: HTMLInputElement, route: Route): Editor
 function createMenuBar(): HTMLElement {
   const menuBar = element("nav", "app-menu-bar");
   menuBar.setAttribute("aria-label", "Application menu");
-  menuBar.append(createMenu("File", "file", ["new", "open", "separator", "save", "save-as"]));
+  menuBar.append(
+    createMenu("File", "file", ["new", "open", "separator", "save", "save-as"]),
+    createMenu("Edit", "edit", ["undo", "redo", "separator", "delete-selected-marker"])
+  );
   return menuBar;
 }
 
@@ -454,17 +488,24 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
   if (!command) {
     return;
   }
+  if ((command.id === "undo" || command.id === "redo") && isEditableEventTarget(event.target)) {
+    return;
+  }
 
   event.preventDefault();
   executeCommand(command);
 }
 
 function isDeleteSelectionKeyEvent(event: KeyboardEvent): boolean {
+  if (isEditableEventTarget(event.target)) {
+    return false;
+  }
+
   if (event.key === "Delete") {
     return true;
   }
 
-  return event.key === "Backspace" && !isEditableEventTarget(event.target);
+  return event.key === "Backspace";
 }
 
 function isEditableEventTarget(target: EventTarget | null): boolean {
@@ -514,6 +555,8 @@ function createActionStack(): HTMLElement {
   status.title = statusMessage;
 
   actions.append(
+    commandActionButton("undo"),
+    commandActionButton("redo"),
     commandActionButton("new"),
     commandActionButton("open"),
     commandActionButton("save"),
@@ -594,11 +637,18 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
   section.append(
     metric("Kind", "Marker", "selected-marker-kind"),
     metric("Id", selectedMarker.id, "selected-marker-id"),
+    createMarkerIdInput(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
     deleteButton
   );
 
   return section;
+}
+
+function createMarkerIdInput(selectedMarker: Scenario["pieces"][number]): HTMLElement {
+  const field = textInput("Marker ID", selectedMarker.id, "selected-marker-id-input");
+  field.input.addEventListener("change", () => updateSelectedMarkerId(field.input.value));
+  return field.label;
 }
 
 function createMarkerPalette(): HTMLElement {
@@ -937,20 +987,67 @@ function handleSelectedMarkerChange(pieceId: string | null): void {
   render();
 }
 
+function updateScenarioTitle(value: string): void {
+  const nextTitle = value || createEmptyScenario().title;
+  if (scenario.title === nextTitle) {
+    return;
+  }
+
+  commitUndoableChange("title edit", "Title updated", () => {
+    scenario = {
+      ...scenario,
+      title: nextTitle
+    };
+  });
+}
+
+function updateSelectedMarkerId(value: string): void {
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker) {
+    return;
+  }
+
+  const nextId = value.trim();
+  if (!nextId) {
+    statusMessage = "Marker ID cannot be empty";
+    render();
+    return;
+  }
+
+  if (nextId === selectedMarker.id) {
+    return;
+  }
+
+  if (scenario.pieces.some((piece) => piece.id === nextId)) {
+    statusMessage = "Marker ID already exists";
+    render();
+    return;
+  }
+
+  commitUndoableChange("marker inspector edit", "Marker ID updated", () => {
+    scenario = {
+      ...scenario,
+      pieces: scenario.pieces.map((piece) =>
+        piece.id === selectedMarker.id ? { ...piece, id: nextId } : piece
+      )
+    };
+    selectedMarkerId = nextId;
+  });
+}
+
 function deleteSelectedMarker(): void {
   const selectedMarker = getSelectedMarker();
   if (!selectedMarker) {
     return;
   }
 
-  scenario = {
-    ...scenario,
-    pieces: scenario.pieces.filter((piece) => piece.id !== selectedMarker.id)
-  };
-  selectedMarkerId = null;
-  dirty = true;
-  statusMessage = "Marker deleted";
-  render();
+  commitUndoableChange("marker deletion", "Marker deleted", () => {
+    scenario = {
+      ...scenario,
+      pieces: scenario.pieces.filter((piece) => piece.id !== selectedMarker.id)
+    };
+    selectedMarkerId = null;
+  });
 }
 
 function placeDefaultMarker(x: number, y: number): void {
@@ -968,23 +1065,22 @@ function placeDefaultMarker(x: number, y: number): void {
 
   const markerId = createMarkerId(x, y);
 
-  scenario = {
-    ...scenario,
-    pieces: [
-      ...scenario.pieces,
-      {
-        id: markerId,
-        kind: "marker" as const,
-        side: "neutral" as const,
-        x,
-        y
-      }
-    ]
-  };
-  selectedMarkerId = markerId;
-  dirty = true;
-  statusMessage = "Marker placed";
-  render();
+  commitUndoableChange("marker placement", "Marker placed", () => {
+    scenario = {
+      ...scenario,
+      pieces: [
+        ...scenario.pieces,
+        {
+          id: markerId,
+          kind: "marker" as const,
+          side: "neutral" as const,
+          x,
+          y
+        }
+      ]
+    };
+    selectedMarkerId = markerId;
+  });
 }
 
 async function createNewScenario(): Promise<void> {
@@ -997,6 +1093,8 @@ async function createNewScenario(): Promise<void> {
   clearCurrentFilePath();
   resetBoardViewportStates();
   boardSetupDraft = createDefaultBoardSetupDraft();
+  clearHistory(editorHistory);
+  cleanScenarioSnapshot = cloneScenarioValue(scenario);
   dirty = false;
   statusMessage = "New blank scenario";
   navigate("editor");
@@ -1066,26 +1164,29 @@ function createTileGrid(options: {
     return;
   }
 
-  scenario = {
-    ...scenario,
-    space: createTileScenarioSpace({
-      type: options.type,
-      width,
-      height,
-      tileSize,
-      distancePerTile,
-      scaleUnit,
-      gridLineColor,
-      gridLineOpacity,
-      backgroundColor
-    }),
-    pieces: []
-  };
-  selectedMarkerId = null;
-  resetBoardViewportStates();
-  dirty = true;
-  statusMessage = `${getTileSpaceLabel(options.type)} created: ${width} x ${height}`;
-  render();
+  commitUndoableChange(
+    "board creation",
+    `${getTileSpaceLabel(options.type)} created: ${width} x ${height}`,
+    () => {
+      scenario = {
+        ...scenario,
+        space: createTileScenarioSpace({
+          type: options.type,
+          width,
+          height,
+          tileSize,
+          distancePerTile,
+          scaleUnit,
+          gridLineColor,
+          gridLineOpacity,
+          backgroundColor
+        }),
+        pieces: []
+      };
+      selectedMarkerId = null;
+      resetBoardViewportStates();
+    }
+  );
 }
 
 function createFreeCoordinateBoard(options: {
@@ -1131,24 +1232,27 @@ function createFreeCoordinateBoard(options: {
     return;
   }
 
-  scenario = {
-    ...scenario,
-    space: createFreeCoordinateScenarioSpace({
-      x,
-      y,
-      width,
-      height,
-      distancePerWorldUnit,
-      scaleUnit,
-      backgroundColor
-    }),
-    pieces: []
-  };
-  selectedMarkerId = null;
-  resetBoardViewportStates();
-  dirty = true;
-  statusMessage = `Free-coordinate board created: ${width} x ${height}`;
-  render();
+  commitUndoableChange(
+    "board creation",
+    `Free-coordinate board created: ${width} x ${height}`,
+    () => {
+      scenario = {
+        ...scenario,
+        space: createFreeCoordinateScenarioSpace({
+          x,
+          y,
+          width,
+          height,
+          distancePerWorldUnit,
+          scaleUnit,
+          backgroundColor
+        }),
+        pieces: []
+      };
+      selectedMarkerId = null;
+      resetBoardViewportStates();
+    }
+  );
 }
 
 async function openScenario(fileInput: HTMLInputElement): Promise<void> {
@@ -1182,6 +1286,88 @@ async function saveScenarioAs(): Promise<void> {
   }
 }
 
+function undoEditorMutation(): void {
+  const snapshot = captureEditorSnapshot();
+  const entry = popUndoHistory(editorHistory, snapshot);
+  if (!entry) {
+    return;
+  }
+
+  applyEditorSnapshot(entry.snapshot);
+  statusMessage = `Undid ${entry.label}`;
+  render();
+}
+
+function redoEditorMutation(): void {
+  const snapshot = captureEditorSnapshot();
+  const entry = popRedoHistory(editorHistory, snapshot);
+  if (!entry) {
+    return;
+  }
+
+  applyEditorSnapshot(entry.snapshot);
+  statusMessage = `Redid ${entry.label}`;
+  render();
+}
+
+function commitUndoableChange(
+  label: string,
+  successMessage: string,
+  mutate: () => void
+): void {
+  const before = captureEditorSnapshot();
+  const previousBoardKey = getScenarioBoardKey(before.scenario);
+  mutate();
+  syncSelectedMarkerWithScenario();
+  const after = captureEditorSnapshot();
+
+  if (editorSnapshotsEqual(before, after)) {
+    return;
+  }
+
+  pushHistoryEntry(editorHistory, {
+    snapshot: before,
+    label
+  });
+  if (previousBoardKey !== getScenarioBoardKey(after.scenario)) {
+    resetBoardViewportStates();
+  }
+  syncDirtyState();
+  statusMessage = successMessage;
+  render();
+}
+
+function captureEditorSnapshot(): EditorSnapshot {
+  return {
+    scenario: cloneScenarioValue(scenario),
+    boardSetupDraft: cloneBoardSetupDraftValue(boardSetupDraft),
+    selectedMarkerId
+  };
+}
+
+function applyEditorSnapshot(snapshot: EditorSnapshot): void {
+  const previousBoardKey = getScenarioBoardKey(scenario);
+  scenario = cloneScenarioValue(snapshot.scenario);
+  boardSetupDraft = cloneBoardSetupDraftValue(snapshot.boardSetupDraft);
+  selectedMarkerId = snapshot.selectedMarkerId;
+  syncSelectedMarkerWithScenario();
+  if (previousBoardKey !== getScenarioBoardKey(scenario)) {
+    resetBoardViewportStates();
+  }
+  syncDirtyState();
+}
+
+function syncDirtyState(): void {
+  dirty = cleanScenarioSnapshot
+    ? !scenariosEqual(scenario, cleanScenarioSnapshot)
+    : true;
+}
+
+function markScenarioClean(value: Scenario): void {
+  cleanScenarioSnapshot = cloneScenarioValue(value);
+  dirty = false;
+}
+
 function applyStorageResult(result: ScenarioStorageResult | null): void {
   if (!result) {
     return;
@@ -1189,6 +1375,8 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
 
   const previousBoardKey = getScenarioBoardKey(scenario);
   let shouldResetViewport = false;
+  const shouldClearUndoHistory =
+    result.statusMessage.startsWith("Opened ") || result.statusMessage.startsWith("Loaded ");
 
   if (result.scenario) {
     scenario = result.scenario;
@@ -1198,11 +1386,16 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
     }
     shouldResetViewport =
       previousBoardKey !== getScenarioBoardKey(scenario) ||
-      result.statusMessage.startsWith("Opened ") ||
-      result.statusMessage.startsWith("Loaded ");
+      shouldClearUndoHistory;
+  }
+  if (result.scenario && result.dirty === false) {
+    markScenarioClean(result.scenario);
   }
   if (result.dirty !== undefined) {
     dirty = result.dirty;
+  }
+  if (shouldClearUndoHistory) {
+    clearHistory(editorHistory);
   }
   if (shouldResetViewport) {
     resetBoardViewportStates();
@@ -1496,6 +1689,18 @@ function boardSetupDraftMatches(
   );
 }
 
+function editorSnapshotsEqual(left: EditorSnapshot, right: EditorSnapshot): boolean {
+  return (
+    left.selectedMarkerId === right.selectedMarkerId &&
+    scenariosEqual(left.scenario, right.scenario) &&
+    boardSetupDraftMatches(left.boardSetupDraft, right.boardSetupDraft)
+  );
+}
+
+function scenariosEqual(left: Scenario, right: Scenario): boolean {
+  return scenarioToJson(left) === scenarioToJson(right);
+}
+
 async function confirmDiscardUnsavedChanges(): Promise<boolean> {
   if (!dirty) {
     return true;
@@ -1514,12 +1719,16 @@ async function confirmDiscardUnsavedChanges(): Promise<boolean> {
 function labeledInput(
   labelText: string,
   value: string,
-  onChange: (value: string) => void
+  onChange: (value: string) => void,
+  testId?: string
 ): HTMLElement {
   const label = element("label", "field-label");
   const text = element("span", "", labelText);
   const input = document.createElement("input");
   input.value = value;
+  if (testId) {
+    input.dataset.testid = testId;
+  }
   input.addEventListener("change", () => onChange(input.value.trim()));
   label.append(text, input);
   return label;
@@ -1632,7 +1841,7 @@ function getMenuCommandTestId(commandId: EditorCommandId): string {
 
 function getSidebarCommandLabel(commandId: EditorCommandId): string {
   const command = getCommand(commandId);
-  if (commandId === "save-as") {
+  if (commandId === "save-as" || commandId === "undo" || commandId === "redo") {
     return command.label;
   }
 
@@ -1847,6 +2056,57 @@ function formatCoordinateForId(value: number): string {
 
 function formatCoordinate(value: number): string {
   return Number.isInteger(value) ? String(value) : String(value);
+}
+
+function cloneScenarioValue(value: Scenario): Scenario {
+  return {
+    ...value,
+    space: cloneScenarioSpaceValue(value.space),
+    pieces: value.pieces.map((piece) => ({ ...piece })),
+    metadata: {
+      ...value.metadata
+    }
+  };
+}
+
+function cloneScenarioSpaceValue(space: Scenario["space"]): Scenario["space"] {
+  if (!space) {
+    return null;
+  }
+
+  if (isTileScenarioSpace(space)) {
+    return {
+      ...space,
+      scale: {
+        ...space.scale
+      },
+      grid: {
+        ...space.grid
+      },
+      background: {
+        ...space.background
+      }
+    };
+  }
+
+  return {
+    ...space,
+    bounds: {
+      ...space.bounds
+    },
+    scale: {
+      ...space.scale
+    },
+    background: {
+      ...space.background
+    }
+  };
+}
+
+function cloneBoardSetupDraftValue(value: BoardSetupDraft): BoardSetupDraft {
+  return {
+    ...value
+  };
 }
 
 function createDefaultBoardSetupDraft(theme: Theme = getActiveTheme()): BoardSetupDraft {
