@@ -126,8 +126,13 @@ Assets and author media:
 
 Command model:
 - use the command-registry slice as the base before adding broader command surfaces
+- revisit the top command bar with a small, durable icon set after the command surfaces settle; keep tooltips, shortcut hints, and clarity stronger than pure icon minimalism
 - consider right-click context menus for board objects and empty board space once selection, deletion, and object inspectors exist
 - leave native Tauri menus for later after the in-app registry proves itself
+
+Selection and board editing:
+- add marquee or drag selection for tokens and other board objects once multi-object authoring pressure is real
+- pair multi-selection with bulk move operations on the board instead of treating drag selection as an isolated gesture-only feature
 
 Editor layout customization:
 - draggable/dockable panels become relevant after the main panel set stabilizes through selection, source editing, and inspector work
