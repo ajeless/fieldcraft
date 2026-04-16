@@ -63,12 +63,62 @@ try {
   await createGrid(page, "square", 6, 5);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
   await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await placeMarkerFromPalette(page, "board-surface", 2, 1);
+  await expectMarkerCount(page, "1");
+  await waitForMarker(page, "board-surface", "2-1");
+  await page.reload();
+  await page.waitForSelector('[data-view="editor"]');
+  await expectStatusLine(page, "Recovered session draft");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectMarkerCount(page, "1");
+  await waitForMarker(page, "board-surface", "2-1");
+  await page.click('[data-testid="save-scenario"]');
+  await expectStatusLine(page, "Scenario saved");
+  const firstRecoveredSave = await page.evaluate(() =>
+    window.localStorage.getItem("fieldcraft:last-scenario")
+  );
+  if (!firstRecoveredSave) {
+    throw new Error("Recovered draft save did not update browser storage.");
+  }
+  const parsedFirstRecoveredSave = JSON.parse(firstRecoveredSave);
+  if (
+    parsedFirstRecoveredSave.pieces.length !== 1 ||
+    !parsedFirstRecoveredSave.pieces.some((piece) => piece.id === "marker-2-1")
+  ) {
+    throw new Error("Recovered draft save did not preserve the saved marker set.");
+  }
+  await placeMarkerFromPalette(page, "board-surface", 4, 3);
+  await expectMarkerCount(page, "2");
+  await waitForMarker(page, "board-surface", "4-3");
+  await page.reload();
+  await page.waitForSelector('[data-view="editor"]');
+  await expectStatusLine(page, "Recovered session draft");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectMarkerCount(page, "2");
+  await waitForMarker(page, "board-surface", "2-1");
+  await waitForMarker(page, "board-surface", "4-3");
+  const durableSquareSave = await page.evaluate(() =>
+    window.localStorage.getItem("fieldcraft:last-scenario")
+  );
+  if (!durableSquareSave) {
+    throw new Error("Saved browser scenario disappeared after draft recovery.");
+  }
+  const parsedDurableSquareSave = JSON.parse(durableSquareSave);
+  if (
+    parsedDurableSquareSave.pieces.length !== 1 ||
+    !parsedDurableSquareSave.pieces.some((piece) => piece.id === "marker-2-1") ||
+    parsedDurableSquareSave.pieces.some((piece) => piece.id === "marker-4-3")
+  ) {
+    throw new Error("Draft recovery overwrote the saved browser scenario.");
+  }
   await dismissConfirm(page, () => page.click('[data-testid="new-scenario"]'));
   await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectMarkerCount(page, "2");
   await expectNoFileChooser(page, () =>
     dismissConfirm(page, () => page.click('[data-testid="open-scenario"]'))
   );
   await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectMarkerCount(page, "2");
   await acceptConfirm(page, () => page.click('[data-testid="new-scenario"]'));
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
 
@@ -526,6 +576,12 @@ async function expectInputValue(page, selector, expectedValue) {
   if (value !== expectedValue) {
     throw new Error(`${selector} was reset to ${JSON.stringify(value)}.`);
   }
+}
+
+async function expectStatusLine(page, expectedValue) {
+  await page.waitForFunction((value) => {
+    return document.querySelector(".status-line")?.textContent === value;
+  }, expectedValue);
 }
 
 async function expectStoredTheme(page, expectedTheme) {

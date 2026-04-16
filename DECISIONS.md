@@ -51,3 +51,15 @@ Finished games export to browser-playable bundles and standalone desktop binarie
 ## 008 — Scenario files are human-readable
 
 Scenario files must be readable and editable in a plain text editor. The visual editor writes them, but never traps the author. Readability is a hard constraint.
+
+## 009 — Desktop editor is authoritative; browser editor is a constrained support surface
+
+The desktop editor is the authoritative authoring environment.
+
+The browser runtime remains a first-class export target.
+
+The browser editor is kept as a constrained development, testing, review, and demo surface, not as a full parity promise with the desktop editor.
+
+Desktop-only capabilities such as native file handling, project/package management, and export/packaging may remain desktop-first without being blocked on equivalent browser support.
+
+Rationale: the browser editor is valuable for fast iteration, smoke testing, and agent-assisted development, but browser sandbox limits should not drive or narrow the main authoring architecture.

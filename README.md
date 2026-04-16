@@ -82,6 +82,10 @@ Check the local developer environment:
 corepack pnpm run doctor
 ```
 
+### Browser Testing
+
+Use the browser flow when you want the fastest editor loop and when you are testing browser-specific file behavior such as file-picker import and JSON download.
+
 Start the browser editor:
 
 ```sh
@@ -89,6 +93,17 @@ corepack pnpm start
 ```
 
 The tracked Vite dev server runs at `http://127.0.0.1:5173/` by default, writes process state to `.fieldcraft/run/dev-server.json`, and writes logs to `.fieldcraft/logs/dev-server.log`. Desktop dev mode uses this server; production desktop builds bundle static assets from `apps/editor/dist/` and do not require Vite.
+
+Manual browser test flow:
+
+1. Run `corepack pnpm start`.
+2. Open `http://127.0.0.1:5173/` in a browser.
+3. Exercise editor and runtime flows in the browser UI.
+4. Verify browser-specific file behavior:
+   - **Open Scenario** uses the browser file picker.
+   - **Save Scenario** updates the browser fallback save state.
+   - **Download JSON** writes a downloaded copy.
+5. Stop the tracked dev server when finished.
 
 Stop the browser editor:
 
@@ -110,6 +125,10 @@ corepack pnpm test:smoke
 
 The smoke test starts the tracked dev server if needed, exercises browser file/menu commands, verifies theme persistence and dark board defaults, creates square, hex, and free-coordinate boards, verifies canvas-backed rendering, places markers across those board types, checks dirty-state confirmation for destructive file actions, checks pan/zoom/reset behavior, saves scenario JSON, launches the runtime, verifies markers render there, and stops any server it started.
 
+### Desktop Testing
+
+Use the desktop flow when you need to verify native dialogs, restart behavior, or the Tauri shell itself. This is the path that corresponds to the standalone binary target.
+
 Run the Tauri desktop shell for development:
 
 ```sh
@@ -118,7 +137,35 @@ corepack pnpm desktop
 
 The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, starts or reuses the tracked browser dev server, launches the Tauri development shell, and stops only the server it started.
 
+Manual desktop test flow:
+
+1. Run `corepack pnpm desktop`.
+2. Wait for the Tauri editor window to open.
+3. Exercise the same editor and runtime flows there.
+4. Verify desktop-specific behavior:
+   - **Open Scenario**, **Save Scenario**, and **Save As** use native file dialogs.
+   - Closing and relaunching the app preserves any expected desktop session behavior you are testing.
+   - Saved files on disk only change after explicit `Save` or `Save As`.
+
 A debug desktop binary built with `corepack pnpm --dir apps/editor tauri build --debug --no-bundle` lives at `apps/editor/src-tauri/target/debug/fieldcraft`.
+
+Build the debug desktop binary:
+
+```sh
+corepack pnpm --dir apps/editor tauri build --debug --no-bundle
+```
+
+Run it directly on Unix-like systems:
+
+```sh
+./apps/editor/src-tauri/target/debug/fieldcraft
+```
+
+Run it directly on Windows:
+
+```powershell
+.\apps\editor\src-tauri\target\debug\fieldcraft.exe
+```
 
 In the desktop shell, **Open Scenario**, **Save Scenario**, and **Save As** use native file dialogs. In the browser fallback, **Open Scenario** imports JSON through the browser file picker and **Download JSON** saves a copy.
 

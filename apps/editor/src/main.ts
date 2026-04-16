@@ -32,6 +32,7 @@ import {
   isTileScenarioSpace,
   maxFreeCoordinateBoardSize,
   maxTileGridSize,
+  parseScenario,
   scenarioToJson
 } from "./scenario";
 import {
@@ -45,7 +46,8 @@ import {
   openScenarioFile,
   rememberScenario,
   saveScenarioFile,
-  saveScenarioFileAs
+  saveScenarioFileAs,
+  setCurrentFilePath
 } from "./storage";
 
 type Route = "editor" | "runtime";
@@ -83,7 +85,16 @@ type ThemeBoardDefaults = {
   boardBackgroundColor: string;
 };
 
+type StoredEditorSessionDraft = {
+  version: 1;
+  scenario: Scenario;
+  boardSetupDraft: BoardSetupDraft;
+  dirty: boolean;
+  currentFilePath: string | null;
+};
+
 const themeStorageKey = "fieldcraft:theme";
+const editorSessionDraftStorageKey = "fieldcraft:editor-session-draft";
 const systemThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
 const darkThemeBoardDefaults: ThemeBoardDefaults = {
   gridLineColor: "#536576",
@@ -97,12 +108,17 @@ if (!appRoot) {
 }
 
 const app = appRoot;
-let scenario = createEmptyScenario();
-let dirty = false;
-let statusMessage = "Ready";
 let themePreference = readStoredThemePreference();
 applyTheme();
-let boardSetupDraft = createDefaultBoardSetupDraft(getActiveTheme());
+const recoveredSessionDraft = readStoredEditorSessionDraft();
+if (recoveredSessionDraft) {
+  setCurrentFilePath(recoveredSessionDraft.currentFilePath);
+}
+let scenario = recoveredSessionDraft?.scenario ?? createEmptyScenario();
+let dirty = recoveredSessionDraft?.dirty ?? false;
+let statusMessage = recoveredSessionDraft ? "Recovered session draft" : "Ready";
+let boardSetupDraft =
+  recoveredSessionDraft?.boardSetupDraft ?? createDefaultBoardSetupDraft(getActiveTheme());
 let commandRegistry: EditorCommands | null = null;
 const boardViewportStates: Record<Route, BoardViewportState> = {
   editor: createBoardViewportState(),
@@ -111,11 +127,13 @@ const boardViewportStates: Record<Route, BoardViewportState> = {
 
 window.addEventListener("hashchange", render);
 window.addEventListener("keydown", handleCommandShortcutKeyDown);
+window.addEventListener("pagehide", syncEditorSessionDraft);
 systemThemeMedia.addEventListener("change", handleSystemThemeChange);
 
 render();
 
 function render(): void {
+  syncEditorSessionDraft();
   app.innerHTML = "";
   app.append(createShell(getRoute()));
 }
@@ -555,6 +573,7 @@ function createBoardSetup(): HTMLElement {
             ? String(getDefaultTileSize(option.type))
             : boardSetupDraft.tileSizeValue
       };
+      syncEditorSessionDraft();
       render();
     });
   }
@@ -630,6 +649,7 @@ function createBoardSetup(): HTMLElement {
         freeScaleUnitValue: scaleUnitInput.input.value,
         freeBackgroundColorValue: backgroundColorInput.input.value
       };
+      syncEditorSessionDraft();
     };
 
     for (const input of [
@@ -739,6 +759,7 @@ function createBoardSetup(): HTMLElement {
       backgroundColorValue: backgroundColorInput.input.value,
       tileSizeEdited: boardSetupDraft.tileSizeEdited
     };
+    syncEditorSessionDraft();
   };
 
   tileSizeInput.input.addEventListener("input", () => {
@@ -1122,6 +1143,142 @@ function handleSystemThemeChange(): void {
   render();
 }
 
+function readStoredEditorSessionDraft(): StoredEditorSessionDraft | null {
+  try {
+    const storedDraft = window.localStorage.getItem(editorSessionDraftStorageKey);
+    if (!storedDraft) {
+      return null;
+    }
+
+    const parsedDraft = parseStoredEditorSessionDraft(JSON.parse(storedDraft));
+    if (!parsedDraft || !shouldRecoverEditorSessionDraft(parsedDraft)) {
+      window.localStorage.removeItem(editorSessionDraftStorageKey);
+      return null;
+    }
+
+    return parsedDraft;
+  } catch {
+    try {
+      window.localStorage.removeItem(editorSessionDraftStorageKey);
+    } catch {
+      // Ignore storage failures and keep booting with an empty in-memory session.
+    }
+    return null;
+  }
+}
+
+function parseStoredEditorSessionDraft(value: unknown): StoredEditorSessionDraft | null {
+  if (!isRecord(value) || value.version !== 1 || typeof value.dirty !== "boolean") {
+    return null;
+  }
+
+  try {
+    return {
+      version: 1,
+      scenario: parseScenario(JSON.stringify(value.scenario)),
+      boardSetupDraft:
+        parseStoredBoardSetupDraft(value.boardSetupDraft) ??
+        createDefaultBoardSetupDraft(getActiveTheme()),
+      dirty: value.dirty,
+      currentFilePath: typeof value.currentFilePath === "string" ? value.currentFilePath : null
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseStoredBoardSetupDraft(value: unknown): BoardSetupDraft | null {
+  if (!isRecord(value) || !isScenarioSpaceType(value.type)) {
+    return null;
+  }
+
+  const requiredStringKeys: Array<keyof BoardSetupDraft> = [
+    "widthValue",
+    "heightValue",
+    "tileSizeValue",
+    "distancePerTileValue",
+    "scaleUnitValue",
+    "gridLineColorValue",
+    "gridLineOpacityValue",
+    "backgroundColorValue",
+    "freeXValue",
+    "freeYValue",
+    "freeWidthValue",
+    "freeHeightValue",
+    "freeDistancePerWorldUnitValue",
+    "freeScaleUnitValue",
+    "freeBackgroundColorValue"
+  ];
+
+  if (
+    requiredStringKeys.some((key) => typeof value[key] !== "string") ||
+    typeof value.tileSizeEdited !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    type: value.type,
+    widthValue: value.widthValue as string,
+    heightValue: value.heightValue as string,
+    tileSizeValue: value.tileSizeValue as string,
+    distancePerTileValue: value.distancePerTileValue as string,
+    scaleUnitValue: value.scaleUnitValue as string,
+    gridLineColorValue: value.gridLineColorValue as string,
+    gridLineOpacityValue: value.gridLineOpacityValue as string,
+    backgroundColorValue: value.backgroundColorValue as string,
+    freeXValue: value.freeXValue as string,
+    freeYValue: value.freeYValue as string,
+    freeWidthValue: value.freeWidthValue as string,
+    freeHeightValue: value.freeHeightValue as string,
+    freeDistancePerWorldUnitValue: value.freeDistancePerWorldUnitValue as string,
+    freeScaleUnitValue: value.freeScaleUnitValue as string,
+    freeBackgroundColorValue: value.freeBackgroundColorValue as string,
+    tileSizeEdited: value.tileSizeEdited as boolean
+  };
+}
+
+function syncEditorSessionDraft(): void {
+  try {
+    if (!shouldPersistEditorSessionDraft()) {
+      window.localStorage.removeItem(editorSessionDraftStorageKey);
+      return;
+    }
+
+    const storedDraft: StoredEditorSessionDraft = {
+      version: 1,
+      scenario,
+      boardSetupDraft,
+      dirty,
+      currentFilePath: getCurrentFilePath()
+    };
+    window.localStorage.setItem(editorSessionDraftStorageKey, JSON.stringify(storedDraft));
+  } catch {
+    // Ignore storage persistence failures and keep the session usable in-memory.
+  }
+}
+
+function shouldPersistEditorSessionDraft(): boolean {
+  return dirty || hasRecoverableBoardSetupDraft(scenario, boardSetupDraft);
+}
+
+function shouldRecoverEditorSessionDraft(draft: StoredEditorSessionDraft): boolean {
+  return draft.dirty || hasRecoverableBoardSetupDraft(draft.scenario, draft.boardSetupDraft);
+}
+
+function hasRecoverableBoardSetupDraft(
+  scenarioValue: Scenario,
+  boardSetupDraftValue: BoardSetupDraft
+): boolean {
+  return (
+    !scenarioValue.space &&
+    !boardSetupDraftMatches(
+      boardSetupDraftValue,
+      createDefaultBoardSetupDraft(getActiveTheme())
+    )
+  );
+}
+
 function syncBoardSetupDraftThemeDefaults(previousTheme: Theme, nextTheme: Theme): void {
   if (previousTheme === nextTheme) {
     return;
@@ -1155,6 +1312,31 @@ function replaceDefaultThemeColor(
   nextDefault: string
 ): string {
   return currentValue === previousDefault ? nextDefault : currentValue;
+}
+
+function boardSetupDraftMatches(
+  left: BoardSetupDraft,
+  right: BoardSetupDraft
+): boolean {
+  return (
+    left.type === right.type &&
+    left.widthValue === right.widthValue &&
+    left.heightValue === right.heightValue &&
+    left.tileSizeValue === right.tileSizeValue &&
+    left.distancePerTileValue === right.distancePerTileValue &&
+    left.scaleUnitValue === right.scaleUnitValue &&
+    left.gridLineColorValue === right.gridLineColorValue &&
+    left.gridLineOpacityValue === right.gridLineOpacityValue &&
+    left.backgroundColorValue === right.backgroundColorValue &&
+    left.freeXValue === right.freeXValue &&
+    left.freeYValue === right.freeYValue &&
+    left.freeWidthValue === right.freeWidthValue &&
+    left.freeHeightValue === right.freeHeightValue &&
+    left.freeDistancePerWorldUnitValue === right.freeDistancePerWorldUnitValue &&
+    left.freeScaleUnitValue === right.freeScaleUnitValue &&
+    left.freeBackgroundColorValue === right.freeBackgroundColorValue &&
+    left.tileSizeEdited === right.tileSizeEdited
+  );
 }
 
 async function confirmDiscardUnsavedChanges(): Promise<boolean> {
@@ -1476,6 +1658,14 @@ function getTileSpaceLabel(type: ScenarioTileSpaceType): string {
 
 function isTileSetupType(type: ScenarioSpaceType): type is ScenarioTileSpaceType {
   return type === "square-grid" || type === "hex-grid";
+}
+
+function isScenarioSpaceType(value: unknown): value is ScenarioSpaceType {
+  return value === "square-grid" || value === "hex-grid" || value === "free-coordinate";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function createMarkerId(x: number, y: number): string {

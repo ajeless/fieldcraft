@@ -32,8 +32,12 @@ export function getCurrentFilePath(): string | null {
   return currentFilePath;
 }
 
+export function setCurrentFilePath(filePath: string | null): void {
+  currentFilePath = filePath;
+}
+
 export function clearCurrentFilePath(): void {
-  currentFilePath = null;
+  setCurrentFilePath(null);
 }
 
 export function getFileLabel(): string {
