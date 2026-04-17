@@ -8,7 +8,7 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; unsaved-change confirmation before destructive `New` and `Open` flows replace dirty work; persisted `System`/`Light`/`Dark` theme support; dark-theme board defaults for new boards; draft recovery autosave; marker selection through the canvas viewport; a small marker inspector; keyboard and inspector deletion for selected markers; in-memory undo/redo for editor mutations; a stable top command bar for document actions; a stable contextual tool slot with the marker palette disabled instead of shifting layout before board creation; one clear `Marker ID` editing surface; compact destructive selection affordances; consistent `Ctrl/Cmd+Shift+Z` redo plus `Ctrl+Y` on Windows/Linux; shared board-size and tile-size validation between board setup and scenario-file loading; rejection of oversized tile-grid scenarios before they enter unsupported editor states; and a read-only runtime view.
 
-Manual testing and review now point to occupancy semantics and source editing as the next pressure. Command-surface cleanup and validation unification landed cleanly on top of the existing command-registry seam, which makes the next trust-blocking risk clearer: the editor still hardens around a false one-object-per-location assumption for tile placement. Occupancy semantics still need to land before source editing and the first real entity model so later work does not preserve that unsupported assumption through source edits, authored data, and runtime inspection.
+Manual testing of the new source editor now points to a narrow hardening follow-up before broader content work. Source editing landed on the existing scenario-parse seam, but real use exposed trust-blocking gaps: duplicate marker ids can still be authored through raw JSON even though selection and rendering assume unique ids, keyboard undo/redo from the source pane does not yet line up with editor-history expectations, and invalid JSON diagnostics still need stronger targeting than a generic rejection message. Those issues should land before asset imports so authored source remains trustworthy instead of becoming another path into partially supported editor state.
 
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
@@ -28,13 +28,19 @@ Current manual testing pressure points are captured in the branch sequence below
    - Apply the same supported board-size and space-model limits to source edits and opened files, or surface unsupported cases explicitly instead of letting scenarios enter a partially supported state.
    - Preserve occupancy semantics established for tile and free-coordinate markers instead of reintroducing one-object-per-location assumptions in source edits.
 
-3. `codex/asset-library-imports`
+3. `codex/source-editor-hardening`
+   - Reject duplicate marker ids in source edits, file-open flows, and draft recovery before those scenarios enter editor/runtime paths that assume unique object identity.
+   - Make undo/redo from the source pane line up with editor-history expectations once the source view matches the applied scenario, without breaking normal text editing for unapplied drafts.
+   - Improve invalid JSON diagnostics with line/column targeting and a clear inline visual indicator in the current source editor.
+   - Keep this slice narrow; do not turn it into a full code-editor integration or broad schema-validation system yet.
+
+4. `codex/asset-library-imports`
    - Add the first scenario asset model for imported images.
    - Prefer a project/package asset library with stable relative references over base64-heavy scenario JSON.
    - Start with board background images before token images so temporary markers do not accidentally become the durable asset model.
    - Treat sprite sheets, board tile images, and tile/sprite placement workflows as follow-on pressure after basic image imports.
 
-4. `codex/export-runtime-spike`
+5. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
    - Prove export assumptions against both tile-based and free-coordinate scenarios before treating the runtime bundle shape as settled.
@@ -44,7 +50,7 @@ Current manual testing pressure points are captured in the branch sequence below
 
 These are not committed near-term order. They hold open design work that should stay out of `DECISIONS.md` until concrete implementation and manual testing settle it.
 
-5. `codex/scenario-format-hardening`
+6. `codex/scenario-format-hardening`
    - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
    - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
    - Separate durable object identity from author-facing labels before coordinate-derived ids like `marker-x-y` calcify into the long-term scenario format.
@@ -52,18 +58,18 @@ These are not committed near-term order. They hold open design work that should 
    - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
    - Define the migration contract in this branch; implement actual migration tooling only for format changes that already exist or split it into a follow-up if it grows beyond the scenario-file hardening slice.
 
-6. `codex/rules-expression-spike`
+7. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-7. `codex/standalone-runtime-export`
+8. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.
 
-8. `codex/unit-entity-model`
+9. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
@@ -71,12 +77,12 @@ These are not committed near-term order. They hold open design work that should 
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-9. `codex/token-styling`
+10. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-10. `codex/rules-authoring-system`
+11. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
@@ -112,6 +118,11 @@ Free-coordinate follow-ons:
 
 Assets and author media:
 - a built-in sprite creator becomes relevant after `codex/asset-library-imports` proves the basic asset model and authoring pressure justifies it
+
+Scenario source and packaging:
+- keep the current scenario source editor inline until real scenario/package complexity proves it is no longer enough; avoid jumping to a file-browser workflow before authored data actually becomes unwieldy
+- revisit whether large authored object/entity data should stay inline in one human-readable scenario file or move into referenced package files only after the asset-library, entity-model, and export slices create concrete pressure
+- if authored source outgrows the current inline pane, move toward a small project/file browser plus a dedicated text editor with syntax highlighting, validation, and file-level recovery instead of layering those expectations onto a bare textarea forever
 
 Command model:
 - use the command-registry slice as the base before adding broader command surfaces

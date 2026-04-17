@@ -91,7 +91,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
   letter-spacing: 0;
 }
@@ -462,6 +463,36 @@ button:disabled {
   gap: 12px;
 }
 
+.source-editor-header {
+  align-items: flex-start;
+}
+
+.source-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.source-editor-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.source-editor-error {
+  margin: 0;
+  color: #b54a4a;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+:root[data-theme="dark"] .source-editor-error {
+  color: #f0a49b;
+}
+
 .status-section {
   display: grid;
   gap: 8px;
@@ -537,6 +568,7 @@ button:disabled {
 .viewport-button:focus-visible,
 .board-canvas:focus-visible,
 .field-label input:focus-visible,
+.source-editor-input:focus-visible,
 .space-option input:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
@@ -816,8 +848,13 @@ button:disabled {
   line-height: 1.1;
 }
 
-.scenario-preview {
+.source-editor-section {
   flex: 1;
+  min-height: 0;
+}
+
+.source-editor-input {
+  width: 100%;
   min-height: 180px;
   overflow: auto;
   margin: 0;
@@ -828,7 +865,21 @@ button:disabled {
   color: var(--scenario-preview-ink);
   font-size: 0.78rem;
   line-height: 1.45;
-  white-space: pre-wrap;
+  white-space: pre;
+  resize: vertical;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+}
+
+.source-editor-input.has-error {
+  border-color: #b54a4a;
+  box-shadow: inset 0 -2px 0 #b54a4a;
+}
+
+:root[data-theme="dark"] .source-editor-input.has-error {
+  border-color: #f0a49b;
+  box-shadow: inset 0 -2px 0 #f0a49b;
 }
 
 @media (max-width: 1080px) {

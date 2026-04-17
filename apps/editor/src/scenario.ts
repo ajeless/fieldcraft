@@ -231,6 +231,8 @@ export function parseScenario(input: string): Scenario {
     throw new Error("File is not a Fieldcraft scenario.");
   }
 
+  validateUniquePieceIds(scenario);
+
   return scenario;
 }
 
@@ -277,6 +279,18 @@ function parseScenarioValue(value: unknown): Scenario | null {
           : null
     }
   };
+}
+
+function validateUniquePieceIds(scenario: Scenario): void {
+  const seenIds = new Set<string>();
+
+  for (const piece of scenario.pieces) {
+    if (seenIds.has(piece.id)) {
+      throw new Error(`Scenario contains duplicate marker ID: ${piece.id}`);
+    }
+
+    seenIds.add(piece.id);
+  }
 }
 
 function parseScenarioPieces(

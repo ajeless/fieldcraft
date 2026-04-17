@@ -105,17 +105,23 @@ type ThemeBoardDefaults = {
 };
 
 type StoredEditorSessionDraft = {
-  version: 1;
+  version: 2;
   scenario: Scenario;
   boardSetupDraft: BoardSetupDraft;
   dirty: boolean;
   currentFilePath: string | null;
+  sourceDraft: string;
 };
 
 type EditorSnapshot = {
   scenario: Scenario;
   boardSetupDraft: BoardSetupDraft;
   selectedMarkerId: string | null;
+};
+
+type SourceEditorSelection = {
+  start: number;
+  end: number;
 };
 
 const documentCommandGroups = [
@@ -149,6 +155,9 @@ let dirty = recoveredSessionDraft?.dirty ?? false;
 let statusMessage = recoveredSessionDraft ? "Recovered session draft" : "Ready";
 let boardSetupDraft =
   recoveredSessionDraft?.boardSetupDraft ?? createDefaultBoardSetupDraft(getActiveTheme());
+let sourceDraft = recoveredSessionDraft?.sourceDraft ?? scenarioToJson(scenario);
+let sourceEditorErrorMessage: string | null = null;
+let sourceEditorErrorSelection: SourceEditorSelection | null = null;
 let selectedMarkerId: string | null = null;
 let commandRegistry: EditorCommands | null = null;
 const editorHistory = createHistoryState<EditorSnapshot>();
@@ -287,7 +296,7 @@ function createEditorView(): HTMLElement {
     savedGameSection.append(metric("Path", currentFilePath));
   }
   inspector.append(savedGameSection);
-  inspector.append(element("pre", "scenario-preview", scenarioToJson(scenario)));
+  inspector.append(createSourceEditorSection());
 
   view.append(sidebar, boardStage, inspector);
   return view;
@@ -484,6 +493,9 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
     return;
   }
 
+  const allowEditorHistoryFromSourceEditor =
+    isSourceEditorEventTarget(event.target) && !hasPendingSourceEdits();
+
   if (isDeleteSelectionKeyEvent(event)) {
     const deleteCommand = commandRegistry["delete-selected-marker"];
     if (deleteCommand?.enabled) {
@@ -493,7 +505,7 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
     return;
   }
 
-  if (isRedoAliasKeyEvent(event)) {
+  if (isRedoAliasKeyEvent(event, allowEditorHistoryFromSourceEditor)) {
     const redoCommand = commandRegistry["redo"];
     if (redoCommand?.enabled) {
       event.preventDefault();
@@ -506,7 +518,11 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
   if (!command) {
     return;
   }
-  if ((command.id === "undo" || command.id === "redo") && isEditableEventTarget(event.target)) {
+  if (
+    (command.id === "undo" || command.id === "redo") &&
+    isEditableEventTarget(event.target) &&
+    !allowEditorHistoryFromSourceEditor
+  ) {
     return;
   }
 
@@ -526,10 +542,13 @@ function isDeleteSelectionKeyEvent(event: KeyboardEvent): boolean {
   return event.key === "Backspace";
 }
 
-function isRedoAliasKeyEvent(event: KeyboardEvent): boolean {
+function isRedoAliasKeyEvent(
+  event: KeyboardEvent,
+  allowFromEditable = false
+): boolean {
   return (
     !isMacPlatform() &&
-    !isEditableEventTarget(event.target) &&
+    (allowFromEditable || !isEditableEventTarget(event.target)) &&
     event.key.toLowerCase() === "y" &&
     event.ctrlKey &&
     !event.metaKey &&
@@ -549,6 +568,114 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
 
   const tagName = target.tagName;
   return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+}
+
+function isSourceEditorEventTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLTextAreaElement &&
+    target.dataset.testid === "scenario-source-input"
+  );
+}
+
+function handleSourceEditorTabKeyDown(
+  editor: HTMLTextAreaElement,
+  event: KeyboardEvent
+): boolean {
+  if (event.key !== "Tab") {
+    return false;
+  }
+
+  event.preventDefault();
+
+  if (event.shiftKey) {
+    outdentSourceEditorSelection(editor);
+  } else {
+    indentSourceEditorSelection(editor);
+  }
+
+  return true;
+}
+
+function indentSourceEditorSelection(editor: HTMLTextAreaElement): void {
+  const indent = "  ";
+  const selectionStart = editor.selectionStart;
+  const selectionEnd = editor.selectionEnd;
+
+  if (selectionStart === selectionEnd) {
+    editor.setRangeText(indent, selectionStart, selectionEnd, "end");
+    return;
+  }
+
+  const lineStart = getLineStartIndex(editor.value, selectionStart);
+  const selectedText = editor.value.slice(lineStart, selectionEnd);
+  const lineCount = selectedText.split("\n").length;
+  const indentedText = selectedText
+    .split("\n")
+    .map((line) => `${indent}${line}`)
+    .join("\n");
+
+  editor.setRangeText(indentedText, lineStart, selectionEnd, "preserve");
+  editor.setSelectionRange(
+    selectionStart + indent.length,
+    selectionEnd + indent.length * lineCount
+  );
+}
+
+function outdentSourceEditorSelection(editor: HTMLTextAreaElement): void {
+  const selectionStart = editor.selectionStart;
+  const selectionEnd = editor.selectionEnd;
+  const lineStart = getLineStartIndex(editor.value, selectionStart);
+
+  if (selectionStart === selectionEnd) {
+    const lineText = getCurrentLineText(editor.value, selectionStart);
+    const removedPrefixLength = getOutdentPrefixLength(lineText);
+    if (removedPrefixLength === 0) {
+      return;
+    }
+
+    editor.setRangeText("", lineStart, lineStart + removedPrefixLength, "preserve");
+    const nextCaret = Math.max(lineStart, selectionStart - removedPrefixLength);
+    editor.setSelectionRange(nextCaret, nextCaret);
+    return;
+  }
+
+  const selectedText = editor.value.slice(lineStart, selectionEnd);
+  const lines = selectedText.split("\n");
+  const removedPrefixLengths = lines.map(getOutdentPrefixLength);
+  const outdentedText = lines
+    .map((line, index) => line.slice(removedPrefixLengths[index]))
+    .join("\n");
+  const totalRemoved = removedPrefixLengths.reduce((sum, value) => sum + value, 0);
+  const removedFromFirstLine = removedPrefixLengths[0] ?? 0;
+
+  editor.setRangeText(outdentedText, lineStart, selectionEnd, "preserve");
+  editor.setSelectionRange(
+    Math.max(lineStart, selectionStart - removedFromFirstLine),
+    Math.max(lineStart, selectionEnd - totalRemoved)
+  );
+}
+
+function getLineStartIndex(value: string, index: number): number {
+  return value.lastIndexOf("\n", Math.max(0, index - 1)) + 1;
+}
+
+function getCurrentLineText(value: string, index: number): string {
+  const lineStart = getLineStartIndex(value, index);
+  const nextNewline = value.indexOf("\n", index);
+
+  return value.slice(lineStart, nextNewline === -1 ? value.length : nextNewline);
+}
+
+function getOutdentPrefixLength(line: string): number {
+  if (line.startsWith("  ")) {
+    return 2;
+  }
+
+  if (line.startsWith("\t") || line.startsWith(" ")) {
+    return 1;
+  }
+
+  return 0;
 }
 
 function createRuntimeView(): HTMLElement {
@@ -680,6 +807,78 @@ function createMarkerIdInput(selectedMarker: Scenario["pieces"][number]): HTMLEl
   const field = textInput("Marker ID", selectedMarker.id, "selected-marker-id-input");
   field.input.addEventListener("change", () => updateSelectedMarkerId(field.input.value));
   return field.label;
+}
+
+function createSourceEditorSection(): HTMLElement {
+  const section = element("section", "inspector-section source-editor-section");
+  const header = element("div", "inspector-section-header source-editor-header");
+  const actions = element("div", "source-editor-actions");
+  const appliedSource = getAppliedSourceText();
+  const hint = element("p", "source-editor-hint");
+  const error =
+    sourceEditorErrorMessage === null
+      ? null
+      : element("p", "source-editor-error", sourceEditorErrorMessage);
+  const editor = document.createElement("textarea");
+  const applyButton = buttonElement("Apply", applyScenarioSource, "apply-source");
+  const resetButton = buttonElement("Reset", resetScenarioSource, "reset-source");
+  const syncSourceEditorDraft = () => {
+    sourceDraft = editor.value;
+    clearSourceEditorError();
+    syncEditorSessionDraft();
+    syncControls();
+  };
+  const syncControls = () => {
+    const hasPendingEdits = editor.value !== appliedSource;
+    hint.textContent = hasPendingEdits
+      ? "Draft has unapplied edits. Apply validates JSON before replacing the current editor state; save and runtime still use the applied scenario."
+      : "Source matches the current editor state.";
+    applyButton.disabled = !hasPendingEdits;
+    resetButton.disabled = !hasPendingEdits;
+  };
+
+  applyButton.className = "action-button compact-action";
+  resetButton.className = "action-button compact-action";
+  header.append(element("p", "eyebrow", "Source"));
+  actions.append(applyButton, resetButton);
+  header.append(actions);
+
+  editor.className = "source-editor-input";
+  if (sourceEditorErrorMessage) {
+    editor.classList.add("has-error");
+  }
+  editor.value = sourceDraft;
+  editor.spellcheck = false;
+  editor.wrap = "off";
+  editor.dataset.testid = "scenario-source-input";
+  editor.setAttribute("aria-label", "Scenario source");
+  editor.addEventListener("input", () => {
+    syncSourceEditorDraft();
+  });
+  editor.addEventListener("keydown", (event) => {
+    if (!handleSourceEditorTabKeyDown(editor, event)) {
+      return;
+    }
+
+    syncSourceEditorDraft();
+  });
+
+  if (sourceEditorErrorSelection) {
+    const selection = sourceEditorErrorSelection;
+    sourceEditorErrorSelection = null;
+    requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(selection.start, selection.end);
+    });
+  }
+
+  syncControls();
+  section.append(header);
+  if (error) {
+    section.append(error);
+  }
+  section.append(hint, editor);
+  return section;
 }
 
 function createContextToolSection(): HTMLElement {
@@ -1140,6 +1339,8 @@ async function createNewScenario(): Promise<void> {
   }
 
   scenario = createEmptyScenario();
+  sourceDraft = getAppliedSourceText();
+  clearSourceEditorError();
   selectedMarkerId = null;
   clearCurrentFilePath();
   resetBoardViewportStates();
@@ -1341,6 +1542,44 @@ async function saveScenarioAs(): Promise<void> {
   }
 }
 
+function applyScenarioSource(): void {
+  try {
+    const parsedScenario = parseScenario(sourceDraft);
+    const appliedSource = scenarioToJson(parsedScenario);
+
+    if (scenariosEqual(parsedScenario, scenario)) {
+      sourceDraft = appliedSource;
+      clearSourceEditorError();
+      statusMessage = "Source applied";
+      render();
+      return;
+    }
+
+    commitUndoableChange("source apply", "Source applied", () => {
+      scenario = parsedScenario;
+      sourceDraft = appliedSource;
+      clearSourceEditorError();
+    });
+  } catch (error) {
+    const sourceEditorError = getScenarioSourceErrorDetails(sourceDraft, error);
+    sourceEditorErrorMessage = sourceEditorError.message;
+    sourceEditorErrorSelection = sourceEditorError.selection;
+    statusMessage = sourceEditorError.message;
+    render();
+  }
+}
+
+function resetScenarioSource(): void {
+  if (!hasPendingSourceEdits()) {
+    return;
+  }
+
+  sourceDraft = getAppliedSourceText();
+  clearSourceEditorError();
+  statusMessage = "Source reset to editor state";
+  render();
+}
+
 function undoEditorMutation(): void {
   const snapshot = captureEditorSnapshot();
   const entry = popUndoHistory(editorHistory, snapshot);
@@ -1373,6 +1612,7 @@ function commitUndoableChange(
   const before = captureEditorSnapshot();
   const previousBoardKey = getScenarioBoardKey(before.scenario);
   mutate();
+  syncSourceDraftWithScenario(before.scenario);
   syncSelectedMarkerWithScenario();
   const after = captureEditorSnapshot();
 
@@ -1401,10 +1641,12 @@ function captureEditorSnapshot(): EditorSnapshot {
 }
 
 function applyEditorSnapshot(snapshot: EditorSnapshot): void {
-  const previousBoardKey = getScenarioBoardKey(scenario);
+  const previousScenario = scenario;
+  const previousBoardKey = getScenarioBoardKey(previousScenario);
   scenario = cloneScenarioValue(snapshot.scenario);
   boardSetupDraft = cloneBoardSetupDraftValue(snapshot.boardSetupDraft);
   selectedMarkerId = snapshot.selectedMarkerId;
+  syncSourceDraftWithScenario(previousScenario);
   syncSelectedMarkerWithScenario();
   if (previousBoardKey !== getScenarioBoardKey(scenario)) {
     resetBoardViewportStates();
@@ -1428,7 +1670,8 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
     return;
   }
 
-  const previousBoardKey = getScenarioBoardKey(scenario);
+  const previousScenario = scenario;
+  const previousBoardKey = getScenarioBoardKey(previousScenario);
   let shouldResetViewport = false;
   const shouldClearUndoHistory =
     result.statusMessage.startsWith("Opened ") || result.statusMessage.startsWith("Loaded ");
@@ -1438,6 +1681,12 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
     selectedMarkerId = null;
     if (!scenario.space) {
       boardSetupDraft = createDefaultBoardSetupDraft(getActiveTheme());
+    }
+    if (shouldClearUndoHistory) {
+      sourceDraft = getAppliedSourceText();
+      clearSourceEditorError();
+    } else {
+      syncSourceDraftWithScenario(previousScenario);
     }
     shouldResetViewport =
       previousBoardKey !== getScenarioBoardKey(scenario) ||
@@ -1461,6 +1710,151 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+function clearSourceEditorError(): void {
+  sourceEditorErrorMessage = null;
+  sourceEditorErrorSelection = null;
+}
+
+function getScenarioSourceErrorDetails(
+  input: string,
+  error: unknown
+): {
+  message: string;
+  selection: SourceEditorSelection | null;
+} {
+  if (error instanceof SyntaxError) {
+    const location = getJsonSyntaxErrorLocation(input, error);
+    if (location) {
+      return {
+        message: `Source is not valid JSON at line ${location.line}, column ${location.column}.`,
+        selection: getSourceEditorSelectionForIndex(input, location.index)
+      };
+    }
+
+    return {
+      message: "Source is not valid JSON.",
+      selection: null
+    };
+  }
+
+  return {
+    message: getErrorMessage(error, "Could not apply source."),
+    selection: null
+  };
+}
+
+function getJsonSyntaxErrorLocation(
+  input: string,
+  error: SyntaxError
+): {
+  index: number;
+  line: number;
+  column: number;
+} | null {
+  const lineColumnMatch = /line\s+(\d+)\s+column\s+(\d+)/i.exec(error.message);
+  if (lineColumnMatch) {
+    const line = Number.parseInt(lineColumnMatch[1], 10);
+    const column = Number.parseInt(lineColumnMatch[2], 10);
+    const index = getIndexForLineAndColumn(input, line, column);
+    if (index !== null) {
+      return { index, line, column };
+    }
+  }
+
+  const positionMatch = /position\s+(\d+)/i.exec(error.message);
+  if (positionMatch) {
+    const index = clampSelectionIndex(
+      Number.parseInt(positionMatch[1], 10),
+      input.length
+    );
+
+    return {
+      index,
+      ...getLineAndColumnForIndex(input, index)
+    };
+  }
+
+  return null;
+}
+
+function getSourceEditorSelectionForIndex(
+  input: string,
+  index: number
+): SourceEditorSelection {
+  const start = clampSelectionIndex(index, input.length);
+  const end = start < input.length ? start + 1 : start;
+
+  if (start === end && start > 0) {
+    return {
+      start: start - 1,
+      end: start
+    };
+  }
+
+  return {
+    start,
+    end
+  };
+}
+
+function getIndexForLineAndColumn(
+  input: string,
+  line: number,
+  column: number
+): number | null {
+  if (line < 1 || column < 1) {
+    return null;
+  }
+
+  let currentLine = 1;
+  let currentColumn = 1;
+
+  for (let index = 0; index <= input.length; index += 1) {
+    if (currentLine === line && currentColumn === column) {
+      return index;
+    }
+
+    if (index === input.length) {
+      break;
+    }
+
+    if (input[index] === "\n") {
+      currentLine += 1;
+      currentColumn = 1;
+    } else {
+      currentColumn += 1;
+    }
+  }
+
+  return null;
+}
+
+function getLineAndColumnForIndex(
+  input: string,
+  index: number
+): {
+  line: number;
+  column: number;
+} {
+  let line = 1;
+  let column = 1;
+
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    if (input[cursor] === "\n") {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+
+  return { line, column };
+}
+
+function clampSelectionIndex(index: number, inputLength: number): number {
+  return Math.max(0, Math.min(index, inputLength));
 }
 
 function getRoute(): Route {
@@ -1559,19 +1953,29 @@ function readStoredEditorSessionDraft(): StoredEditorSessionDraft | null {
 }
 
 function parseStoredEditorSessionDraft(value: unknown): StoredEditorSessionDraft | null {
-  if (!isRecord(value) || value.version !== 1 || typeof value.dirty !== "boolean") {
+  if (
+    !isRecord(value) ||
+    (value.version !== 1 && value.version !== 2) ||
+    typeof value.dirty !== "boolean"
+  ) {
     return null;
   }
 
   try {
+    const parsedScenario = parseScenario(JSON.stringify(value.scenario));
+
     return {
-      version: 1,
-      scenario: parseScenario(JSON.stringify(value.scenario)),
+      version: 2,
+      scenario: parsedScenario,
       boardSetupDraft:
         parseStoredBoardSetupDraft(value.boardSetupDraft) ??
         createDefaultBoardSetupDraft(getActiveTheme()),
       dirty: value.dirty,
-      currentFilePath: typeof value.currentFilePath === "string" ? value.currentFilePath : null
+      currentFilePath: typeof value.currentFilePath === "string" ? value.currentFilePath : null,
+      sourceDraft:
+        typeof value.sourceDraft === "string"
+          ? value.sourceDraft
+          : scenarioToJson(parsedScenario)
     };
   } catch {
     return null;
@@ -1637,11 +2041,12 @@ function syncEditorSessionDraft(): void {
     }
 
     const storedDraft: StoredEditorSessionDraft = {
-      version: 1,
+      version: 2,
       scenario,
       boardSetupDraft,
       dirty,
-      currentFilePath: getCurrentFilePath()
+      currentFilePath: getCurrentFilePath(),
+      sourceDraft
     };
     window.localStorage.setItem(editorSessionDraftStorageKey, JSON.stringify(storedDraft));
   } catch {
@@ -1650,11 +2055,15 @@ function syncEditorSessionDraft(): void {
 }
 
 function shouldPersistEditorSessionDraft(): boolean {
-  return dirty || hasRecoverableBoardSetupDraft(scenario, boardSetupDraft);
+  return dirty || hasRecoverableBoardSetupDraft(scenario, boardSetupDraft) || hasPendingSourceEdits();
 }
 
 function shouldRecoverEditorSessionDraft(draft: StoredEditorSessionDraft): boolean {
-  return draft.dirty || hasRecoverableBoardSetupDraft(draft.scenario, draft.boardSetupDraft);
+  return (
+    draft.dirty ||
+    hasRecoverableBoardSetupDraft(draft.scenario, draft.boardSetupDraft) ||
+    hasPendingSourceEditsForScenario(draft.scenario, draft.sourceDraft)
+  );
 }
 
 function hasRecoverableBoardSetupDraft(
@@ -1711,6 +2120,28 @@ function syncSelectedMarkerWithScenario(): void {
   }
 }
 
+function getAppliedSourceText(value: Scenario = scenario): string {
+  return scenarioToJson(value);
+}
+
+function hasPendingSourceEdits(): boolean {
+  return hasPendingSourceEditsForScenario(scenario, sourceDraft);
+}
+
+function hasPendingSourceEditsForScenario(
+  scenarioValue: Scenario,
+  sourceDraftValue: string
+): boolean {
+  return sourceDraftValue !== getAppliedSourceText(scenarioValue);
+}
+
+function syncSourceDraftWithScenario(previousScenario: Scenario): void {
+  if (!hasPendingSourceEditsForScenario(previousScenario, sourceDraft)) {
+    sourceDraft = getAppliedSourceText();
+    clearSourceEditorError();
+  }
+}
+
 function replaceDefaultThemeColor(
   currentValue: string,
   previousDefault: string,
@@ -1757,7 +2188,7 @@ function scenariosEqual(left: Scenario, right: Scenario): boolean {
 }
 
 async function confirmDiscardUnsavedChanges(): Promise<boolean> {
-  if (!dirty) {
+  if (!dirty && !hasPendingSourceEdits()) {
     return true;
   }
 
@@ -2012,7 +2443,7 @@ function getMarkerPositionLabel(piece: Scenario["pieces"][number]): string {
 }
 
 function getDocumentState(): string {
-  if (dirty) {
+  if (dirty || hasPendingSourceEdits()) {
     return "Unsaved changes";
   }
 

@@ -14,10 +14,15 @@ const oversizedGridFixturePath = path.join(
   smokeDir,
   "oversized-grid-scenario.fieldcraft.json"
 );
+const duplicateMarkerIdFixturePath = path.join(
+  smokeDir,
+  "duplicate-marker-id-scenario.fieldcraft.json"
+);
 
 fs.mkdirSync(smokeDir, { recursive: true });
 fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
 fs.writeFileSync(oversizedGridFixturePath, createOversizedGridFixture(), "utf8");
+fs.writeFileSync(duplicateMarkerIdFixturePath, createDuplicateMarkerIdFixture(), "utf8");
 
 const before = await readState();
 const beforePid = before?.pid;
@@ -168,6 +173,11 @@ try {
   await waitForMarker(page, "board-surface", "1-2");
   await openScenarioFromSidebar(page, oversizedGridFixturePath);
   await expectStatusLine(page, "File is not a Fieldcraft scenario.");
+  await expectMarkerCount(page, "1");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await waitForMarker(page, "board-surface", "1-2");
+  await openScenarioFromSidebar(page, duplicateMarkerIdFixturePath);
+  await expectStatusLine(page, "Scenario contains duplicate marker ID: marker-1-2");
   await expectMarkerCount(page, "1");
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await waitForMarker(page, "board-surface", "1-2");
@@ -335,13 +345,63 @@ try {
   await page.click('[data-testid="reset-board-view"]');
   await waitForTransform(page, "board-surface", homeTransform);
 
-  await clickMenuItem(page, "file", "menu-save-scenario");
+  await updateSourceEditorJson(page, (scenario) => {
+    scenario.title = "Source Applied Fixture";
+    scenario.pieces.push({
+      id: "source-stack-marker",
+      kind: "marker",
+      side: "neutral",
+      x: 32,
+      y: 32
+    });
+    return scenario;
+  });
+  await page.click('[data-testid="apply-source"]');
+  await expectStatusLine(page, "Source applied");
+  await expectInputValue(page, '[data-testid="scenario-title-input"]', "Source Applied Fixture");
+  await expectMarkerCount(page, "4");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
+  await page.click('[data-testid="scenario-source-input"]');
+  await page.keyboard.press("Control+Z");
+  await expectInputValue(
+    page,
+    '[data-testid="scenario-title-input"]',
+    "Untitled Fieldcraft Scenario"
+  );
+  await expectMarkerCount(page, "3");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 2);
+  await page.keyboard.press("Control+Shift+Z");
+  await expectInputValue(page, '[data-testid="scenario-title-input"]', "Source Applied Fixture");
+  await expectMarkerCount(page, "4");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
+  const appliedSquareSource = await readSourceEditorValue(page);
+  await setSourceEditorSelection(page, 0, 0);
+  await expectSourceEditorFocused(page);
+  await page.keyboard.press("Tab");
+  await expectSourceEditorFocused(page);
+  const indentedSquareSource = await readSourceEditorValue(page);
+  if (!indentedSquareSource.startsWith("  {")) {
+    throw new Error("Tab did not indent the source editor.");
+  }
+  await page.keyboard.press("Shift+Tab");
+  await expectSourceEditorFocused(page);
+  if ((await readSourceEditorValue(page)) !== appliedSquareSource) {
+    throw new Error("Shift+Tab did not restore the source editor indentation.");
+  }
 
-  const savedScenario = await page.evaluate(() => window.localStorage.getItem("fieldcraft:last-scenario"));
+  await page.click('[data-testid="save-scenario"]');
+  await expectStatusLine(page, "Scenario saved");
+
+  const savedScenario = await page.evaluate(() =>
+    window.localStorage.getItem("fieldcraft:last-scenario")
+  );
   if (!savedScenario || !savedScenario.includes('"schema": "fieldcraft.scenario.v0"')) {
     throw new Error("Scenario was not saved to browser storage.");
   }
   const parsedScenario = JSON.parse(savedScenario);
+  if (parsedScenario.title !== "Source Applied Fixture") {
+    throw new Error(`Saved square scenario title was ${JSON.stringify(parsedScenario.title)}.`);
+  }
   expectTileSpaceSetup(parsedScenario.space, {
     type: "square-grid",
     width: 64,
@@ -354,14 +414,58 @@ try {
     backgroundColor: "#f4faf7"
   });
   if (
-    parsedScenario.pieces.length !== 3 ||
-    parsedScenario.pieces.filter((piece) => piece.x === 32 && piece.y === 32).length !== 2 ||
+    parsedScenario.pieces.length !== 4 ||
+    parsedScenario.pieces.filter((piece) => piece.x === 32 && piece.y === 32).length !== 3 ||
     !parsedScenario.pieces.some((piece) => piece.id === "marker-0-0") ||
+    !parsedScenario.pieces.some((piece) => piece.id === "source-stack-marker") ||
     parsedScenario.pieces.some((piece) => piece.id === deletedStackedMarkerId) ||
     parsedScenario.pieces.some((piece) => piece.id === "marker-63-63")
   ) {
     throw new Error("Saved scenario did not preserve colocated marker deletion.");
   }
+
+  const invalidSquareSource = '{\n  "schema": "fieldcraft.scenario.v0"\n';
+  await setSourceEditorValue(page, invalidSquareSource);
+  await page.click('[data-testid="apply-source"]');
+  await expectStatusLine(page, "Source is not valid JSON at line 3, column 1.");
+  await expectSourceEditorErrorState(page, true);
+  await expectMarkerCount(page, "4");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
+  await dismissConfirm(page, () => page.click('[data-testid="new-scenario"]'));
+  await expectMarkerCount(page, "4");
+  await expectInputValue(page, '[data-testid="scenario-source-input"]', invalidSquareSource);
+  await page.reload();
+  await page.waitForSelector('[data-view="editor"]');
+  await expectStatusLine(page, "Recovered session draft");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectSourceEditorErrorState(page, false);
+  await expectMarkerCount(page, "4");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
+  await expectInputValue(page, '[data-testid="scenario-source-input"]', invalidSquareSource);
+  await page.click('[data-testid="reset-source"]');
+  await expectStatusLine(page, "Source reset to editor state");
+  await expectSourceEditorErrorState(page, false);
+  const resetSquareSource = JSON.parse(await readSourceEditorValue(page));
+  if (
+    resetSquareSource.title !== "Source Applied Fixture" ||
+    resetSquareSource.pieces.length !== 4
+  ) {
+    throw new Error("Source reset did not restore the applied square scenario.");
+  }
+  await updateSourceEditorJson(page, (scenario) => {
+    scenario.pieces.push({
+      ...scenario.pieces[scenario.pieces.length - 1]
+    });
+    return scenario;
+  });
+  await page.click('[data-testid="apply-source"]');
+  await expectStatusLine(page, "Scenario contains duplicate marker ID: source-stack-marker");
+  await expectSourceEditorErrorState(page, true);
+  await expectMarkerCount(page, "4");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
+  await page.click('[data-testid="reset-source"]');
+  await expectStatusLine(page, "Source reset to editor state");
+  await expectSourceEditorErrorState(page, false);
 
   await expectScenarioDownload(page, () => clickMenuItem(page, "file", "menu-save-as-scenario"));
   await expectScenarioDownload(page, () => page.click('[data-testid="save-as-scenario"]'));
@@ -373,7 +477,7 @@ try {
   await page.click('[data-testid="mode-runtime"]');
   await page.waitForSelector('[data-view="runtime"]');
   await waitForMarker(page, "runtime-board-surface", "32-32");
-  await expectMarkerPositionOccurrences(page, "runtime-board-surface", "32-32", 2);
+  await expectMarkerPositionOccurrences(page, "runtime-board-surface", "32-32", 3);
   await waitForMarker(page, "runtime-board-surface", "0-0");
   await expectMarkerMissing(page, "runtime-board-surface", "63-63");
   await page.click('[data-testid="mode-editor"]');
@@ -570,8 +674,25 @@ try {
   await page.click('[data-testid="reset-board-view"]');
   await waitForTransform(page, "board-surface", freeHomeTransform);
 
+  await updateSourceEditorJson(page, (scenario) => {
+    scenario.pieces.push({
+      id: "source-free-marker",
+      kind: "marker",
+      side: "neutral",
+      x: 73.25,
+      y: 18.5
+    });
+    return scenario;
+  });
+  await page.click('[data-testid="apply-source"]');
+  await expectStatusLine(page, "Source applied");
+  await expectMarkerCount(page, "5");
+  await expectFreeMarkerCountNear(page, "board-surface", 73.25, 18.5, 3);
+
   await page.click('[data-testid="save-scenario"]');
-  const savedFreeScenario = await page.evaluate(() => window.localStorage.getItem("fieldcraft:last-scenario"));
+  const savedFreeScenario = await page.evaluate(() =>
+    window.localStorage.getItem("fieldcraft:last-scenario")
+  );
   if (!savedFreeScenario) {
     throw new Error("Free-coordinate scenario was not saved to browser storage.");
   }
@@ -591,10 +712,11 @@ try {
     freeMarkerKey(expectFreePieceNear(parsedFreeScenario.pieces, -49.5, 94.75))
   ];
   if (
-    parsedFreeScenario.pieces.length !== 4 ||
+    parsedFreeScenario.pieces.length !== 5 ||
     parsedFreeScenario.pieces.filter(
       (piece) => Math.abs(piece.x - 73.25) <= 0.75 && Math.abs(piece.y - 18.5) <= 0.75
-    ).length !== 2
+    ).length !== 3 ||
+    !parsedFreeScenario.pieces.some((piece) => piece.id === "source-free-marker")
   ) {
     throw new Error("Saved free-coordinate scenario did not preserve colocated markers.");
   }
@@ -603,7 +725,7 @@ try {
   await page.waitForSelector('[data-view="runtime"]');
   await expectSurfaceSpace(page, "runtime-board-surface", "free-coordinate");
   await expectCanvasHasRenderedBoard(page, "runtime-board-canvas");
-  await expectFreeMarkerCountNear(page, "runtime-board-surface", 73.25, 18.5, 2);
+  await expectFreeMarkerCountNear(page, "runtime-board-surface", 73.25, 18.5, 3);
   for (const markerKey of freeMarkerKeys) {
     await waitForMarker(page, "runtime-board-surface", markerKey);
   }
@@ -703,6 +825,54 @@ function createOversizedGridFixture() {
         }
       },
       pieces: [],
+      metadata: {
+        editorVersion: "0.1.0-experiment",
+        savedAt: null
+      }
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function createDuplicateMarkerIdFixture() {
+  return `${JSON.stringify(
+    {
+      schema: "fieldcraft.scenario.v0",
+      title: "Duplicate Marker Id Fixture",
+      space: {
+        type: "square-grid",
+        width: 4,
+        height: 4,
+        tileSize: 48,
+        scale: {
+          distancePerTile: 1,
+          unit: "tile"
+        },
+        grid: {
+          lineColor: "#aeb8c1",
+          lineOpacity: 1
+        },
+        background: {
+          color: "#f9fbfb"
+        }
+      },
+      pieces: [
+        {
+          id: "marker-1-2",
+          kind: "marker",
+          side: "neutral",
+          x: 1,
+          y: 2
+        },
+        {
+          id: "marker-1-2",
+          kind: "marker",
+          side: "neutral",
+          x: 2,
+          y: 2
+        }
+      ],
       metadata: {
         editorVersion: "0.1.0-experiment",
         savedAt: null
@@ -873,6 +1043,56 @@ async function setInputValue(page, selector, value) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }, value);
+}
+
+async function readSourceEditorValue(page) {
+  return page.locator('[data-testid="scenario-source-input"]').inputValue();
+}
+
+async function setSourceEditorSelection(page, start, end = start) {
+  await page.locator('[data-testid="scenario-source-input"]').evaluate((input, selection) => {
+    if (!(input instanceof HTMLTextAreaElement)) {
+      throw new Error("Target is not a textarea.");
+    }
+
+    input.focus();
+    input.setSelectionRange(selection.start, selection.end);
+  }, { start, end });
+}
+
+async function setSourceEditorValue(page, value) {
+  await page.locator('[data-testid="scenario-source-input"]').evaluate((input, nextValue) => {
+    if (!(input instanceof HTMLTextAreaElement)) {
+      throw new Error("Target is not a textarea.");
+    }
+
+    input.value = nextValue;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, value);
+}
+
+async function updateSourceEditorJson(page, mutate) {
+  const source = JSON.parse(await readSourceEditorValue(page));
+  const nextSource = mutate(source);
+  await setSourceEditorValue(page, `${JSON.stringify(nextSource, null, 2)}\n`);
+}
+
+async function expectSourceEditorErrorState(page, expected) {
+  await page.waitForFunction((hasError) => {
+    const input = document.querySelector('[data-testid="scenario-source-input"]');
+    return (
+      input instanceof HTMLTextAreaElement &&
+      input.classList.contains("has-error") === hasError
+    );
+  }, expected);
+}
+
+async function expectSourceEditorFocused(page) {
+  await page.waitForFunction(() => {
+    const input = document.querySelector('[data-testid="scenario-source-input"]');
+    return input instanceof HTMLTextAreaElement && document.activeElement === input;
+  });
 }
 
 function expectTileSpaceSetup(space, expected) {
