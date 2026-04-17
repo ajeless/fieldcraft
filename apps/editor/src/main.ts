@@ -41,7 +41,10 @@ import {
   isTileScenarioSpace,
   maxFreeCoordinateBoardSize,
   maxTileGridSize,
+  parseSupportedFreeCoordinateBoardSize,
   parseScenario,
+  parseSupportedTileGridSize,
+  parseSupportedTileSize,
   scenarioToJson
 } from "./scenario";
 import {
@@ -1192,9 +1195,9 @@ function createTileGrid(options: {
     tileSizeEdited: boardSetupDraft.tileSizeEdited
   };
 
-  const width = parseGridSize(options.widthValue);
-  const height = parseGridSize(options.heightValue);
-  const tileSize = parseTileSize(options.tileSizeValue);
+  const width = parseSupportedTileGridSize(Number.parseInt(options.widthValue, 10));
+  const height = parseSupportedTileGridSize(Number.parseInt(options.heightValue, 10));
+  const tileSize = parseSupportedTileSize(Number.parseFloat(options.tileSizeValue));
   const distancePerTile = parsePositiveNumber(options.distancePerTileValue);
   const gridLineOpacity = parseOpacity(options.gridLineOpacityValue);
   const gridLineColor = parseHexColor(options.gridLineColorValue);
@@ -1268,8 +1271,12 @@ function createFreeCoordinateBoard(options: {
 
   const x = parseFiniteNumber(options.xValue);
   const y = parseFiniteNumber(options.yValue);
-  const width = parseFreeCoordinateBoardSize(options.widthValue);
-  const height = parseFreeCoordinateBoardSize(options.heightValue);
+  const width = parseSupportedFreeCoordinateBoardSize(
+    Number.parseFloat(options.widthValue)
+  );
+  const height = parseSupportedFreeCoordinateBoardSize(
+    Number.parseFloat(options.heightValue)
+  );
   const distancePerWorldUnit = parsePositiveNumber(options.distancePerWorldUnitValue);
   const backgroundColor = parseHexColor(options.backgroundColorValue);
   const scaleUnit = options.scaleUnitValue.trim();
@@ -2043,40 +2050,10 @@ function getScenarioBoardKey(value: Scenario): string | null {
   return `${value.space.type}:${value.space.width}x${value.space.height}:${value.space.tileSize}`;
 }
 
-function parseGridSize(value: string): number | null {
-  const size = Number.parseInt(value, 10);
-
-  if (!Number.isInteger(size) || size < 1 || size > maxTileGridSize) {
-    return null;
-  }
-
-  return size;
-}
-
-function parseTileSize(value: string): number | null {
-  const size = Number.parseFloat(value);
-
-  if (!Number.isFinite(size) || size < 8 || size > 160) {
-    return null;
-  }
-
-  return size;
-}
-
 function parseFiniteNumber(value: string): number | null {
   const number = Number.parseFloat(value);
 
   return Number.isFinite(number) ? number : null;
-}
-
-function parseFreeCoordinateBoardSize(value: string): number | null {
-  const size = Number.parseFloat(value);
-
-  if (!Number.isFinite(size) || size <= 0 || size > maxFreeCoordinateBoardSize) {
-    return null;
-  }
-
-  return size;
 }
 
 function parsePositiveNumber(value: string): number | null {

@@ -10,9 +10,14 @@ const startScript = path.join(repoRoot, "scripts", "start.mjs");
 const stopScript = path.join(repoRoot, "scripts", "stop.mjs");
 const smokeDir = path.join(repoRoot, ".fieldcraft", "smoke");
 const menuOpenFixturePath = path.join(smokeDir, "menu-open-scenario.fieldcraft.json");
+const oversizedGridFixturePath = path.join(
+  smokeDir,
+  "oversized-grid-scenario.fieldcraft.json"
+);
 
 fs.mkdirSync(smokeDir, { recursive: true });
 fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
+fs.writeFileSync(oversizedGridFixturePath, createOversizedGridFixture(), "utf8");
 
 const before = await readState();
 const beforePid = before?.pid;
@@ -158,6 +163,11 @@ try {
   await expectMarkerCount(page, "0");
 
   await openScenarioFromSidebar(page, menuOpenFixturePath);
+  await expectMarkerCount(page, "1");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await waitForMarker(page, "board-surface", "1-2");
+  await openScenarioFromSidebar(page, oversizedGridFixturePath);
+  await expectStatusLine(page, "File is not a Fieldcraft scenario.");
   await expectMarkerCount(page, "1");
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await waitForMarker(page, "board-surface", "1-2");
@@ -623,6 +633,39 @@ function createMenuOpenFixture() {
           y: 2
         }
       ],
+      metadata: {
+        editorVersion: "0.1.0-experiment",
+        savedAt: null
+      }
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function createOversizedGridFixture() {
+  return `${JSON.stringify(
+    {
+      schema: "fieldcraft.scenario.v0",
+      title: "Oversized Grid Fixture",
+      space: {
+        type: "square-grid",
+        width: 65,
+        height: 4,
+        tileSize: 48,
+        scale: {
+          distancePerTile: 1,
+          unit: "tile"
+        },
+        grid: {
+          lineColor: "#aeb8c1",
+          lineOpacity: 1
+        },
+        background: {
+          color: "#f9fbfb"
+        }
+      },
+      pieces: [],
       metadata: {
         editorVersion: "0.1.0-experiment",
         savedAt: null
