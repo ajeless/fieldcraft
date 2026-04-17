@@ -1114,15 +1114,7 @@ function placeDefaultMarker(x: number, y: number): void {
     return;
   }
 
-  const existing = scenario.pieces.find((piece) => piece.x === x && piece.y === y);
-  if (existing) {
-    selectedMarkerId = existing.id;
-    statusMessage = "Marker already present";
-    render();
-    return;
-  }
-
-  const markerId = createMarkerId(x, y);
+  const markerId = createMarkerId(x, y, scenario.pieces);
 
   commitUndoableChange("marker placement", "Marker placed", () => {
     scenario = {
@@ -2088,12 +2080,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function createMarkerId(x: number, y: number): string {
-  if (Number.isInteger(x) && Number.isInteger(y)) {
-    return `marker-${x}-${y}`;
+function createMarkerId(x: number, y: number, pieces: Scenario["pieces"]): string {
+  const baseId =
+    Number.isInteger(x) && Number.isInteger(y)
+      ? `marker-${x}-${y}`
+      : `marker-${formatCoordinateForId(x)}-${formatCoordinateForId(y)}`;
+
+  if (!pieces.some((piece) => piece.id === baseId)) {
+    return baseId;
   }
 
-  return `marker-${formatCoordinateForId(x)}-${formatCoordinateForId(y)}`;
+  let suffix = 2;
+  while (pieces.some((piece) => piece.id === `${baseId}-${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `${baseId}-${suffix}`;
 }
 
 function formatCoordinateForId(value: number): string {

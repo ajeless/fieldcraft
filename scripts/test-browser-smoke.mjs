@@ -248,17 +248,43 @@ try {
     id: "marker-32-32",
     position: "Tile 32, 32"
   });
-  await placeMarkerFromPalette(page, "board-surface", 0, 0);
+  await placeMarkerFromPalette(page, "board-surface", 32, 32);
   await expectMarkerCount(page, "2");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 2);
+  await placeMarkerFromPalette(page, "board-surface", 32, 32);
+  await expectMarkerCount(page, "3");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
+  await clickStackedTileMarker(page, "board-surface", 32, 32, 0);
+  const stackedSelectionA = await getSelectedMarkerId(page);
+  await clickStackedTileMarker(page, "board-surface", 32, 32, 1);
+  const stackedSelectionB = await getSelectedMarkerId(page);
+  await clickStackedTileMarker(page, "board-surface", 32, 32, 2);
+  const stackedSelectionC = await getSelectedMarkerId(page);
+  if (
+    !stackedSelectionA ||
+    !stackedSelectionB ||
+    !stackedSelectionC ||
+    new Set([stackedSelectionA, stackedSelectionB, stackedSelectionC]).size !== 3
+  ) {
+    throw new Error("Colocated square-grid markers were not independently selectable.");
+  }
+  const deletedStackedMarkerId = stackedSelectionC;
+  await page.keyboard.press("Delete");
+  await expectStatusLine(page, "Marker deleted");
+  await expectNoSelectedMarker(page);
+  await expectMarkerCount(page, "2");
+  await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 2);
+  await clickStackedTileMarker(page, "board-surface", 32, 32, 0);
+  const remainingStackSelection = await getSelectedMarkerId(page);
+  if (!remainingStackSelection || remainingStackSelection === deletedStackedMarkerId) {
+    throw new Error("Deleting one colocated square-grid marker removed stack inspection.");
+  }
+  await placeMarkerFromPalette(page, "board-surface", 0, 0);
+  await expectMarkerCount(page, "3");
   await waitForMarker(page, "board-surface", "0-0");
   await placeMarkerFromPalette(page, "board-surface", 63, 63);
-  await expectMarkerCount(page, "3");
+  await expectMarkerCount(page, "4");
   await waitForMarker(page, "board-surface", "63-63");
-  await clickTile(page, "board-surface", 32, 32, { x: 8, y: 0 });
-  await expectSelectedMarker(page, {
-    id: "marker-32-32",
-    position: "Tile 32, 32"
-  });
   await clickTile(page, "board-surface", 2, 3);
   await expectNoSelectedMarker(page);
   await clickTile(page, "board-surface", 63, 63);
@@ -269,17 +295,17 @@ try {
   await page.keyboard.press("Delete");
   await expectStatusLine(page, "Marker deleted");
   await expectNoSelectedMarker(page);
-  await expectMarkerCount(page, "2");
+  await expectMarkerCount(page, "3");
   await expectMarkerMissing(page, "board-surface", "63-63");
   await page.click('[data-testid="undo-scenario"]');
-  await expectMarkerCount(page, "3");
+  await expectMarkerCount(page, "4");
   await waitForMarker(page, "board-surface", "63-63");
   await expectSelectedMarker(page, {
     id: "marker-63-63",
     position: "Tile 63, 63"
   });
   await page.keyboard.press("Control+Y");
-  await expectMarkerCount(page, "2");
+  await expectMarkerCount(page, "3");
   await expectMarkerMissing(page, "board-surface", "63-63");
   await expectNoSelectedMarker(page);
 
@@ -328,12 +354,13 @@ try {
     backgroundColor: "#f4faf7"
   });
   if (
-    parsedScenario.pieces.length !== 2 ||
-    !parsedScenario.pieces.some((piece) => piece.id === "marker-32-32") ||
+    parsedScenario.pieces.length !== 3 ||
+    parsedScenario.pieces.filter((piece) => piece.x === 32 && piece.y === 32).length !== 2 ||
     !parsedScenario.pieces.some((piece) => piece.id === "marker-0-0") ||
+    parsedScenario.pieces.some((piece) => piece.id === deletedStackedMarkerId) ||
     parsedScenario.pieces.some((piece) => piece.id === "marker-63-63")
   ) {
-    throw new Error("Saved scenario did not preserve marker deletion.");
+    throw new Error("Saved scenario did not preserve colocated marker deletion.");
   }
 
   await expectScenarioDownload(page, () => clickMenuItem(page, "file", "menu-save-as-scenario"));
@@ -346,6 +373,7 @@ try {
   await page.click('[data-testid="mode-runtime"]');
   await page.waitForSelector('[data-view="runtime"]');
   await waitForMarker(page, "runtime-board-surface", "32-32");
+  await expectMarkerPositionOccurrences(page, "runtime-board-surface", "32-32", 2);
   await waitForMarker(page, "runtime-board-surface", "0-0");
   await expectMarkerMissing(page, "runtime-board-surface", "63-63");
   await page.click('[data-testid="mode-editor"]');
@@ -515,8 +543,11 @@ try {
   await placeMarkerAtFreeCoordinate(page, "board-surface", 73.25, 18.5);
   await expectMarkerCount(page, "2");
   await waitForFreeMarkerNear(page, "board-surface", 73.25, 18.5);
-  await placeMarkerAtFreeCoordinate(page, "board-surface", -49.5, 94.75);
+  await placeMarkerAtFreeCoordinate(page, "board-surface", 73.25, 18.5);
   await expectMarkerCount(page, "3");
+  await expectFreeMarkerCountNear(page, "board-surface", 73.25, 18.5, 2);
+  await placeMarkerAtFreeCoordinate(page, "board-surface", -49.5, 94.75);
+  await expectMarkerCount(page, "4");
   await waitForFreeMarkerNear(page, "board-surface", -49.5, 94.75);
 
   await panSurface(page, "board-surface");
@@ -559,21 +590,27 @@ try {
     freeMarkerKey(expectFreePieceNear(parsedFreeScenario.pieces, 73.25, 18.5)),
     freeMarkerKey(expectFreePieceNear(parsedFreeScenario.pieces, -49.5, 94.75))
   ];
-  if (parsedFreeScenario.pieces.length !== 3) {
-    throw new Error("Saved free-coordinate scenario did not preserve dragged markers.");
+  if (
+    parsedFreeScenario.pieces.length !== 4 ||
+    parsedFreeScenario.pieces.filter(
+      (piece) => Math.abs(piece.x - 73.25) <= 0.75 && Math.abs(piece.y - 18.5) <= 0.75
+    ).length !== 2
+  ) {
+    throw new Error("Saved free-coordinate scenario did not preserve colocated markers.");
   }
 
   await page.click('[data-testid="mode-runtime"]');
   await page.waitForSelector('[data-view="runtime"]');
   await expectSurfaceSpace(page, "runtime-board-surface", "free-coordinate");
   await expectCanvasHasRenderedBoard(page, "runtime-board-canvas");
+  await expectFreeMarkerCountNear(page, "runtime-board-surface", 73.25, 18.5, 2);
   for (const markerKey of freeMarkerKeys) {
     await waitForMarker(page, "runtime-board-surface", markerKey);
   }
   await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
 
-  console.log("Browser smoke passed: square, hex, and free-coordinate editor placement, persistence, and runtime checks passed.");
+  console.log("Browser smoke passed: square, hex, and free-coordinate placement, colocated marker, persistence, and runtime checks passed.");
 } finally {
   if (browser) {
     await browser.close();
@@ -1049,6 +1086,138 @@ async function getTileViewportPoint(page, surfaceTestId, x, y) {
   }, { x, y });
 }
 
+async function clickStackedTileMarker(page, surfaceTestId, x, y, occurrenceIndex) {
+  await waitForSurfaceReady(page, surfaceTestId);
+  const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
+  const point = await getStackedTileMarkerViewportPoint(
+    page,
+    surfaceTestId,
+    x,
+    y,
+    occurrenceIndex
+  );
+
+  await surface.click({ position: point });
+}
+
+async function getStackedTileMarkerViewportPoint(
+  page,
+  surfaceTestId,
+  x,
+  y,
+  occurrenceIndex
+) {
+  const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
+
+  return surface.evaluate((node, marker) => {
+    const element = node;
+    const scale = Number(element.dataset.viewScale);
+    const rotation = Number(element.dataset.viewRotation);
+    const panX = Number(element.dataset.viewPanX);
+    const panY = Number(element.dataset.viewPanY);
+    const worldWidth = Number(element.dataset.boardWorldWidth);
+    const worldHeight = Number(element.dataset.boardWorldHeight);
+    const columns = Number(element.dataset.boardColumns);
+    const rows = Number(element.dataset.boardRows);
+    const spaceType = element.dataset.boardSpaceType;
+    const positions = (element.getAttribute("data-marker-positions") ?? "")
+      .split(" ")
+      .filter(Boolean);
+    const markerKey = `${marker.x}-${marker.y}`;
+    const occurrenceCount = positions.filter((position) => position === markerKey).length;
+
+    if (
+      !Number.isFinite(scale) ||
+      !Number.isFinite(rotation) ||
+      !Number.isFinite(panX) ||
+      !Number.isFinite(panY) ||
+      !Number.isFinite(worldWidth) ||
+      !Number.isFinite(worldHeight) ||
+      !Number.isFinite(columns) ||
+      !Number.isFinite(rows) ||
+      (spaceType !== "square-grid" && spaceType !== "hex-grid")
+    ) {
+      throw new Error("Tile board viewport did not expose coordinate metadata.");
+    }
+
+    if (occurrenceCount < 2) {
+      throw new Error(`Tile ${markerKey} does not contain colocated markers.`);
+    }
+
+    if (marker.occurrenceIndex < 0 || marker.occurrenceIndex >= occurrenceCount) {
+      throw new Error(`Invalid colocated marker index ${marker.occurrenceIndex} for ${markerKey}.`);
+    }
+
+    let worldX;
+    let worldY;
+    let baseRadius;
+    if (spaceType === "hex-grid") {
+      const radius = worldHeight / (rows * 1.5 + 0.5);
+      const hexWidth = Math.sqrt(3) * radius;
+
+      worldX = hexWidth / 2 + marker.x * hexWidth + (marker.y % 2 === 1 ? hexWidth / 2 : 0);
+      worldY = radius + marker.y * radius * 1.5;
+      baseRadius = Math.min(radius * 0.56, Math.max(radius * 0.34, 5 / scale));
+    } else {
+      const tileSize = worldWidth / columns;
+
+      worldX = (marker.x + 0.5) * tileSize;
+      worldY = (marker.y + 0.5) * (worldHeight / rows);
+      baseRadius = Math.min(tileSize * 0.42, Math.max(tileSize * 0.24, 5 / scale));
+    }
+
+    const orbitStep = getColocatedMarkerOrbit(baseRadius, scale, occurrenceCount);
+    const offset = getColocatedMarkerOffset(
+      occurrenceCount,
+      marker.occurrenceIndex,
+      orbitStep
+    );
+    const worldPoint = {
+      x: worldX + offset.x,
+      y: worldY + offset.y
+    };
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+
+    return {
+      x: worldPoint.x * scale * cos - worldPoint.y * scale * sin + panX,
+      y: worldPoint.x * scale * sin + worldPoint.y * scale * cos + panY
+    };
+
+    function getColocatedMarkerOrbit(base, zoomScale, count) {
+      const factor = count <= 3 ? 0.66 : count <= 6 ? 0.76 : 0.88;
+
+      return Math.max(base * factor, 6 / Math.max(zoomScale, 0.04));
+    }
+
+    function getColocatedMarkerOffset(count, index, orbitStepValue) {
+      let remaining = count;
+      let ring = 1;
+      let ringIndex = index;
+
+      while (remaining > 0) {
+        const ringCapacity = ring * 6;
+        const ringCount = Math.min(remaining, ringCapacity);
+
+        if (ringIndex < ringCount) {
+          const angle = -Math.PI / 2 + (ringIndex / ringCount) * Math.PI * 2;
+
+          return {
+            x: Math.cos(angle) * orbitStepValue * ring,
+            y: Math.sin(angle) * orbitStepValue * ring
+          };
+        }
+
+        ringIndex -= ringCount;
+        remaining -= ringCount;
+        ring += 1;
+      }
+
+      throw new Error("Could not resolve colocated marker offset.");
+    }
+  }, { x, y, occurrenceIndex });
+}
+
 async function getFreeCoordinateViewportPoint(page, surfaceTestId, x, y) {
   const surface = page.locator(`[data-testid="${surfaceTestId}"]`);
 
@@ -1232,6 +1401,14 @@ async function expectNoSelectedMarker(page) {
   });
 }
 
+async function getSelectedMarkerId(page) {
+  return page.evaluate(() => {
+    const input = document.querySelector('[data-testid="selected-marker-id-input"]');
+
+    return input instanceof HTMLInputElement ? input.value : null;
+  });
+}
+
 async function updateSelectedMarkerId(page, value) {
   const input = page.locator('[data-testid="selected-marker-id-input"]');
   await input.fill(value);
@@ -1382,6 +1559,35 @@ async function expectMarkerMissing(page, surfaceTestId, markerPosition) {
   );
 }
 
+async function expectMarkerPositionOccurrences(page, surfaceTestId, markerPosition, count) {
+  await page.waitForFunction(
+    ({ testId, marker, expectedCount }) => {
+      const surface = document.querySelector(`[data-testid="${testId}"]`);
+      const positions = (surface?.getAttribute("data-marker-positions") ?? "")
+        .split(" ")
+        .filter(Boolean);
+
+      return (
+        hasFiniteAttribute(surface, "data-view-scale") &&
+        hasFiniteAttribute(surface, "data-view-pan-x") &&
+        hasFiniteAttribute(surface, "data-view-pan-y") &&
+        positions.filter((position) => position === marker).length === expectedCount
+      );
+
+      function hasFiniteAttribute(element, name) {
+        const value = element?.getAttribute(name);
+
+        return value !== null && Number.isFinite(Number(value));
+      }
+    },
+    {
+      testId: surfaceTestId,
+      marker: markerPosition,
+      expectedCount: count
+    }
+  );
+}
+
 async function waitForFreeMarkerNear(page, surfaceTestId, x, y, tolerance = 0.75) {
   await page.waitForFunction(
     ({ testId, point, allowedDrift }) => {
@@ -1416,6 +1622,54 @@ async function waitForFreeMarkerNear(page, surfaceTestId, x, y, tolerance = 0.75
     {
       testId: surfaceTestId,
       point: { x, y },
+      allowedDrift: tolerance
+    }
+  );
+}
+
+async function expectFreeMarkerCountNear(
+  page,
+  surfaceTestId,
+  x,
+  y,
+  count,
+  tolerance = 0.75
+) {
+  await page.waitForFunction(
+    ({ testId, point, expectedCount, allowedDrift }) => {
+      const surface = document.querySelector(`[data-testid="${testId}"]`);
+      const positions = (surface?.getAttribute("data-marker-positions") ?? "")
+        .split(" ")
+        .filter(Boolean)
+        .map((position) => {
+          const [markerX, markerY] = position.split(",").map(Number);
+
+          return { x: markerX, y: markerY };
+        });
+
+      return (
+        hasFiniteAttribute(surface, "data-view-scale") &&
+        hasFiniteAttribute(surface, "data-view-pan-x") &&
+        hasFiniteAttribute(surface, "data-view-pan-y") &&
+        positions.filter(
+          (marker) =>
+            Number.isFinite(marker.x) &&
+            Number.isFinite(marker.y) &&
+            Math.abs(marker.x - point.x) <= allowedDrift &&
+            Math.abs(marker.y - point.y) <= allowedDrift
+        ).length === expectedCount
+      );
+
+      function hasFiniteAttribute(element, name) {
+        const value = element?.getAttribute(name);
+
+        return value !== null && Number.isFinite(Number(value));
+      }
+    },
+    {
+      testId: surfaceTestId,
+      point: { x, y },
+      expectedCount: count,
       allowedDrift: tolerance
     }
   );

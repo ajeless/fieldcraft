@@ -78,6 +78,11 @@ type DrawOptions = {
   recoverHiddenView?: boolean;
 };
 
+type PieceRenderLayout = {
+  center: Point;
+  radius: number;
+};
+
 const homePadding = 40;
 const minZoom = 0.04;
 const maxZoom = 5;
@@ -1006,9 +1011,13 @@ function drawMarkers(
     selectedPieceId: string | null;
   }
 ): void {
+  const layouts = createPieceRenderLayouts(pieces, geometry, options.scale);
+  const baseRadius = geometry.markerRadius(options.scale);
+
   for (const piece of pieces) {
-    const center = geometry.pieceToWorldPoint(piece);
-    const radius = geometry.markerRadius(options.scale);
+    const layout = layouts.get(piece.id);
+    const center = layout?.center ?? geometry.pieceToWorldPoint(piece);
+    const radius = layout?.radius ?? baseRadius;
 
     if (piece.id === options.selectedPieceId) {
       context.beginPath();
@@ -1088,14 +1097,17 @@ function findPieceAtWorldPoint(
   geometry: GridGeometry,
   scale: number
 ): ScenarioPiece | null {
-  const radius = geometry.markerRadius(scale);
-  const hitRadius = radius + markerHitSlopPixels / Math.max(scale, minZoom);
+  const layouts = createPieceRenderLayouts(pieces, geometry, scale);
+  const baseRadius = geometry.markerRadius(scale);
   let closestPiece: ScenarioPiece | null = null;
   let closestDistance = Number.POSITIVE_INFINITY;
 
   for (let index = pieces.length - 1; index >= 0; index -= 1) {
     const piece = pieces[index];
-    const center = geometry.pieceToWorldPoint(piece);
+    const layout = layouts.get(piece.id);
+    const center = layout?.center ?? geometry.pieceToWorldPoint(piece);
+    const hitRadius =
+      (layout?.radius ?? baseRadius) + markerHitSlopPixels / Math.max(scale, minZoom);
     const distance = Math.hypot(worldPoint.x - center.x, worldPoint.y - center.y);
     if (distance > hitRadius || distance >= closestDistance) {
       continue;
@@ -1106,6 +1118,110 @@ function findPieceAtWorldPoint(
   }
 
   return closestPiece;
+}
+
+function createPieceRenderLayouts(
+  pieces: ScenarioPiece[],
+  geometry: GridGeometry,
+  scale: number
+): Map<string, PieceRenderLayout> {
+  const layouts = new Map<string, PieceRenderLayout>();
+  const groups = new Map<string, ScenarioPiece[]>();
+
+  for (const piece of pieces) {
+    const key = getPieceOccupancyKey(piece, geometry.spaceType);
+    const group = groups.get(key);
+    if (group) {
+      group.push(piece);
+    } else {
+      groups.set(key, [piece]);
+    }
+  }
+
+  const baseRadius = geometry.markerRadius(scale);
+
+  for (const group of groups.values()) {
+    const anchor = geometry.pieceToWorldPoint(group[0]);
+
+    if (group.length === 1) {
+      layouts.set(group[0].id, {
+        center: anchor,
+        radius: baseRadius
+      });
+      continue;
+    }
+
+    const radius = getColocatedMarkerRadius(baseRadius, scale, group.length);
+    const offsets = createColocatedMarkerOffsets(
+      group.length,
+      getColocatedMarkerOrbit(baseRadius, scale, group.length)
+    );
+
+    group.forEach((piece, index) => {
+      const offset = offsets[index] ?? { x: 0, y: 0 };
+      layouts.set(piece.id, {
+        center: {
+          x: anchor.x + offset.x,
+          y: anchor.y + offset.y
+        },
+        radius
+      });
+    });
+  }
+
+  return layouts;
+}
+
+function getPieceOccupancyKey(
+  piece: ScenarioPiece,
+  spaceType: ScenarioSpace["type"]
+): string {
+  return spaceType === "free-coordinate" ? `${piece.x},${piece.y}` : `${piece.x}:${piece.y}`;
+}
+
+function getColocatedMarkerRadius(
+  baseRadius: number,
+  scale: number,
+  groupSize: number
+): number {
+  const factor = groupSize <= 2 ? 0.68 : groupSize <= 6 ? 0.6 : 0.52;
+
+  return Math.max(baseRadius * factor, 4 / Math.max(scale, minZoom));
+}
+
+function getColocatedMarkerOrbit(
+  baseRadius: number,
+  scale: number,
+  groupSize: number
+): number {
+  const factor = groupSize <= 3 ? 0.66 : groupSize <= 6 ? 0.76 : 0.88;
+
+  return Math.max(baseRadius * factor, 6 / Math.max(scale, minZoom));
+}
+
+function createColocatedMarkerOffsets(count: number, orbitStep: number): Point[] {
+  const offsets: Point[] = [];
+  let remaining = count;
+  let ring = 1;
+
+  while (remaining > 0) {
+    const ringCapacity = ring * 6;
+    const ringCount = Math.min(remaining, ringCapacity);
+    const ringRadius = orbitStep * ring;
+
+    for (let index = 0; index < ringCount; index += 1) {
+      const angle = -Math.PI / 2 + (index / ringCount) * Math.PI * 2;
+      offsets.push({
+        x: Math.cos(angle) * ringRadius,
+        y: Math.sin(angle) * ringRadius
+      });
+    }
+
+    remaining -= ringCount;
+    ring += 1;
+  }
+
+  return offsets;
 }
 
 function getMarkerPositions(pieces: ScenarioPiece[], spaceType: ScenarioSpace["type"]): string {

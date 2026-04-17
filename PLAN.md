@@ -19,6 +19,7 @@ Current manual testing pressure points are captured in the branch sequence below
    - Do not treat rounded free-coordinate values as a collision or deduplication rule; stored precision is for readable authoring, not occupancy semantics.
    - Keep the marker model permissive and editor-first; do not encode game-rule legality for stacking or proximity yet.
    - Add the minimum editor/runtime rendering and selection behavior needed to inspect and delete colocated markers without reopening a broad entity-system design.
+   - Treat any temporary fan-out or offset rendering for colocated markers as a selection aid only, not as the durable authored-position model for long-term tile or free-coordinate scenarios.
 
 2. `codex/source-editor`
    - Turn the scenario JSON panel into an editable source view.
@@ -46,6 +47,8 @@ These are not committed near-term order. They hold open design work that should 
 5. `codex/scenario-format-hardening`
    - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
    - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
+   - Separate durable object identity from author-facing labels before coordinate-derived ids like `marker-x-y` calcify into the long-term scenario format.
+   - Choose an identity convention that stays readable in JSON while remaining stable across moves, stacking, and future object types; likely direction is opaque internal ids plus editable display labels, not type/location-encoded names.
    - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
    - Define the migration contract in this branch; implement actual migration tooling only for format changes that already exist or split it into a follow-up if it grows beyond the scenario-file hardening slice.
 
@@ -85,7 +88,7 @@ Large boards and map styling:
 - free-coordinate boards now have a foundation slice; keep only follow-on refinements here
 - refine authored scale semantics for tiled and free-coordinate boards after the first free-coordinate editor/runtime slice proves the basic model
 - decide how marker/token visual size relates to board/world scale, authored units, and eventual token/entity configuration; the foundation marker currently uses viewport-friendly temporary sizing, not durable physical scale
-- decide how stacked tile objects should render and how authors disambiguate selection, cycling, or list-based inspection once multiple colocated objects become common
+- decide how stacked tile objects should render once temporary orbit/fan-out selection aids are no longer enough; long-term authoring likely needs true authored overlap plus a clear disambiguation path such as cycling, stack inspection, list/browser selection, or hover fan-out
 - decide whether token placement validity is based on center point only or on the full token footprint; manual testing showed edge placements can intentionally or unintentionally hang outside free-coordinate board bounds
 - add concise setup help or tooltip hints once labels like distance per tile, scale unit, tile size, and free-coordinate bounds need to carry real authoring meaning
 - add inline board setup validation once setup grows past the first slice: keep invalid draft values visible, mark invalid fields, and show field-local range messages instead of relying only on the status line
@@ -99,7 +102,7 @@ Free-coordinate follow-ons:
 - add measurement and ruler tools after free-coordinate placement proves the world-coordinate model
 - add snapping, guides, bearing widgets, and authored coordinate overlays only after concrete authoring pressure shows which aids matter
 - clarify origin/bounds semantics in the UI, including what top-left `x`/`y` means relative to `width`/`height`, before relying on offset free-coordinate maps in author workflows
-- decide how coincident or near-coincident free-coordinate objects should be visualized and disambiguated in the editor without treating rounded display precision as physical occupancy
+- decide how coincident or near-coincident free-coordinate objects should be visualized and disambiguated in the editor without treating rounded display precision as physical occupancy; authored visual position should stay faithful even if selection needs a separate affordance
 - add object facing or bearing editing with the first real entity workflow, not with temporary markers
 - add free-space movement, order plotting, and resolution only when the plotted-turn play-test slice needs them
 - add continuous-space terrain, zones, obstacles, or movement-cost hooks after basic placement and entity/rules pressure justify them
