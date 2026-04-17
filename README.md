@@ -8,7 +8,7 @@ Fieldcraft aims to be an editor-first environment for designing, play-testing, a
 
 ## Status
 
-First vertical slices are in place: the editor can create square-grid, pointy-top hex, and free-coordinate boards, configure board scale and styling, place markers through a canvas-backed viewport, select markers, inspect and delete the current selection, pan/zoom/reset the board view, save and open human-readable scenario JSON documents, recover unsaved session drafts, and launch a read-only runtime view from the current scenario. The editor now also has persisted `System`/`Light`/`Dark` theme support, dark-theme board defaults for newly created boards, and unsaved-change confirmation before destructive `New` and `Open` actions replace dirty work. See `PLAN.md` for the current near-term branch sequence.
+First vertical slices are in place: the editor can create square-grid, pointy-top hex, and free-coordinate boards, configure board scale and styling, place markers through a canvas-backed viewport, select markers, inspect and delete the current selection, pan/zoom/reset the board view, save and open human-readable scenario JSON documents, recover unsaved session drafts, and launch a read-only runtime view from the current scenario. The editor now also has persisted `System`/`Light`/`Dark` theme support, dark-theme board defaults for newly created boards, unsaved-change confirmation before destructive `New` and `Open` actions replace dirty work, a stable top command bar for document actions, a stable contextual tool slot in the left panel, and shared board validation so unsupported tile-grid sizes are rejected consistently in setup and file-open flows. See `PLAN.md` for the current near-term branch sequence.
 
 ## Stack
 
@@ -123,6 +123,12 @@ Run the browser smoke test:
 corepack pnpm test:smoke
 ```
 
+If Google Chrome is unavailable locally, install Playwright's Chromium first:
+
+```sh
+corepack pnpm exec playwright install chromium
+```
+
 The smoke test starts the tracked dev server if needed, exercises browser file/menu commands, verifies theme persistence and dark board defaults, checks draft recovery, creates square, hex, and free-coordinate boards, verifies canvas-backed rendering, places/selects/deletes markers across those board types, checks dirty-state confirmation for destructive file actions, checks pan/zoom/reset behavior, saves scenario JSON, launches the runtime, verifies persisted marker state renders there, and stops any server it started.
 
 ### Desktop Testing
@@ -143,7 +149,8 @@ Manual desktop test flow:
 2. Wait for the Tauri editor window to open.
 3. Exercise the same editor and runtime flows there.
 4. Verify desktop-specific behavior:
-   - **Open Scenario**, **Save Scenario**, and **Save As** use native file dialogs.
+   - **Open Scenario** and **Save As** use native file dialogs.
+   - **Save Scenario** writes directly to the current file once the scenario already has a path; otherwise it falls back to **Save As**.
    - Closing and relaunching the app preserves any expected desktop session behavior you are testing.
    - Saved files on disk only change after explicit `Save` or `Save As`.
 
@@ -167,7 +174,7 @@ Run it directly on Windows:
 .\apps\editor\src-tauri\target\debug\fieldcraft.exe
 ```
 
-In the desktop shell, **Open Scenario**, **Save Scenario**, and **Save As** use native file dialogs. In the browser fallback, **Open Scenario** imports JSON through the browser file picker and **Download JSON** saves a copy.
+In the desktop shell, **Open Scenario** and **Save As** use native file dialogs, while **Save Scenario** writes directly to the current file after the scenario has a path. In the browser fallback, **Open Scenario** imports JSON through the browser file picker and **Download JSON** saves a copy.
 
 ### Maintenance
 
@@ -184,10 +191,4 @@ References:
 
 ## Docs
 
-Project docs are intentionally small:
-
-- `README.md` covers setup and commands.
-- `AGENTS.md` covers contribution and agent workflow.
-- `DECISIONS.md` records settled choices.
-- `PLAN.md` tracks mutable plans and open design work.
-- `CLAUDE.md` is a compatibility pointer to `AGENTS.md`.
+Project docs are intentionally small. `AGENTS.md` covers contribution workflow and doc ownership, `DECISIONS.md` records settled choices, `PLAN.md` tracks mutable plans and open design work, and `CLAUDE.md` is a compatibility pointer to `AGENTS.md`.
