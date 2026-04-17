@@ -7,6 +7,8 @@ export const scenarioSchema = "fieldcraft.scenario.v0";
 
 export const maxTileGridSize = 64;
 export const maxFreeCoordinateBoardSize = 100000;
+export const minTileSize = 8;
+export const maxTileSize = 160;
 export const defaultSquareTileSize = 48;
 export const defaultHexTileSize = 28;
 export const defaultScaleDistancePerTile = 1;
@@ -167,6 +169,29 @@ export function createFreeCoordinateScenarioSpace(
 
 export function getDefaultTileSize(type: ScenarioTileSpaceType): number {
   return type === "hex-grid" ? defaultHexTileSize : defaultSquareTileSize;
+}
+
+export function parseSupportedTileGridSize(value: unknown): number | null {
+  return isPositiveInteger(value) && value <= maxTileGridSize ? value : null;
+}
+
+export function parseSupportedTileSize(
+  value: unknown,
+  fallback?: number
+): number | null {
+  if (value === undefined && fallback !== undefined) {
+    return parseSupportedTileSize(fallback);
+  }
+
+  return isPositiveNumber(value) && value >= minTileSize && value <= maxTileSize
+    ? value
+    : null;
+}
+
+export function parseSupportedFreeCoordinateBoardSize(
+  value: unknown
+): number | null {
+  return isPositiveNumber(value) && value <= maxFreeCoordinateBoardSize ? value : null;
 }
 
 export function isTileScenarioSpace(
@@ -335,11 +360,14 @@ function parseTileScenarioSpace(
   value: Record<string, unknown>,
   type: ScenarioTileSpaceType
 ): ScenarioTileSpace | false {
-  if (!isPositiveInteger(value.width) || !isPositiveInteger(value.height)) {
+  const width = parseSupportedTileGridSize(value.width);
+  const height = parseSupportedTileGridSize(value.height);
+
+  if (!width || !height) {
     return false;
   }
 
-  const tileSize = parsePositiveNumber(value.tileSize, getDefaultTileSize(type));
+  const tileSize = parseSupportedTileSize(value.tileSize, getDefaultTileSize(type));
   const scale = parseTileScale(value.scale);
   const grid = parseGridStyle(value.grid);
   const background = parseBackground(value.background);
@@ -350,8 +378,8 @@ function parseTileScenarioSpace(
 
   return {
     type,
-    width: value.width,
-    height: value.height,
+    width,
+    height,
     tileSize,
     scale,
     grid,
@@ -469,13 +497,14 @@ function parseFreeCoordinateBounds(value: unknown): ScenarioFreeCoordinateBounds
     return null;
   }
 
+  const width = parseSupportedFreeCoordinateBoardSize(value.width);
+  const height = parseSupportedFreeCoordinateBoardSize(value.height);
+
   if (
     !isFiniteNumber(value.x) ||
     !isFiniteNumber(value.y) ||
-    !isPositiveNumber(value.width) ||
-    !isPositiveNumber(value.height) ||
-    value.width > maxFreeCoordinateBoardSize ||
-    value.height > maxFreeCoordinateBoardSize
+    !width ||
+    !height
   ) {
     return null;
   }
@@ -483,8 +512,8 @@ function parseFreeCoordinateBounds(value: unknown): ScenarioFreeCoordinateBounds
   return {
     x: value.x,
     y: value.y,
-    width: value.width,
-    height: value.height
+    width,
+    height
   } satisfies FreeCoordinateBounds;
 }
 
