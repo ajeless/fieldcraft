@@ -51,13 +51,24 @@ type GridColors = {
   boardLineOpacity: number;
 };
 
+type BackgroundImageResource = {
+  image: HTMLImageElement;
+  status: "loading" | "ready" | "error";
+  listeners: Set<() => void>;
+};
+
 type GridGeometry = {
   key: string;
   spaceType: ScenarioSpace["type"];
   bounds: Bounds;
   columns: number | null;
   rows: number | null;
-  draw: (context: CanvasRenderingContext2D, colors: GridColors, scale: number) => void;
+  draw: (
+    context: CanvasRenderingContext2D,
+    colors: GridColors,
+    scale: number,
+    backgroundImage: HTMLImageElement | null
+  ) => void;
   markerRadius: (scale: number) => number;
   pieceToWorldPoint: (piece: ScenarioPiece) => Point;
   worldToPlacementPoint: (point: Point) => BoardCoordinate | null;
@@ -68,6 +79,7 @@ type BoardViewportOptions = {
   readonly: boolean;
   space: ScenarioSpace;
   pieces: ScenarioPiece[];
+  backgroundImageUrl?: string | null;
   selectedPieceId?: string | null;
   state: BoardViewportState;
   onPieceSelect?: (pieceId: string | null) => void;
@@ -89,6 +101,7 @@ const maxZoom = 5;
 const resizeRecoveryVisibleRatio = 0.08;
 const pointerClickMovementThreshold = 8;
 const markerHitSlopPixels = 8;
+const backgroundImageCache = new Map<string, BackgroundImageResource>();
 
 export const markerDragDataType = "application/x-fieldcraft-marker";
 
@@ -114,6 +127,9 @@ export function resetBoardViewportState(state: BoardViewportState): void {
 
 export function createBoardViewport(options: BoardViewportOptions): HTMLElement {
   const geometry = createGridGeometry(options.space);
+  const backgroundImageResource = options.backgroundImageUrl
+    ? getBackgroundImageResource(options.backgroundImageUrl)
+    : null;
   const viewport = document.createElement("section");
   const toolbar = document.createElement("div");
   const surface = document.createElement("div");
@@ -230,6 +246,8 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
 
   const resizeObserver = new ResizeObserver(() => draw({ recoverHiddenView: true }));
   resizeObserver.observe(surface);
+  const handleBackgroundImageUpdate = () => draw();
+  backgroundImageResource?.listeners.add(handleBackgroundImageUpdate);
   const cleanupObserver = new MutationObserver(() => {
     if (!viewport.isConnected) {
       resizeObserver.disconnect();
@@ -238,6 +256,7 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
       window.removeEventListener("keyup", keyController.handleKeyUp);
       window.removeEventListener("blur", keyController.handleBlur);
       window.removeEventListener("resize", handleWindowResize);
+      backgroundImageResource?.listeners.delete(handleBackgroundImageUpdate);
     }
   });
   cleanupObserver.observe(document.body, {
@@ -306,7 +325,12 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
     context.fillRect(0, 0, size.width, size.height);
     context.save();
     applyViewportTransform(context, transform);
-    geometry.draw(context, colors, transform.scale);
+    geometry.draw(
+      context,
+      colors,
+      transform.scale,
+      backgroundImageResource?.status === "ready" ? backgroundImageResource.image : null
+    );
     drawMarkers(context, geometry, options.pieces, {
       scale: transform.scale,
       markerFill,
@@ -354,9 +378,12 @@ function createSquareGridGeometry(space: ScenarioTileSpace): GridGeometry {
     bounds,
     columns: space.width,
     rows: space.height,
-    draw: (context, colors, scale) => {
+    draw: (context, colors, scale, backgroundImage) => {
       context.fillStyle = colors.boardFill;
       context.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+      if (backgroundImage) {
+        context.drawImage(backgroundImage, bounds.x, bounds.y, bounds.width, bounds.height);
+      }
       context.strokeStyle = colorWithOpacity(colors.boardLine, colors.boardLineOpacity);
       context.lineWidth = Math.max(1 / scale, 0.75);
       context.beginPath();
@@ -426,20 +453,24 @@ function createHexGridGeometry(space: ScenarioTileSpace): GridGeometry {
     bounds,
     columns: space.width,
     rows: space.height,
-    draw: (context, colors, scale) => {
+    draw: (context, colors, scale, backgroundImage) => {
       context.fillStyle = colors.boardFill;
+      context.beginPath();
+      tracePointyHexGrid(context, space, tileToWorldCenter, hexRadius);
+      context.fill();
+      if (backgroundImage) {
+        context.save();
+        context.beginPath();
+        tracePointyHexGrid(context, space, tileToWorldCenter, hexRadius);
+        context.clip();
+        context.drawImage(backgroundImage, bounds.x, bounds.y, bounds.width, bounds.height);
+        context.restore();
+      }
       context.strokeStyle = colorWithOpacity(colors.boardLine, colors.boardLineOpacity);
       context.lineWidth = Math.max(1 / scale, 0.75);
       context.lineJoin = "round";
       context.beginPath();
-
-      for (let row = 0; row < space.height; row += 1) {
-        for (let column = 0; column < space.width; column += 1) {
-          tracePointyHexPath(context, tileToWorldCenter({ x: column, y: row }), hexRadius);
-        }
-      }
-
-      context.fill();
+      tracePointyHexGrid(context, space, tileToWorldCenter, hexRadius);
       context.stroke();
     },
     markerRadius: (scale) =>
@@ -498,9 +529,12 @@ function createFreeCoordinateGeometry(space: ScenarioFreeCoordinateSpace): GridG
     bounds,
     columns: null,
     rows: null,
-    draw: (context, colors, scale) => {
+    draw: (context, colors, scale, backgroundImage) => {
       context.fillStyle = colors.boardFill;
       context.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+      if (backgroundImage) {
+        context.drawImage(backgroundImage, bounds.x, bounds.y, bounds.width, bounds.height);
+      }
       context.strokeStyle = colorWithOpacity(colors.boardLine, colors.boardLineOpacity);
       context.lineWidth = Math.max(1.5 / scale, 0.75);
       context.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
@@ -518,8 +552,53 @@ function createFreeCoordinateGeometry(space: ScenarioFreeCoordinateSpace): GridG
   };
 }
 
+function getBackgroundImageResource(url: string): BackgroundImageResource {
+  const cached = backgroundImageCache.get(url);
+  if (cached) {
+    return cached;
+  }
+
+  const image = new Image();
+  const resource: BackgroundImageResource = {
+    image,
+    status: "loading",
+    listeners: new Set()
+  };
+  const notifyListeners = () => {
+    for (const listener of resource.listeners) {
+      listener();
+    }
+  };
+
+  image.addEventListener("load", () => {
+    resource.status = "ready";
+    notifyListeners();
+  });
+  image.addEventListener("error", () => {
+    resource.status = "error";
+    notifyListeners();
+  });
+  image.src = url;
+  backgroundImageCache.set(url, resource);
+
+  return resource;
+}
+
 function getHexRowOffset(row: number, hexWidth: number): number {
   return row % 2 === 1 ? hexWidth / 2 : 0;
+}
+
+function tracePointyHexGrid(
+  context: CanvasRenderingContext2D,
+  space: ScenarioTileSpace,
+  tileToWorldCenter: (tile: TileCoordinate) => Point,
+  hexRadius: number
+): void {
+  for (let row = 0; row < space.height; row += 1) {
+    for (let column = 0; column < space.width; column += 1) {
+      tracePointyHexPath(context, tileToWorldCenter({ x: column, y: row }), hexRadius);
+    }
+  }
 }
 
 function tracePointyHexPath(

@@ -6,9 +6,9 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; unsaved-change confirmation before destructive `New` and `Open` flows replace dirty work; persisted `System`/`Light`/`Dark` theme support; dark-theme board defaults for new boards; draft recovery autosave; marker selection through the canvas viewport; a small marker inspector; keyboard and inspector deletion for selected markers; in-memory undo/redo for editor mutations; a stable top command bar for document actions; a stable contextual tool slot with the marker palette disabled instead of shifting layout before board creation; one clear `Marker ID` editing surface; compact destructive selection affordances; consistent `Ctrl/Cmd+Shift+Z` redo plus `Ctrl+Y` on Windows/Linux; shared board-size and tile-size validation between board setup and scenario-file loading; rejection of oversized tile-grid scenarios before they enter unsupported editor states; and a read-only runtime view.
+Keep the editor visibly trustworthy while broader editor systems are still small. The current baseline now includes square, pointy-top hex, and free-coordinate board setup; marker placement and persistence; shared viewport pan/zoom/reset; browser and desktop file commands; a small in-app command registry for file actions; unsaved-change confirmation before destructive `New` and `Open` flows replace dirty work; persisted `System`/`Light`/`Dark` theme support; dark-theme board defaults for new boards; draft recovery autosave; marker selection through the canvas viewport; a small marker inspector; keyboard and inspector deletion for selected markers; in-memory undo/redo for editor mutations; a stable top command bar for document actions; a stable contextual tool slot with the marker palette disabled instead of shifting layout before board creation; one clear `Marker ID` editing surface; compact destructive selection affordances; consistent `Ctrl/Cmd+Shift+Z` redo plus `Ctrl+Y` on Windows/Linux; shared board-size and tile-size validation between board setup and scenario-file loading; rejection of oversized tile-grid scenarios before they enter unsupported editor states; a read-only runtime view; and the first package-local scenario asset model with desktop image/audio imports plus board background image assignment.
 
-Manual testing of the new source editor now points to a narrow hardening follow-up before broader content work. Source editing landed on the existing scenario-parse seam, but real use exposed trust-blocking gaps: duplicate marker ids can still be authored through raw JSON even though selection and rendering assume unique ids, keyboard undo/redo from the source pane does not yet line up with editor-history expectations, and invalid JSON diagnostics still need stronger targeting than a generic rejection message. Those issues should land before asset imports so authored source remains trustworthy instead of becoming another path into partially supported editor state.
+Manual testing cleared the source-editor hardening pressure that had been blocking broader content work. The first asset slice now behaves well enough to treat as baseline: imported files are copied into an `assets/` folder beside the scenario file, scenarios keep stable relative asset refs, board backgrounds can point at imported image assets, and `Save As` carries package assets forward into the new scenario location. Audio import is intentionally storage-only in this slice; playback wiring stays out until a concrete runtime workflow needs it.
 
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
@@ -34,29 +34,28 @@ Current manual testing pressure points are captured in the branch sequence below
    - Improve invalid JSON diagnostics with line/column targeting and a clear inline visual indicator in the current source editor.
    - Keep this slice narrow; do not turn it into a full code-editor integration or broad schema-validation system yet.
 
-4. `codex/asset-library-imports`
-   - Add the first scenario asset model for imported images.
-   - Prefer a project/package asset library with stable relative references over base64-heavy scenario JSON.
-   - Start with board background images before token images so temporary markers do not accidentally become the durable asset model.
-   - Treat sprite sheets, board tile images, and tile/sprite placement workflows as follow-on pressure after basic image imports.
-
-5. `codex/export-runtime-spike`
+4. `codex/export-runtime-spike`
    - Define the first browser export path once the runtime has enough behavior to export.
    - Include the implications of bundling referenced scenario assets.
    - Prove export assumptions against both tile-based and free-coordinate scenarios before treating the runtime bundle shape as settled.
    - Keep standalone binary game export out of this branch; prove the browser bundle first.
 
-## Later Branch Candidates
-
-These are not committed near-term order. They hold open design work that should stay out of `DECISIONS.md` until concrete implementation and manual testing settle it.
-
-6. `codex/scenario-format-hardening`
+5. `codex/scenario-format-hardening`
    - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
    - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
    - Separate durable object identity from author-facing labels before coordinate-derived ids like `marker-x-y` calcify into the long-term scenario format.
    - Choose an identity convention that stays readable in JSON while remaining stable across moves, stacking, and future object types; likely direction is opaque internal ids plus editable display labels, not type/location-encoded names.
    - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
    - Define the migration contract in this branch; implement actual migration tooling only for format changes that already exist or split it into a follow-up if it grows beyond the scenario-file hardening slice.
+
+## Later Branch Candidates
+
+These are not committed near-term order. They hold open design work that should stay out of `DECISIONS.md` until concrete implementation and manual testing settle it.
+
+6. `codex/asset-library-follow-ons`
+   - Add follow-on authoring pressure after the first package asset baseline proves itself in real scenarios.
+   - Treat token images, sprite sheets, board tile imagery, and richer media workflows as separate pressure from simple board backgrounds.
+   - Keep polish work such as better previewing, error surfacing, and image-fit controls out of this branch unless real use makes them trust-blocking.
 
 7. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
@@ -117,7 +116,7 @@ Free-coordinate follow-ons:
 - treat additional source-editor and export polish for free-coordinate scenarios as follow-on work unless needed to preserve valid round-trips in the foundation branch
 
 Assets and author media:
-- a built-in sprite creator becomes relevant after `codex/asset-library-imports` proves the basic asset model and authoring pressure justifies it
+- a built-in sprite creator becomes relevant after the first package asset baseline proves itself under real scenario pressure
 
 Scenario source and packaging:
 - keep the current scenario source editor inline until real scenario/package complexity proves it is no longer enough; avoid jumping to a file-browser workflow before authored data actually becomes unwieldy

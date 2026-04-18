@@ -19,6 +19,14 @@ export const defaultGridLineColor = "#aeb8c1";
 export const defaultGridLineOpacity = 1;
 export const defaultBoardBackgroundColor = "#f9fbfb";
 
+export type ScenarioAssetKind = "image" | "audio";
+
+export type ScenarioAsset = {
+  id: string;
+  kind: ScenarioAssetKind;
+  path: string;
+};
+
 export type ScenarioPiece = {
   id: string;
   kind: "marker";
@@ -47,6 +55,7 @@ export type ScenarioGridStyle = {
 
 export type ScenarioBoardBackground = {
   color: string;
+  imageAssetId?: string;
 };
 
 export type ScenarioTileSpace = {
@@ -79,6 +88,7 @@ export type Scenario = {
   schema: typeof scenarioSchema;
   title: string;
   space: ScenarioSpace | null;
+  assets: ScenarioAsset[];
   pieces: ScenarioPiece[];
   metadata: {
     editorVersion: string;
@@ -115,6 +125,7 @@ export function createEmptyScenario(): Scenario {
     schema: scenarioSchema,
     title: "Untitled Fieldcraft Scenario",
     space: null,
+    assets: [],
     pieces: [],
     metadata: {
       editorVersion: "0.1.0-experiment",
@@ -207,6 +218,14 @@ export function isFreeCoordinateScenarioSpace(
 }
 
 export function prepareScenarioForSave(scenario: Scenario): Scenario {
+  const assets = scenario.assets
+    .map((asset) => ({ ...asset }))
+    .sort(
+      (left, right) =>
+        left.kind.localeCompare(right.kind) ||
+        left.id.localeCompare(right.id) ||
+        left.path.localeCompare(right.path)
+    );
   const pieces = scenario.space
     ? scenario.pieces
         .map((piece) => ({ ...piece }))
@@ -215,6 +234,7 @@ export function prepareScenarioForSave(scenario: Scenario): Scenario {
 
   return {
     ...scenario,
+    assets,
     pieces,
     metadata: {
       ...scenario.metadata,
@@ -231,7 +251,9 @@ export function parseScenario(input: string): Scenario {
     throw new Error("File is not a Fieldcraft scenario.");
   }
 
+  validateUniqueAssetIds(scenario);
   validateUniquePieceIds(scenario);
+  validateScenarioAssetReferences(scenario);
 
   return scenario;
 }
@@ -253,6 +275,11 @@ function parseScenarioValue(value: unknown): Scenario | null {
     return null;
   }
 
+  const assets = parseScenarioAssets(value.assets);
+  if (!assets) {
+    return null;
+  }
+
   const space = parseScenarioSpace(value.space);
   if (space === false) {
     return null;
@@ -267,6 +294,7 @@ function parseScenarioValue(value: unknown): Scenario | null {
     schema: scenarioSchema,
     title: value.title,
     space,
+    assets,
     pieces,
     metadata: {
       editorVersion:
@@ -281,6 +309,18 @@ function parseScenarioValue(value: unknown): Scenario | null {
   };
 }
 
+function validateUniqueAssetIds(scenario: Scenario): void {
+  const seenIds = new Set<string>();
+
+  for (const asset of scenario.assets) {
+    if (seenIds.has(asset.id)) {
+      throw new Error(`Scenario contains duplicate asset ID: ${asset.id}`);
+    }
+
+    seenIds.add(asset.id);
+  }
+}
+
 function validateUniquePieceIds(scenario: Scenario): void {
   const seenIds = new Set<string>();
 
@@ -291,6 +331,60 @@ function validateUniquePieceIds(scenario: Scenario): void {
 
     seenIds.add(piece.id);
   }
+}
+
+function validateScenarioAssetReferences(scenario: Scenario): void {
+  const backgroundImageAssetId = scenario.space?.background.imageAssetId;
+  if (!backgroundImageAssetId) {
+    return;
+  }
+
+  const backgroundImageAsset = scenario.assets.find(
+    (asset) => asset.id === backgroundImageAssetId
+  );
+
+  if (!backgroundImageAsset) {
+    throw new Error(
+      `Scenario background references missing image asset ID: ${backgroundImageAssetId}`
+    );
+  }
+
+  if (backgroundImageAsset.kind !== "image") {
+    throw new Error(`Scenario background asset must be an image: ${backgroundImageAssetId}`);
+  }
+}
+
+function parseScenarioAssets(value: unknown): ScenarioAsset[] | null {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const assets: ScenarioAsset[] = [];
+
+  for (const asset of value) {
+    if (!isRecord(asset) || !isScenarioAssetKind(asset.kind)) {
+      return null;
+    }
+
+    const id = parseScenarioAssetId(asset.id);
+    const path = parseScenarioAssetPath(asset.path);
+
+    if (!id || !path) {
+      return null;
+    }
+
+    assets.push({
+      id,
+      kind: asset.kind,
+      path
+    });
+  }
+
+  return assets;
 }
 
 function parseScenarioPieces(
@@ -499,11 +593,14 @@ function parseBackground(value: unknown): ScenarioBoardBackground | null {
   }
 
   const color = parseColor(value.color, defaultBoardBackgroundColor);
-  if (!color) {
+  const imageAssetId =
+    value.imageAssetId === undefined ? undefined : parseScenarioAssetId(value.imageAssetId);
+
+  if (!color || (value.imageAssetId !== undefined && !imageAssetId)) {
     return null;
   }
 
-  return { color };
+  return imageAssetId ? { color, imageAssetId } : { color };
 }
 
 function parseFreeCoordinateBounds(value: unknown): ScenarioFreeCoordinateBounds | null {
@@ -579,10 +676,57 @@ function parseColor(value: unknown, fallback: string): string | null {
   return value.toLowerCase();
 }
 
+function parseScenarioAssetId(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function parseScenarioAssetPath(value: unknown): string | null {
+  if (typeof value !== "string" || value.length === 0 || value.trim() !== value) {
+    return null;
+  }
+
+  if (
+    value.startsWith("/") ||
+    value.startsWith("\\") ||
+    value.startsWith("./") ||
+    value.startsWith("../") ||
+    value.includes("\\") ||
+    value.includes(":")
+  ) {
+    return null;
+  }
+
+  const segments = value.split("/");
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")) {
+    return null;
+  }
+
+  return value;
+}
+
 function isScaleUnit(value: unknown): value is string {
   return typeof value === "string" && normalizeScaleUnit(value).length > 0;
 }
 
+function isScenarioAssetKind(value: unknown): value is ScenarioAssetKind {
+  return value === "image" || value === "audio";
+}
+
 function normalizeScaleUnit(value: string): string {
   return value.trim().slice(0, 32);
+}
+
+export function getScenarioAssetById(
+  scenario: Scenario,
+  assetId: string | null | undefined
+): ScenarioAsset | null {
+  if (!assetId) {
+    return null;
+  }
+
+  return scenario.assets.find((asset) => asset.id === assetId) ?? null;
+}
+
+export function getScenarioBackgroundImageAsset(scenario: Scenario): ScenarioAsset | null {
+  return getScenarioAssetById(scenario, scenario.space?.background.imageAssetId);
 }

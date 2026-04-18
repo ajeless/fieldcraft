@@ -60,6 +60,12 @@ try {
   });
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
   await expectCommandDisabled(page, "palette-marker");
+  if (!(await page.locator('[data-testid="import-image-asset"]').isDisabled())) {
+    throw new Error("Browser mode should not enable desktop image imports.");
+  }
+  if (!(await page.locator('[data-testid="import-audio-asset"]').isDisabled())) {
+    throw new Error("Browser mode should not enable desktop audio imports.");
+  }
   await page.click('[data-testid="theme-dark"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
   await expectStoredTheme(page, "dark");
@@ -389,6 +395,40 @@ try {
     throw new Error("Shift+Tab did not restore the source editor indentation.");
   }
 
+  await updateSourceEditorJson(page, (scenario) => {
+    scenario.assets = [
+      {
+        id: "test-board-image",
+        kind: "image",
+        path: "assets/checkerboard-32.png"
+      },
+      {
+        id: "test-tone",
+        kind: "audio",
+        path: "assets/test-tone-440hz.wav"
+      }
+    ];
+    scenario.space.background.imageAssetId = "test-board-image";
+    return scenario;
+  });
+  await page.click('[data-testid="apply-source"]');
+  await expectStatusLine(page, "Source applied");
+  await expectMetricValue(page, "asset-count", "2");
+  await expectMetricValue(page, "board-background-image-asset", "test-board-image");
+
+  await updateSourceEditorJson(page, (scenario) => {
+    scenario.space.background.imageAssetId = "test-tone";
+    return scenario;
+  });
+  await page.click('[data-testid="apply-source"]');
+  await expectStatusLine(page, "Scenario background asset must be an image: test-tone");
+  await expectSourceEditorErrorState(page, true);
+  await expectMetricValue(page, "asset-count", "2");
+  await expectMetricValue(page, "board-background-image-asset", "test-board-image");
+  await page.click('[data-testid="reset-source"]');
+  await expectStatusLine(page, "Source reset to editor state");
+  await expectSourceEditorErrorState(page, false);
+
   await page.click('[data-testid="save-scenario"]');
   await expectStatusLine(page, "Scenario saved");
 
@@ -414,6 +454,12 @@ try {
     backgroundColor: "#f4faf7"
   });
   if (
+    parsedScenario.assets.length !== 2 ||
+    !parsedScenario.assets.some(
+      (asset) => asset.id === "test-board-image" && asset.kind === "image"
+    ) ||
+    !parsedScenario.assets.some((asset) => asset.id === "test-tone" && asset.kind === "audio") ||
+    parsedScenario.space?.background?.imageAssetId !== "test-board-image" ||
     parsedScenario.pieces.length !== 4 ||
     parsedScenario.pieces.filter((piece) => piece.x === 32 && piece.y === 32).length !== 3 ||
     !parsedScenario.pieces.some((piece) => piece.id === "marker-0-0") ||
@@ -951,6 +997,15 @@ async function expectStatusLine(page, expectedValue) {
   await page.waitForFunction((value) => {
     return document.querySelector(".status-line")?.textContent === value;
   }, expectedValue);
+}
+
+async function expectMetricValue(page, testId, expectedValue) {
+  await page.waitForFunction(
+    ([nextTestId, nextValue]) => {
+      return document.querySelector(`[data-testid="${nextTestId}"]`)?.textContent === nextValue;
+    },
+    [testId, expectedValue]
+  );
 }
 
 async function expectStoredTheme(page, expectedTheme) {

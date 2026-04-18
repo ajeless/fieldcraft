@@ -24,6 +24,7 @@ import {
   pushHistoryEntry
 } from "./history";
 import {
+  type ScenarioAssetKind,
   type Scenario,
   type ScenarioSpaceType,
   type ScenarioTileSpaceType,
@@ -38,6 +39,7 @@ import {
   defaultScaleDistancePerTile,
   defaultScaleUnit,
   getDefaultTileSize,
+  getScenarioBackgroundImageAsset,
   isTileScenarioSpace,
   maxFreeCoordinateBoardSize,
   maxTileGridSize,
@@ -49,14 +51,17 @@ import {
 } from "./scenario";
 import {
   type ScenarioStorageResult,
+  canImportScenarioAssets,
   clearCurrentFilePath,
   getCurrentFilePath,
   getFileLabel,
   getSaveAsLabel,
   getStorageModeLabel,
+  importScenarioAssetFile,
   openBrowserScenarioFile,
   openScenarioFile,
   rememberScenario,
+  resolveScenarioAssetUrl,
   saveScenarioFile,
   saveScenarioFileAs,
   setCurrentFilePath
@@ -259,6 +264,7 @@ function createEditorView(): HTMLElement {
     labeledInput("Title", scenario.title, updateScenarioTitle, "scenario-title-input"),
     metric("Board", getBoardLabel()),
     metric("Markers", String(scenario.pieces.length), "marker-count"),
+    metric("Assets", String(scenario.assets.length), "asset-count"),
     metric("File", getFileLabel(), "current-file"),
     createContextToolSection(),
     createStatusSection()
@@ -281,6 +287,7 @@ function createEditorView(): HTMLElement {
 
   const inspector = element("aside", "panel right-panel");
   inspector.append(createSelectionInspector(selectedMarker));
+  inspector.append(createAssetLibrarySection());
   const savedAt = scenario.metadata.savedAt
     ? new Date(scenario.metadata.savedAt).toLocaleString()
     : "Not saved";
@@ -687,7 +694,8 @@ function createRuntimeView(): HTMLElement {
     element("p", "eyebrow", "Runtime"),
     element("h1", "runtime-title", scenario.title),
     metric("Board", getBoardLabel()),
-    metric("Markers", String(scenario.pieces.length))
+    metric("Markers", String(scenario.pieces.length)),
+    metric("Assets", String(scenario.assets.length))
   );
 
   const boardStage = element("section", "board-stage runtime-stage");
@@ -752,11 +760,16 @@ function createBoard(options: {
     return createBlankBoardMessage();
   }
 
+  const backgroundImageAsset = getScenarioBackgroundImageAsset(scenario);
+
   return createBoardViewport({
     mode: options.mode,
     readonly: options.readonly,
     space,
     pieces: scenario.pieces,
+    backgroundImageUrl: backgroundImageAsset
+      ? resolveScenarioAssetUrl(backgroundImageAsset)
+      : null,
     selectedPieceId: options.selectedMarkerId ?? null,
     state: options.state,
     onPieceSelect: options.onPieceSelect,
@@ -807,6 +820,111 @@ function createMarkerIdInput(selectedMarker: Scenario["pieces"][number]): HTMLEl
   const field = textInput("Marker ID", selectedMarker.id, "selected-marker-id-input");
   field.input.addEventListener("change", () => updateSelectedMarkerId(field.input.value));
   return field.label;
+}
+
+function createAssetLibrarySection(): HTMLElement {
+  const section = element("section", "inspector-section");
+  const header = element("div", "inspector-section-header");
+  const actions = element("div", "asset-section-actions");
+  const importImageButton = buttonElement(
+    "Import Image",
+    () => importScenarioAsset("image"),
+    "import-image-asset",
+    !canImportScenarioAssets() || !getCurrentFilePath()
+  );
+  const importAudioButton = buttonElement(
+    "Import Audio",
+    () => importScenarioAsset("audio"),
+    "import-audio-asset",
+    !canImportScenarioAssets() || !getCurrentFilePath()
+  );
+  const clearBackgroundButton = buttonElement(
+    "Clear Background",
+    clearBoardBackgroundImageAsset,
+    "clear-background-image-asset",
+    !scenario.space?.background.imageAssetId
+  );
+  const backgroundImageAsset = getScenarioBackgroundImageAsset(scenario);
+  const currentFilePath = getCurrentFilePath();
+
+  importImageButton.className = "action-button compact-action";
+  importAudioButton.className = "action-button compact-action";
+  clearBackgroundButton.className = "action-button compact-action";
+  header.append(element("p", "eyebrow", "Assets"));
+  actions.append(importImageButton, importAudioButton, clearBackgroundButton);
+  header.append(actions);
+  section.append(header);
+  section.append(
+    metric(
+      "Board Background",
+      backgroundImageAsset?.id ?? "None",
+      "board-background-image-asset"
+    )
+  );
+
+  if (!isTauri()) {
+    section.append(
+      element(
+        "p",
+        "inspector-empty",
+        "Desktop imports copy package-local image and audio files. Browser mode preserves asset refs from source or opened scenarios but does not import local files."
+      )
+    );
+  } else if (!currentFilePath) {
+    section.append(
+      element(
+        "p",
+        "inspector-empty",
+        "Save the scenario to a desktop file before importing package assets."
+      )
+    );
+  } else {
+    section.append(
+      element(
+        "p",
+        "source-editor-hint",
+        "Imported assets are copied into an assets/ folder beside the scenario file and kept as relative package refs."
+      )
+    );
+  }
+
+  if (scenario.assets.length === 0) {
+    section.append(element("p", "inspector-empty", "No imported assets."));
+    return section;
+  }
+
+  const assetList = element("ul", "asset-list");
+  assetList.dataset.testid = "asset-list";
+
+  for (const asset of scenario.assets) {
+    const item = element("li", "asset-list-item");
+    const assetMeta = element("div", "asset-meta");
+    const assetHeader = element("div", "asset-meta-header");
+    const assetId = element("strong", "asset-id", asset.id);
+    const assetKind = element("span", `asset-kind asset-kind-${asset.kind}`, asset.kind);
+    const assetPath = element("code", "asset-path", asset.path);
+
+    assetHeader.append(assetId, assetKind);
+    assetMeta.append(assetHeader, assetPath);
+    item.append(assetMeta);
+
+    if (asset.kind === "image" && scenario.space) {
+      const isCurrentBackground = scenario.space.background.imageAssetId === asset.id;
+      const backgroundButton = buttonElement(
+        isCurrentBackground ? "Background Active" : "Set Background",
+        () => setBoardBackgroundImageAsset(asset.id),
+        `set-background-image-${asset.id}`,
+        isCurrentBackground
+      );
+      backgroundButton.className = "action-button compact-action";
+      item.append(backgroundButton);
+    }
+
+    assetList.append(item);
+  }
+
+  section.append(assetList);
+  return section;
 }
 
 function createSourceEditorSection(): HTMLElement {
@@ -1542,6 +1660,62 @@ async function saveScenarioAs(): Promise<void> {
   }
 }
 
+async function importScenarioAsset(kind: ScenarioAssetKind): Promise<void> {
+  const result = await importScenarioAssetFile(scenario, kind);
+  const importedAsset = result.asset;
+  if (!importedAsset) {
+    statusMessage = result.statusMessage;
+    render();
+    return;
+  }
+
+  commitUndoableChange(`import ${kind} asset`, result.statusMessage, () => {
+    scenario = {
+      ...scenario,
+      assets: [...scenario.assets, importedAsset]
+    };
+  });
+}
+
+function setBoardBackgroundImageAsset(assetId: string): void {
+  if (!scenario.space || scenario.space.background.imageAssetId === assetId) {
+    return;
+  }
+
+  commitUndoableChange("set board background image", "Board background image updated", () => {
+    scenario = {
+      ...scenario,
+      space: {
+        ...scenario.space!,
+        background: {
+          ...scenario.space!.background,
+          imageAssetId: assetId
+        }
+      }
+    };
+  });
+}
+
+function clearBoardBackgroundImageAsset(): void {
+  if (!scenario.space?.background.imageAssetId) {
+    return;
+  }
+
+  commitUndoableChange("clear board background image", "Board background image cleared", () => {
+    const nextBackground = {
+      ...scenario.space!.background
+    };
+    delete nextBackground.imageAssetId;
+    scenario = {
+      ...scenario,
+      space: {
+        ...scenario.space!,
+        background: nextBackground
+      }
+    };
+  });
+}
+
 function applyScenarioSource(): void {
   try {
     const parsedScenario = parseScenario(sourceDraft);
@@ -1709,7 +1883,22 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message;
+    }
+  }
+
+  return fallback;
 }
 
 function clearSourceEditorError(): void {
@@ -2541,6 +2730,7 @@ function cloneScenarioValue(value: Scenario): Scenario {
   return {
     ...value,
     space: cloneScenarioSpaceValue(value.space),
+    assets: value.assets.map((asset) => ({ ...asset })),
     pieces: value.pieces.map((piece) => ({ ...piece })),
     metadata: {
       ...value.metadata
