@@ -1,0 +1,8 @@
+{
+  "schema": "fieldcraft.scenario.v0",
+  "title": "Empty scenario",
+  "space": null,
+  "assets": [],
+  "pieces": [],
+  "metadata": { "editorVersion": "0.1.0-experiment", "savedAt": null }
+}

@@ -1,0 +1,22 @@
+{
+  "schema": "fieldcraft.scenario",
+  "schemaVersion": 1,
+  "title": "Tile migration sample",
+  "space": {
+    "type": "square-grid",
+    "width": 6,
+    "height": 4,
+    "tileSize": 48,
+    "scale": { "distancePerTile": 1, "unit": "tile" },
+    "grid": { "lineColor": "#aeb8c1", "lineOpacity": 1 },
+    "background": { "color": "#f9fbfb" }
+  },
+  "assets": [
+    { "id": "board-bg", "kind": "image", "path": "assets/board-bg.png" }
+  ],
+  "pieces": [
+    { "id": "piece_STUB01", "label": "marker-2-1", "kind": "marker", "side": "neutral", "x": 2, "y": 1 },
+    { "id": "piece_STUB02", "label": "scout-alpha", "kind": "marker", "side": "neutral", "x": 4, "y": 3 }
+  ],
+  "metadata": { "editorVersion": "0.1.0-experiment", "savedAt": "2026-04-10T00:00:00.000Z" }
+}
