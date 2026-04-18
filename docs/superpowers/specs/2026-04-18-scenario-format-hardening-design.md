@@ -47,7 +47,7 @@ This slice ships the contract *and* the first real migration that exercises it (
   "assets": [ ... ],
   "pieces": [
     {
-      "id": "piece_7A3fK2",
+      "id": "piece_7A3FK2",
       "label": "scout alpha",
       "kind": "marker",
       "side": "neutral",
@@ -62,7 +62,7 @@ This slice ships the contract *and* the first real migration that exercises it (
 Two format-level changes:
 
 - **Identifier/version split.** `schema` becomes the stable identifier string (`"fieldcraft.scenario"`). The integer version lives in its own field `schemaVersion`. This lets migrations and forward-incompat checks key off a number rather than parsing a composite string. Future migrations never touch `schema`.
-- **Piece identity split.** `id` becomes an opaque short-random token (format: `piece_` prefix + 6 characters base32, e.g. `piece_7A3fK2`). `label` is free-form author text, optional (`""` allowed), non-unique across pieces.
+- **Piece identity split.** `id` becomes an opaque short-random token (format: `piece_` prefix + 6 characters base32, e.g. `piece_7A3FK2`). `label` is free-form author text, optional (`""` allowed), non-unique across pieces.
 
 ## Piece id generation
 
