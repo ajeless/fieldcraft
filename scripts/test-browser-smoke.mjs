@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { isProcessRunning, readState, repoRoot } from "./process-utils.mjs";
 
@@ -60,6 +61,7 @@ try {
   });
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
   await expectCommandDisabled(page, "palette-marker");
+  await expectCommandDisabled(page, "export-runtime-scenario");
   if (!(await page.locator('[data-testid="import-image-asset"]').isDisabled())) {
     throw new Error("Browser mode should not enable desktop image imports.");
   }
@@ -83,6 +85,7 @@ try {
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await expectCommandEnabled(page, "undo-scenario");
   await expectCommandDisabled(page, "redo-scenario");
+  await expectCommandEnabled(page, "export-runtime-scenario");
   await page.click('[data-testid="undo-scenario"]');
   await expectBoardSetupVisible(page);
   await expectInputValue(page, '[data-testid="grid-width-input"]', "6");
@@ -529,7 +532,50 @@ try {
   await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
 
-  await page.click('[data-testid="new-scenario"]');
+  await updateSourceEditorJson(page, (scenario) => {
+    scenario.assets = [
+      {
+        id: "export-board-image",
+        kind: "image",
+        path: "export-fixtures/checkerboard-32.png"
+      },
+      {
+        id: "export-tone",
+        kind: "audio",
+        path: "export-fixtures/test-tone-440hz.wav"
+      }
+    ];
+    scenario.space.background.imageAssetId = "export-board-image";
+    return scenario;
+  });
+  await page.click('[data-testid="apply-source"]');
+  await expectStatusLine(page, "Source applied");
+  const squareRuntimeExport = await expectRuntimeExportDownload(page, () =>
+    page.click('[data-testid="export-runtime-scenario"]')
+  );
+  await verifyRuntimeExportDownload(page, squareRuntimeExport, {
+    spaceType: "square-grid",
+    backgroundImagePath: "export-fixtures/checkerboard-32.png",
+    markerKeys: ["0-0", "32-32"],
+    markerOccurrences: [
+      {
+        markerKey: "32-32",
+        count: 3
+      }
+    ],
+    assetChecks: [
+      {
+        path: "export-fixtures/checkerboard-32.png",
+        dataUrlPrefix: "data:image/png;base64,"
+      },
+      {
+        path: "export-fixtures/test-tone-440hz.wav",
+        dataUrlPrefix: "data:audio/wav;base64,"
+      }
+    ]
+  });
+
+  await acceptConfirm(page, () => page.click('[data-testid="new-scenario"]'));
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
   await createGrid(page, "hex", 18, 14);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
@@ -778,7 +824,53 @@ try {
   await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
 
-  console.log("Browser smoke passed: square, hex, and free-coordinate placement, colocated marker, persistence, and runtime checks passed.");
+  await updateSourceEditorJson(page, (scenario) => {
+    scenario.assets = [
+      {
+        id: "free-export-board-image",
+        kind: "image",
+        path: "export-fixtures/checkerboard-32.png"
+      },
+      {
+        id: "free-export-tone",
+        kind: "audio",
+        path: "export-fixtures/test-tone-440hz.wav"
+      }
+    ];
+    scenario.space.background.imageAssetId = "free-export-board-image";
+    return scenario;
+  });
+  await page.click('[data-testid="apply-source"]');
+  await expectStatusLine(page, "Source applied");
+  const freeRuntimeExport = await expectRuntimeExportDownload(page, () =>
+    clickMenuItem(page, "file", "menu-export-runtime-scenario")
+  );
+  await verifyRuntimeExportDownload(page, freeRuntimeExport, {
+    spaceType: "free-coordinate",
+    backgroundImagePath: "export-fixtures/checkerboard-32.png",
+    markerKeys: freeMarkerKeys,
+    freeMarkerCounts: [
+      {
+        x: 73.25,
+        y: 18.5,
+        count: 3
+      }
+    ],
+    assetChecks: [
+      {
+        path: "export-fixtures/checkerboard-32.png",
+        dataUrlPrefix: "data:image/png;base64,"
+      },
+      {
+        path: "export-fixtures/test-tone-440hz.wav",
+        dataUrlPrefix: "data:audio/wav;base64,"
+      }
+    ]
+  });
+
+  console.log(
+    "Browser smoke passed: square, hex, and free-coordinate placement, runtime checks, and standalone runtime export checks passed."
+  );
 } finally {
   if (browser) {
     await browser.close();
@@ -1086,6 +1178,111 @@ async function expectScenarioDownload(page, action) {
     throw new Error(`Unexpected scenario download filename: ${download.suggestedFilename()}`);
   }
   await download.delete();
+}
+
+async function expectRuntimeExportDownload(page, action) {
+  const downloadPromise = page.waitForEvent("download");
+  await action();
+  const download = await downloadPromise;
+  if (!download.suggestedFilename().endsWith(".fieldcraft.runtime.html")) {
+    throw new Error(
+      `Unexpected runtime export filename: ${download.suggestedFilename()}`
+    );
+  }
+
+  const filePath = path.join(smokeDir, download.suggestedFilename());
+  await download.saveAs(filePath);
+
+  return {
+    download,
+    filePath,
+    html: fs.readFileSync(filePath, "utf8")
+  };
+}
+
+async function verifyRuntimeExportDownload(page, runtimeExport, options) {
+  for (const assetCheck of options.assetChecks ?? []) {
+    if (!runtimeExport.html.includes(assetCheck.path)) {
+      throw new Error(`Runtime export is missing bundled asset path ${assetCheck.path}.`);
+    }
+    if (!runtimeExport.html.includes(assetCheck.dataUrlPrefix)) {
+      throw new Error(
+        `Runtime export is missing bundled asset payload ${assetCheck.dataUrlPrefix} for ${assetCheck.path}.`
+      );
+    }
+  }
+
+  const browser = page.context().browser();
+  if (!browser) {
+    throw new Error("Could not access the browser for runtime export verification.");
+  }
+
+  const runtimeContext = await browser.newContext({
+    viewport: { width: 1280, height: 820 }
+  });
+  const runtimePage = await runtimeContext.newPage();
+  const pageErrors = [];
+  const consoleErrors = [];
+
+  try {
+    runtimePage.on("pageerror", (error) => {
+      pageErrors.push(String(error));
+    });
+    runtimePage.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push(message.text());
+      }
+    });
+    await runtimePage.goto(pathToFileURL(runtimeExport.filePath).href);
+    try {
+      await runtimePage.waitForSelector('[data-view="runtime-export"]');
+    } catch (error) {
+      const pageContent = await runtimePage.content();
+      throw new Error(
+        `Runtime export did not boot. Page errors: ${JSON.stringify(pageErrors)}. Console errors: ${JSON.stringify(consoleErrors)}. Body: ${pageContent.slice(0, 1200)}`,
+        { cause: error }
+      );
+    }
+    await expectSurfaceSpace(runtimePage, "runtime-board-surface", options.spaceType);
+    await runtimePage.waitForSelector(
+      '[data-testid="runtime-board-surface"][data-background-image-status="ready"]'
+    );
+    await expectCanvasHasRenderedBoard(runtimePage, "runtime-board-canvas");
+
+    const backgroundImagePath = await runtimePage
+      .locator('[data-testid="runtime-board-surface"]')
+      .getAttribute("data-background-image-path");
+    if (backgroundImagePath !== options.backgroundImagePath) {
+      throw new Error(
+        `Runtime export background path was ${JSON.stringify(backgroundImagePath)} instead of ${JSON.stringify(options.backgroundImagePath)}.`
+      );
+    }
+
+    for (const markerKey of options.markerKeys ?? []) {
+      await waitForMarker(runtimePage, "runtime-board-surface", markerKey);
+    }
+    for (const markerOccurrence of options.markerOccurrences ?? []) {
+      await expectMarkerPositionOccurrences(
+        runtimePage,
+        "runtime-board-surface",
+        markerOccurrence.markerKey,
+        markerOccurrence.count
+      );
+    }
+    for (const freeMarkerCount of options.freeMarkerCounts ?? []) {
+      await expectFreeMarkerCountNear(
+        runtimePage,
+        "runtime-board-surface",
+        freeMarkerCount.x,
+        freeMarkerCount.y,
+        freeMarkerCount.count
+      );
+    }
+  } finally {
+    await runtimeContext.close();
+  }
+
+  await runtimeExport.download.delete();
 }
 
 async function setInputValue(page, selector, value) {

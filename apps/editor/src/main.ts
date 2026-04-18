@@ -53,6 +53,7 @@ import {
   type ScenarioStorageResult,
   canImportScenarioAssets,
   clearCurrentFilePath,
+  exportScenarioBrowserRuntime,
   getCurrentFilePath,
   getFileLabel,
   getSaveAsLabel,
@@ -76,6 +77,7 @@ type EditorCommandId =
   | "open"
   | "save"
   | "save-as"
+  | "export-runtime"
   | "delete-selected-marker";
 
 type EditorCommand = CommandDefinition<EditorCommandId>;
@@ -131,7 +133,7 @@ type SourceEditorSelection = {
 
 const documentCommandGroups = [
   ["undo", "redo"],
-  ["new", "open", "save", "save-as"]
+  ["new", "open", "save", "save-as", "export-runtime"]
 ] as const satisfies ReadonlyArray<ReadonlyArray<EditorCommandId>>;
 
 const themeStorageKey = "fieldcraft:theme";
@@ -382,6 +384,12 @@ function createEditorCommands(fileInput: HTMLInputElement, route: Route): Editor
       run: saveScenarioAs
     },
     {
+      id: "export-runtime",
+      label: "Export Runtime",
+      enabled: Boolean(scenario.space),
+      run: exportRuntime
+    },
+    {
       id: "delete-selected-marker",
       label: "Delete Marker",
       enabled: route === "editor" && Boolean(selectedMarker),
@@ -395,7 +403,14 @@ function createMenuBar(): HTMLElement {
   const menuBar = element("nav", "app-menu-bar");
   menuBar.setAttribute("aria-label", "Application menu");
   menuBar.append(
-    createMenu("File", "file", ["new", "open", "separator", "save", "save-as"]),
+    createMenu("File", "file", [
+      "new",
+      "open",
+      "separator",
+      "save",
+      "save-as",
+      "export-runtime"
+    ]),
     createMenu("Edit", "edit", ["undo", "redo", "separator", "delete-selected-marker"])
   );
   return menuBar;
@@ -1656,6 +1671,21 @@ async function saveScenarioAs(): Promise<void> {
     applyStorageResult(await saveScenarioFileAs(scenario));
   } catch (error) {
     statusMessage = getErrorMessage(error, "Could not save scenario.");
+    render();
+  }
+}
+
+async function exportRuntime(): Promise<void> {
+  if (!scenario.space) {
+    statusMessage = "Create a board before exporting runtime.";
+    render();
+    return;
+  }
+
+  try {
+    applyStorageResult(await exportScenarioBrowserRuntime(scenario));
+  } catch (error) {
+    statusMessage = getErrorMessage(error, "Could not export runtime.");
     render();
   }
 }
