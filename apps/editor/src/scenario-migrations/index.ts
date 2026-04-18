@@ -14,8 +14,16 @@ const migrations: readonly MigrationStep[] = [
   {
     from: 0,
     to: 1,
-    migrate: (input) =>
-      migrateV0ToV1(input, { generateId: () => generatePieceId(collectPieceIds(input)) })
+    migrate: (input) => {
+      const taken = collectPieceIds(input);
+      return migrateV0ToV1(input, {
+        generateId: () => {
+          const id = generatePieceId(taken);
+          taken.add(id);
+          return id;
+        }
+      });
+    }
   }
 ];
 
@@ -129,5 +137,5 @@ function collectPieceIds(input: unknown): Set<string> {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

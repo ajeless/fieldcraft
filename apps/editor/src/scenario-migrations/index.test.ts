@@ -77,6 +77,83 @@ describe("loadScenario", () => {
     }
   });
 
+  it("rejects a negative schemaVersion with not-a-scenario", () => {
+    const payload = JSON.stringify({
+      schema: "fieldcraft.scenario",
+      schemaVersion: -1,
+      title: "bad version",
+      space: null,
+      assets: [],
+      pieces: [],
+      metadata: { editorVersion: "x", savedAt: null }
+    });
+
+    try {
+      loadScenario(payload);
+      throw new Error("expected throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ScenarioLoadError);
+      if (error instanceof ScenarioLoadError) {
+        expect(error.kind).toBe("not-a-scenario");
+      }
+    }
+  });
+
+  it("rejects a non-integer schemaVersion with not-a-scenario", () => {
+    const payload = JSON.stringify({
+      schema: "fieldcraft.scenario",
+      schemaVersion: 1.5,
+      title: "bad version",
+      space: null,
+      assets: [],
+      pieces: [],
+      metadata: { editorVersion: "x", savedAt: null }
+    });
+
+    try {
+      loadScenario(payload);
+      throw new Error("expected throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ScenarioLoadError);
+      if (error instanceof ScenarioLoadError) {
+        expect(error.kind).toBe("not-a-scenario");
+      }
+    }
+  });
+
+  it("surfaces downstream validation failure as invalid-payload", () => {
+    const payload = JSON.stringify({
+      schema: "fieldcraft.scenario",
+      schemaVersion: 1,
+      title: "duplicate ids",
+      space: {
+        type: "square-grid",
+        width: 4,
+        height: 4,
+        tileSize: 48,
+        scale: { distancePerTile: 1, unit: "tile" },
+        grid: { lineColor: "#aeb8c1", lineOpacity: 1 },
+        background: { color: "#f9fbfb" }
+      },
+      assets: [],
+      pieces: [
+        { id: "piece_AAAAAA", label: "a", kind: "marker", side: "neutral", x: 0, y: 0 },
+        { id: "piece_AAAAAA", label: "b", kind: "marker", side: "neutral", x: 1, y: 1 }
+      ],
+      metadata: { editorVersion: "x", savedAt: null }
+    });
+
+    try {
+      loadScenario(payload);
+      throw new Error("expected throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ScenarioLoadError);
+      if (error instanceof ScenarioLoadError) {
+        expect(error.kind).toBe("invalid-payload");
+      }
+    }
+  });
+
   it("reports a migration side effect so callers can mark docs dirty", () => {
     const v0Text = readFixture("pre-tile.json");
     const v1Text = readFixture("post-tile.json");
