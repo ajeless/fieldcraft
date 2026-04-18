@@ -18,13 +18,13 @@ function makeStubIdGenerator(): () => string {
 }
 
 describe("migrateV0ToV1", () => {
-  it("migrates a tile scenario, preserving labels from old ids", () => {
+  it("migrates a tile scenario, preserving labels from old ids and leaving assets untouched", () => {
     const pre = loadFixture("pre-tile.json");
     const post = loadFixture("post-tile.json");
     expect(migrateV0ToV1(pre, { generateId: makeStubIdGenerator() })).toEqual(post);
   });
 
-  it("migrates a free-coordinate scenario with decimal positions", () => {
+  it("migrates a free-coordinate scenario with decimal and negative positions", () => {
     const pre = loadFixture("pre-free.json");
     const post = loadFixture("post-free.json");
     expect(migrateV0ToV1(pre, { generateId: makeStubIdGenerator() })).toEqual(post);
