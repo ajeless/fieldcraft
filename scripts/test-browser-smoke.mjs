@@ -119,7 +119,7 @@ try {
   const parsedFirstRecoveredSave = JSON.parse(firstRecoveredSave);
   if (
     parsedFirstRecoveredSave.pieces.length !== 1 ||
-    !parsedFirstRecoveredSave.pieces.some((piece) => piece.id === "marker-2-1")
+    !parsedFirstRecoveredSave.pieces.some((piece) => piece.x === 2 && piece.y === 1)
   ) {
     throw new Error("Recovered draft save did not preserve the saved marker set.");
   }
@@ -142,8 +142,8 @@ try {
   const parsedDurableSquareSave = JSON.parse(durableSquareSave);
   if (
     parsedDurableSquareSave.pieces.length !== 1 ||
-    !parsedDurableSquareSave.pieces.some((piece) => piece.id === "marker-2-1") ||
-    parsedDurableSquareSave.pieces.some((piece) => piece.id === "marker-4-3")
+    !parsedDurableSquareSave.pieces.some((piece) => piece.x === 2 && piece.y === 1) ||
+    parsedDurableSquareSave.pieces.some((piece) => piece.x === 4 && piece.y === 3)
   ) {
     throw new Error("Draft recovery overwrote the saved browser scenario.");
   }
@@ -186,7 +186,7 @@ try {
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await waitForMarker(page, "board-surface", "1-2");
   await openScenarioFromSidebar(page, duplicateMarkerIdFixturePath);
-  await expectStatusLine(page, "Scenario contains duplicate marker ID: marker-1-2");
+  await expectStatusLine(page, "Scenario contains duplicate marker ID: piece_FIXT01");
   await expectMarkerCount(page, "1");
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await waitForMarker(page, "board-surface", "1-2");
@@ -233,7 +233,7 @@ try {
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "32-32");
   await expectSelectedMarker(page, {
-    id: "marker-32-32",
+    id: "",
     position: "Tile 32, 32"
   });
   await page.keyboard.press("Control+Z");
@@ -244,17 +244,17 @@ try {
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "32-32");
   await expectSelectedMarker(page, {
-    id: "marker-32-32",
+    id: "",
     position: "Tile 32, 32"
   });
-  await updateSelectedMarkerId(page, "lead-marker");
+  await updateSelectedMarkerLabel(page, "lead-marker");
   await expectSelectedMarker(page, {
     id: "lead-marker",
     position: "Tile 32, 32"
   });
   await page.keyboard.press("Control+Z");
   await expectSelectedMarker(page, {
-    id: "marker-32-32",
+    id: "",
     position: "Tile 32, 32"
   });
   await page.keyboard.press("Control+Shift+Z");
@@ -264,7 +264,7 @@ try {
   });
   await page.keyboard.press("Control+Z");
   await expectSelectedMarker(page, {
-    id: "marker-32-32",
+    id: "",
     position: "Tile 32, 32"
   });
   await placeMarkerFromPalette(page, "board-surface", 32, 32);
@@ -308,7 +308,6 @@ try {
   await expectNoSelectedMarker(page);
   await clickTile(page, "board-surface", 63, 63);
   await expectSelectedMarker(page, {
-    id: "marker-63-63",
     position: "Tile 63, 63"
   });
   await page.keyboard.press("Delete");
@@ -320,7 +319,6 @@ try {
   await expectMarkerCount(page, "4");
   await waitForMarker(page, "board-surface", "63-63");
   await expectSelectedMarker(page, {
-    id: "marker-63-63",
     position: "Tile 63, 63"
   });
   await page.keyboard.press("Control+Y");
@@ -358,6 +356,7 @@ try {
     scenario.title = "Source Applied Fixture";
     scenario.pieces.push({
       id: "source-stack-marker",
+      label: "source-stack-marker",
       kind: "marker",
       side: "neutral",
       x: 32,
@@ -438,7 +437,7 @@ try {
   const savedScenario = await page.evaluate(() =>
     window.localStorage.getItem("fieldcraft:last-scenario")
   );
-  if (!savedScenario || !savedScenario.includes('"schema": "fieldcraft.scenario.v0"')) {
+  if (!savedScenario || !savedScenario.includes('"schema": "fieldcraft.scenario"') || !savedScenario.includes('"schemaVersion": 1')) {
     throw new Error("Scenario was not saved to browser storage.");
   }
   const parsedScenario = JSON.parse(savedScenario);
@@ -465,18 +464,21 @@ try {
     parsedScenario.space?.background?.imageAssetId !== "test-board-image" ||
     parsedScenario.pieces.length !== 4 ||
     parsedScenario.pieces.filter((piece) => piece.x === 32 && piece.y === 32).length !== 3 ||
-    !parsedScenario.pieces.some((piece) => piece.id === "marker-0-0") ||
-    !parsedScenario.pieces.some((piece) => piece.id === "source-stack-marker") ||
+    !parsedScenario.pieces.some((piece) => piece.x === 0 && piece.y === 0) ||
+    !parsedScenario.pieces.some((piece) => piece.label === "source-stack-marker") ||
     parsedScenario.pieces.some((piece) => piece.id === deletedStackedMarkerId) ||
-    parsedScenario.pieces.some((piece) => piece.id === "marker-63-63")
+    parsedScenario.pieces.some((piece) => piece.x === 63 && piece.y === 63)
   ) {
     throw new Error("Saved scenario did not preserve colocated marker deletion.");
   }
 
-  const invalidSquareSource = '{\n  "schema": "fieldcraft.scenario.v0"\n';
+  const invalidSquareSource = '{\n  "schema": "fieldcraft.scenario"\n';
   await setSourceEditorValue(page, invalidSquareSource);
   await page.click('[data-testid="apply-source"]');
-  await expectStatusLine(page, "Source is not valid JSON at line 3, column 1.");
+  await page.waitForFunction(() => {
+    const text = document.querySelector(".status-line")?.textContent ?? "";
+    return text.includes("line 3") && text.includes("column 1");
+  });
   await expectSourceEditorErrorState(page, true);
   await expectMarkerCount(page, "4");
   await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
@@ -594,7 +596,6 @@ try {
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "9-7");
   await expectSelectedMarker(page, {
-    id: "marker-9-7",
     position: "Tile 9, 7"
   });
   await placeMarkerFromPalette(page, "board-surface", 0, 0);
@@ -608,12 +609,10 @@ try {
   await waitForMarker(page, "board-surface", "0-13");
   await clickTile(page, "board-surface", 9, 7, { x: 7, y: 0 });
   await expectSelectedMarker(page, {
-    id: "marker-9-7",
     position: "Tile 9, 7"
   });
   await clickTile(page, "board-surface", 17, 13);
   await expectSelectedMarker(page, {
-    id: "marker-17-13",
     position: "Tile 17, 13"
   });
   await panBoardToBottomRightSliver(page, "board-surface");
@@ -625,7 +624,6 @@ try {
   await waitForMarker(page, "board-surface", extremeDropMarker);
   await clickTile(page, "board-surface", extremeDropTile.x, extremeDropTile.y);
   await expectSelectedMarker(page, {
-    id: `marker-${extremeDropMarker}`,
     position: `Tile ${extremeDropTile.x}, ${extremeDropTile.y}`
   });
   const afterExtremeDropTransform = await getTransform(page, "board-surface");
@@ -681,11 +679,11 @@ try {
   if (
     parsedHexScenario.space?.type !== "hex-grid" ||
     parsedHexScenario.pieces.length !== 5 ||
-    !parsedHexScenario.pieces.some((piece) => piece.id === "marker-9-7") ||
-    !parsedHexScenario.pieces.some((piece) => piece.id === "marker-0-0") ||
-    !parsedHexScenario.pieces.some((piece) => piece.id === "marker-17-13") ||
-    !parsedHexScenario.pieces.some((piece) => piece.id === "marker-0-13") ||
-    !parsedHexScenario.pieces.some((piece) => piece.id === `marker-${extremeDropMarker}`)
+    !parsedHexScenario.pieces.some((piece) => piece.x === 9 && piece.y === 7) ||
+    !parsedHexScenario.pieces.some((piece) => piece.x === 0 && piece.y === 0) ||
+    !parsedHexScenario.pieces.some((piece) => piece.x === 17 && piece.y === 13) ||
+    !parsedHexScenario.pieces.some((piece) => piece.x === 0 && piece.y === 13) ||
+    !parsedHexScenario.pieces.some((piece) => piece.x === extremeDropTile.x && piece.y === extremeDropTile.y)
   ) {
     throw new Error("Saved hex scenario did not preserve dragged markers.");
   }
@@ -769,6 +767,7 @@ try {
   await updateSourceEditorJson(page, (scenario) => {
     scenario.pieces.push({
       id: "source-free-marker",
+      label: "source-free-marker",
       kind: "marker",
       side: "neutral",
       x: 73.25,
@@ -808,7 +807,7 @@ try {
     parsedFreeScenario.pieces.filter(
       (piece) => Math.abs(piece.x - 73.25) <= 0.75 && Math.abs(piece.y - 18.5) <= 0.75
     ).length !== 3 ||
-    !parsedFreeScenario.pieces.some((piece) => piece.id === "source-free-marker")
+    !parsedFreeScenario.pieces.some((piece) => piece.label === "source-free-marker")
   ) {
     throw new Error("Saved free-coordinate scenario did not preserve colocated markers.");
   }
@@ -902,7 +901,8 @@ function runNodeScript(scriptPath) {
 function createMenuOpenFixture() {
   return `${JSON.stringify(
     {
-      schema: "fieldcraft.scenario.v0",
+      schema: "fieldcraft.scenario",
+      schemaVersion: 1,
       title: "Menu Open Fixture",
       space: {
         type: "square-grid",
@@ -923,7 +923,8 @@ function createMenuOpenFixture() {
       },
       pieces: [
         {
-          id: "marker-1-2",
+          id: "piece_FIXT01",
+          label: "marker-1-2",
           kind: "marker",
           side: "neutral",
           x: 1,
@@ -943,7 +944,8 @@ function createMenuOpenFixture() {
 function createOversizedGridFixture() {
   return `${JSON.stringify(
     {
-      schema: "fieldcraft.scenario.v0",
+      schema: "fieldcraft.scenario",
+      schemaVersion: 1,
       title: "Oversized Grid Fixture",
       space: {
         type: "square-grid",
@@ -976,7 +978,8 @@ function createOversizedGridFixture() {
 function createDuplicateMarkerIdFixture() {
   return `${JSON.stringify(
     {
-      schema: "fieldcraft.scenario.v0",
+      schema: "fieldcraft.scenario",
+      schemaVersion: 1,
       title: "Duplicate Marker Id Fixture",
       space: {
         type: "square-grid",
@@ -997,14 +1000,16 @@ function createDuplicateMarkerIdFixture() {
       },
       pieces: [
         {
-          id: "marker-1-2",
+          id: "piece_FIXT01",
+          label: "marker-1-2",
           kind: "marker",
           side: "neutral",
           x: 1,
           y: 2
         },
         {
-          id: "marker-1-2",
+          id: "piece_FIXT01",
+          label: "marker-2-2",
           kind: "marker",
           side: "neutral",
           x: 2,
@@ -1818,7 +1823,7 @@ async function expectSelectedMarker(page, expected = {}) {
   await page.waitForFunction(({ id, position, near }) => {
     const emptyState = document.querySelector('[data-testid="selected-marker-empty"]');
     const kind = document.querySelector('[data-testid="selected-marker-kind"]')?.textContent;
-    const selectedIdInput = document.querySelector('[data-testid="selected-marker-id-input"]');
+    const selectedIdInput = document.querySelector('[data-testid="selected-marker-label-input"]');
     const selectedPosition = document.querySelector(
       '[data-testid="selected-marker-position"]'
     )?.textContent;
@@ -1875,14 +1880,14 @@ async function expectNoSelectedMarker(page) {
 
 async function getSelectedMarkerId(page) {
   return page.evaluate(() => {
-    const input = document.querySelector('[data-testid="selected-marker-id-input"]');
+    const code = document.querySelector('[data-testid="selected-marker-id"]');
 
-    return input instanceof HTMLInputElement ? input.value : null;
+    return code instanceof HTMLElement ? code.textContent : null;
   });
 }
 
-async function updateSelectedMarkerId(page, value) {
-  const input = page.locator('[data-testid="selected-marker-id-input"]');
+async function updateSelectedMarkerLabel(page, value) {
+  const input = page.locator('[data-testid="selected-marker-label-input"]');
   await input.fill(value);
   await input.blur();
 }
