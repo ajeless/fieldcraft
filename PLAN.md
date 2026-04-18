@@ -6,7 +6,7 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Keep the editor visibly trustworthy while broader editor systems are still small. Today's baseline covers board setup across square, pointy-top hex, and free-coordinate models; permissive colocated marker placement, selection, and deletion; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a small command registry for file actions; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; a read-only in-app runtime view; browser runtime export with bundled assets; and the first package-local asset model (desktop image/audio import, board background images, `Save As` carrying assets forward).
+Keep the editor visibly trustworthy while broader editor systems are still small. Today's baseline covers board setup across square, pointy-top hex, and free-coordinate models; permissive colocated marker placement, selection, and deletion; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a small command registry for file actions; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; a read-only in-app runtime view; browser runtime export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, `Save As` carrying assets forward); and the v1 scenario format with opaque piece ids, author-facing labels, and a chained migration registry that upgrades older files on load.
 
 The first asset slice behaves well enough to treat as baseline. Audio import is intentionally storage-only for now; playback wiring waits for a concrete runtime need.
 
@@ -38,35 +38,33 @@ Automation still primarily exercises the browser support surface. Desktop-native
   - Referenced scenario assets are bundled into the exported runtime payload.
   - Square, hex, and free-coordinate scenarios round-trip through the export baseline.
 
+- `codex/scenario-format-hardening`
+  - Scenario files now split identity from version: `schema: "fieldcraft.scenario"` plus integer `schemaVersion: 1`, with pieces carrying an opaque `id` (6-char Crockford base32, prefixed `piece_`) alongside an optional free-form `label`.
+  - Migration registry lives at `apps/editor/src/scenario-migrations/` and runs chained per-adjacent-version upgrades on load (file open, source apply, draft recovery). Forward-version files hard-reject with a readable error.
+  - Opening a v0 file migrates in memory, dirties the doc, and saves as v1 through the normal save flow; source-editor line/column diagnostics are preserved through the `ScenarioLoadError` wrapper.
+  - Vitest is the new unit-test runner, co-located at `apps/editor/src/**/*.test.ts`; pre/post fixture pairs cover tile, free-coord (with negative positions), and empty scenarios.
+
 Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/scenario-format-hardening`
-   - Revisit the scenario file shape after source editing, asset references, and export have real pressure.
-   - Keep the current JSON format unless another human-readable shape clearly improves authoring, review, or packaging.
-   - Separate durable object identity from author-facing labels before coordinate-derived ids like `marker-x-y` calcify into the long-term scenario format.
-   - Choose an identity convention that stays readable in JSON while remaining stable across moves, stacking, and future object types; likely direction is opaque internal ids plus editable display labels, not type/location-encoded names.
-   - Make versioning and migration behavior explicit before introducing incompatible scenario-file changes.
-   - Define the migration contract in this branch; implement actual migration tooling only for format changes that already exist or split it into a follow-up if it grows beyond the scenario-file hardening slice.
-
-2. `codex/desktop-release-smoke`
+1. `codex/desktop-release-smoke`
    - Operationalize decision `009` with a documented, repeatable manual desktop smoke pass.
    - Keep the checklist in `DESKTOP-TESTING.md`; cover native open/save/save-as, asset import, `Save As` asset carry-forward, runtime launch, and browser export from the desktop shell.
    - Consider a small scripted helper only if manual execution becomes the slowest part of releasing a slice.
 
-3. `codex/asset-library-follow-ons`
+2. `codex/asset-library-follow-ons`
    - Add follow-on authoring pressure after the first package asset baseline proves itself in real scenarios.
    - Treat token images, sprite sheets, board tile imagery, and richer media workflows as separate pressure from simple board backgrounds.
    - Keep polish work such as better previewing, error surfacing, and image-fit controls out of this branch unless real use makes them trust-blocking.
 
-4. `codex/rules-expression-spike`
+3. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-5. `codex/unit-entity-model`
+4. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
@@ -74,22 +72,22 @@ Current manual testing pressure points are captured in the branch sequence below
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-6. `codex/editor-help-overlay`
+5. `codex/editor-help-overlay`
    - Add a lightweight, discoverable help surface for existing keyboard shortcuts and command affordances.
    - Prefer a single overlay or menu-tooltip pass over a per-surface help scheme.
    - Keep content data-driven so commands added later surface automatically.
 
-7. `codex/token-styling`
+6. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-8. `codex/rules-authoring-system`
+7. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
 
-9. `codex/standalone-runtime-export`
+8. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.
