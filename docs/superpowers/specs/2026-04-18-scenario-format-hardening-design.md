@@ -142,18 +142,13 @@ After v0's sunset window (not this slice), a missing or non-integer `schemaVersi
 
 ### Testing contract
 
-Each migration ships with a fixture pair and a unit test:
+Each migration ships with one or more fixture pairs and a unit test. Fixtures live at `apps/editor/test-fixtures/migrations/v{N}-to-v{N+1}/` and follow the naming convention `pre-{case}.json` / `post-{case}.json` per case; a single-case migration can use `pre.json` / `post.json`. The test runs the migration over each pre fixture and deep-equals the post, with a seam for opaque-id generation replaced by a deterministic stub (so the test is stable).
 
-- `apps/editor/test-fixtures/migrations/v{N}-to-v{N+1}/pre.json`
-- `apps/editor/test-fixtures/migrations/v{N}-to-v{N+1}/post.json`
-- Automated test that runs the migration over `pre.json` and deep-equals `post.json`, with a seam for opaque-id generation replaced by a deterministic stub (so the test is stable).
+For `v0 → v1`, the fixture set covers:
 
-For `v0 → v1`, the fixture covers at least:
-
-- A tile scenario with multiple pieces, including an author-renamed id (not coordinate-encoded).
-- A free-coordinate scenario with decimal / negative positions (the hardest current id-format cases).
-- A scenario with an asset reference intact.
-- A scenario with no pieces.
+- `pre-tile.json` / `post-tile.json` — a tile scenario with multiple pieces, including an author-renamed id (not coordinate-encoded), and an asset reference that survives untouched.
+- `pre-free.json` / `post-free.json` — a free-coordinate scenario with decimal and negative positions (the hardest current id-format cases).
+- `pre-empty.json` / `post-empty.json` — a scenario with no pieces (and no configured space).
 
 The smoke test suite gets a parallel set of fixtures migrated and re-saved to exercise the browser load path end to end.
 
