@@ -1455,6 +1455,7 @@ function placeDefaultMarker(x: number, y: number): void {
         ...scenario.pieces,
         {
           id: markerId,
+          label: "",
           kind: "marker" as const,
           side: "neutral" as const,
           x,
