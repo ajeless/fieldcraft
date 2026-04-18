@@ -3,7 +3,8 @@ import {
   isPointInFreeCoordinateBounds
 } from "./spatial";
 
-export const scenarioSchema = "fieldcraft.scenario.v0";
+export const schemaIdentifier = "fieldcraft.scenario";
+export const currentSchemaVersion = 1;
 
 export const maxTileGridSize = 64;
 export const maxFreeCoordinateBoardSize = 100000;
@@ -29,6 +30,7 @@ export type ScenarioAsset = {
 
 export type ScenarioPiece = {
   id: string;
+  label: string;
   kind: "marker";
   side: "neutral";
   x: number;
@@ -85,7 +87,8 @@ export type ScenarioFreeCoordinateSpace = {
 export type ScenarioSpace = ScenarioTileSpace | ScenarioFreeCoordinateSpace;
 
 export type Scenario = {
-  schema: typeof scenarioSchema;
+  schema: typeof schemaIdentifier;
+  schemaVersion: typeof currentSchemaVersion;
   title: string;
   space: ScenarioSpace | null;
   assets: ScenarioAsset[];
@@ -122,7 +125,8 @@ export const scenarioStorageKey = "fieldcraft:last-scenario";
 
 export function createEmptyScenario(): Scenario {
   return {
-    schema: scenarioSchema,
+    schema: schemaIdentifier,
+    schemaVersion: currentSchemaVersion,
     title: "Untitled Fieldcraft Scenario",
     space: null,
     assets: [],
@@ -267,7 +271,11 @@ function parseScenarioValue(value: unknown): Scenario | null {
     return null;
   }
 
-  if (value.schema !== scenarioSchema || typeof value.title !== "string") {
+  if (value.schema !== schemaIdentifier || value.schemaVersion !== currentSchemaVersion) {
+    return null;
+  }
+
+  if (typeof value.title !== "string") {
     return null;
   }
 
@@ -291,7 +299,8 @@ function parseScenarioValue(value: unknown): Scenario | null {
   }
 
   return {
-    schema: scenarioSchema,
+    schema: schemaIdentifier,
+    schemaVersion: currentSchemaVersion,
     title: value.title,
     space,
     assets,
@@ -402,12 +411,18 @@ function parseScenarioPieces(
       return null;
     }
 
-    const x = piece.x;
-    const y = piece.y;
-
-    if (typeof piece.id !== "string" || piece.kind !== "marker" || piece.side !== "neutral") {
+    if (
+      typeof piece.id !== "string" ||
+      piece.id.length === 0 ||
+      typeof piece.label !== "string" ||
+      piece.kind !== "marker" ||
+      piece.side !== "neutral"
+    ) {
       return null;
     }
+
+    const x = piece.x;
+    const y = piece.y;
 
     if (isTileScenarioSpace(space)) {
       if (
@@ -434,6 +449,7 @@ function parseScenarioPieces(
 
     parsedPieces.push({
       id: piece.id,
+      label: piece.label,
       kind: "marker",
       side: "neutral",
       x,

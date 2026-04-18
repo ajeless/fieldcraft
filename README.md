@@ -135,6 +135,12 @@ corepack pnpm exec playwright install chromium
 
 The smoke test exercises the main browser editor and runtime flows end to end. See `scripts/test-browser-smoke.mjs` for the current coverage surface.
 
+Run the editor unit tests (identity generator, scenario migrations, and the `loadScenario` entry point):
+
+```sh
+corepack pnpm test:unit
+```
+
 ### Desktop Testing
 
 Use the desktop flow when you need to verify native dialogs, restart behavior, package-local asset imports, or the Tauri shell itself. This is the authoritative authoring path and the path that corresponds to the standalone binary target.

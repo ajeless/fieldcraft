@@ -44,11 +44,15 @@ import {
   maxFreeCoordinateBoardSize,
   maxTileGridSize,
   parseSupportedFreeCoordinateBoardSize,
-  parseScenario,
   parseSupportedTileGridSize,
   parseSupportedTileSize,
   scenarioToJson
 } from "./scenario";
+import {
+  loadScenarioWithMeta,
+  ScenarioLoadError
+} from "./scenario-migrations";
+import { generatePieceId } from "./scenario-migrations/identity";
 import {
   type ScenarioStorageResult,
   canImportScenarioAssets,
@@ -823,7 +827,8 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
   }
 
   section.append(
-    createMarkerIdInput(selectedMarker),
+    createMarkerLabelInput(selectedMarker),
+    createMarkerIdDisclosure(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
     metric("Kind", "Marker", "selected-marker-kind")
   );
@@ -831,10 +836,33 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
   return section;
 }
 
-function createMarkerIdInput(selectedMarker: Scenario["pieces"][number]): HTMLElement {
-  const field = textInput("Marker ID", selectedMarker.id, "selected-marker-id-input");
-  field.input.addEventListener("change", () => updateSelectedMarkerId(field.input.value));
+function createMarkerLabelInput(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const field = textInput(
+    "Label",
+    selectedMarker.label,
+    "selected-marker-label-input"
+  );
+  field.input.placeholder = "Name this marker";
+  field.input.addEventListener("change", () =>
+    updateSelectedMarkerLabel(field.input.value)
+  );
   return field.label;
+}
+
+function createMarkerIdDisclosure(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const details = document.createElement("details");
+  details.className = "inspector-disclosure";
+  const summary = document.createElement("summary");
+  summary.className = "inspector-disclosure-summary";
+  summary.textContent = "Show id";
+  const value = element("code", "inspector-id-value", selectedMarker.id);
+  value.dataset.testid = "selected-marker-id";
+  details.append(summary, value);
+  return details;
 }
 
 function createAssetLibrarySection(): HTMLElement {
@@ -1392,37 +1420,24 @@ function updateScenarioTitle(value: string): void {
   });
 }
 
-function updateSelectedMarkerId(value: string): void {
+function updateSelectedMarkerLabel(value: string): void {
   const selectedMarker = getSelectedMarker();
   if (!selectedMarker) {
     return;
   }
 
-  const nextId = value.trim();
-  if (!nextId) {
-    statusMessage = "Marker ID cannot be empty";
-    render();
+  const nextLabel = value;
+  if (nextLabel === selectedMarker.label) {
     return;
   }
 
-  if (nextId === selectedMarker.id) {
-    return;
-  }
-
-  if (scenario.pieces.some((piece) => piece.id === nextId)) {
-    statusMessage = "Marker ID already exists";
-    render();
-    return;
-  }
-
-  commitUndoableChange("marker inspector edit", "Marker ID updated", () => {
+  commitUndoableChange("marker label edit", "Marker label updated", () => {
     scenario = {
       ...scenario,
       pieces: scenario.pieces.map((piece) =>
-        piece.id === selectedMarker.id ? { ...piece, id: nextId } : piece
+        piece.id === selectedMarker.id ? { ...piece, label: nextLabel } : piece
       )
     };
-    selectedMarkerId = nextId;
   });
 }
 
@@ -1446,7 +1461,8 @@ function placeDefaultMarker(x: number, y: number): void {
     return;
   }
 
-  const markerId = createMarkerId(x, y, scenario.pieces);
+  const existingIds = new Set(scenario.pieces.map((piece) => piece.id));
+  const markerId = generatePieceId(existingIds);
 
   commitUndoableChange("marker placement", "Marker placed", () => {
     scenario = {
@@ -1455,6 +1471,7 @@ function placeDefaultMarker(x: number, y: number): void {
         ...scenario.pieces,
         {
           id: markerId,
+          label: "",
           kind: "marker" as const,
           side: "neutral" as const,
           x,
@@ -1748,18 +1765,21 @@ function clearBoardBackgroundImageAsset(): void {
 
 function applyScenarioSource(): void {
   try {
-    const parsedScenario = parseScenario(sourceDraft);
+    const { scenario: parsedScenario, migrated } = loadScenarioWithMeta(sourceDraft);
     const appliedSource = scenarioToJson(parsedScenario);
+    const statusText = migrated
+      ? "Source applied and upgraded to current format"
+      : "Source applied";
 
     if (scenariosEqual(parsedScenario, scenario)) {
       sourceDraft = appliedSource;
       clearSourceEditorError();
-      statusMessage = "Source applied";
+      statusMessage = statusText;
       render();
       return;
     }
 
-    commitUndoableChange("source apply", "Source applied", () => {
+    commitUndoableChange("source apply", statusText, () => {
       scenario = parsedScenario;
       sourceDraft = appliedSource;
       clearSourceEditorError();
@@ -1896,10 +1916,12 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
       previousBoardKey !== getScenarioBoardKey(scenario) ||
       shouldClearUndoHistory;
   }
-  if (result.scenario && result.dirty === false) {
+  if (result.scenario) {
     markScenarioClean(result.scenario);
   }
-  if (result.dirty !== undefined) {
+  if (result.migrated) {
+    dirty = true;
+  } else if (result.dirty !== undefined) {
     dirty = result.dirty;
   }
   if (shouldClearUndoHistory) {
@@ -1908,7 +1930,10 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
   if (shouldResetViewport) {
     resetBoardViewportStates();
   }
-  statusMessage = result.statusMessage;
+  statusMessage =
+    result.migrated && result.scenario
+      ? `${result.statusMessage} (upgraded to current format)`
+      : result.statusMessage;
   render();
 }
 
@@ -1943,8 +1968,9 @@ function getScenarioSourceErrorDetails(
   message: string;
   selection: SourceEditorSelection | null;
 } {
-  if (error instanceof SyntaxError) {
-    const location = getJsonSyntaxErrorLocation(input, error);
+  const syntaxError = unwrapJsonSyntaxError(error);
+  if (syntaxError) {
+    const location = getJsonSyntaxErrorLocation(input, syntaxError);
     if (location) {
       return {
         message: `Source is not valid JSON at line ${location.line}, column ${location.column}.`,
@@ -1962,6 +1988,18 @@ function getScenarioSourceErrorDetails(
     message: getErrorMessage(error, "Could not apply source."),
     selection: null
   };
+}
+
+function unwrapJsonSyntaxError(error: unknown): SyntaxError | null {
+  if (error instanceof SyntaxError) {
+    return error;
+  }
+
+  if (error instanceof ScenarioLoadError && error.kind === "invalid-json" && error.cause instanceof SyntaxError) {
+    return error.cause;
+  }
+
+  return null;
 }
 
 function getJsonSyntaxErrorLocation(
@@ -2181,7 +2219,9 @@ function parseStoredEditorSessionDraft(value: unknown): StoredEditorSessionDraft
   }
 
   try {
-    const parsedScenario = parseScenario(JSON.stringify(value.scenario));
+    const { scenario: parsedScenario, migrated } = loadScenarioWithMeta(
+      JSON.stringify(value.scenario)
+    );
 
     return {
       version: 2,
@@ -2189,7 +2229,7 @@ function parseStoredEditorSessionDraft(value: unknown): StoredEditorSessionDraft
       boardSetupDraft:
         parseStoredBoardSetupDraft(value.boardSetupDraft) ??
         createDefaultBoardSetupDraft(getActiveTheme()),
-      dirty: value.dirty,
+      dirty: value.dirty || migrated,
       currentFilePath: typeof value.currentFilePath === "string" ? value.currentFilePath : null,
       sourceDraft:
         typeof value.sourceDraft === "string"
@@ -2728,28 +2768,6 @@ function isScenarioSpaceType(value: unknown): value is ScenarioSpaceType {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function createMarkerId(x: number, y: number, pieces: Scenario["pieces"]): string {
-  const baseId =
-    Number.isInteger(x) && Number.isInteger(y)
-      ? `marker-${x}-${y}`
-      : `marker-${formatCoordinateForId(x)}-${formatCoordinateForId(y)}`;
-
-  if (!pieces.some((piece) => piece.id === baseId)) {
-    return baseId;
-  }
-
-  let suffix = 2;
-  while (pieces.some((piece) => piece.id === `${baseId}-${suffix}`)) {
-    suffix += 1;
-  }
-
-  return `${baseId}-${suffix}`;
-}
-
-function formatCoordinateForId(value: number): string {
-  return String(value).replace("-", "neg").replace(".", "p");
 }
 
 function formatCoordinate(value: number): string {

@@ -1040,3 +1040,25 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.inspector-disclosure {
+  margin: 6px 0 10px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.inspector-disclosure-summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.inspector-id-value {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-left: 6px;
+  background: rgba(127, 127, 127, 0.12);
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
+  color: var(--ink);
+}
