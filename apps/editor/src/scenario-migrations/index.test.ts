@@ -14,10 +14,17 @@ function readFixture(name: string): string {
   return readFileSync(join(fixturesDir, name), "utf8");
 }
 
+function readCurrentFixture(name: string): string {
+  const payload = JSON.parse(readFixture(name));
+  payload.schemaVersion = CURRENT_SCHEMA_VERSION;
+  return JSON.stringify(payload);
+}
+
 describe("loadScenario", () => {
-  it("loads a v1 payload directly", () => {
-    const text = readFixture("post-tile.json");
-    const scenario = loadScenario(text);
+  it("loads a current-version payload directly", () => {
+    const text = readCurrentFixture("post-tile.json");
+    const { scenario, migrated } = loadScenarioWithMeta(text);
+    expect(migrated).toBe(false);
     expect(scenario.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(scenario.pieces[0]?.label).toBe("marker-2-1");
   });
@@ -28,6 +35,14 @@ describe("loadScenario", () => {
     expect(scenario.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(scenario.pieces[0]?.label).toBe("marker-2-1");
     expect(scenario.pieces[0]?.id).toMatch(/^piece_[0-9A-Z]{6}$/);
+  });
+
+  it("migrates a v1 payload into the current schema version", () => {
+    const text = readFixture("post-tile.json");
+    const { scenario, migrated } = loadScenarioWithMeta(text);
+    expect(migrated).toBe(true);
+    expect(scenario.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(scenario.pieces[0]?.label).toBe("marker-2-1");
   });
 
   it("rejects a future version with a readable error", () => {
@@ -157,7 +172,9 @@ describe("loadScenario", () => {
   it("reports a migration side effect so callers can mark docs dirty", () => {
     const v0Text = readFixture("pre-tile.json");
     const v1Text = readFixture("post-tile.json");
+    const currentText = readCurrentFixture("post-tile.json");
     expect(loadScenarioWithMeta(v0Text).migrated).toBe(true);
-    expect(loadScenarioWithMeta(v1Text).migrated).toBe(false);
+    expect(loadScenarioWithMeta(v1Text).migrated).toBe(true);
+    expect(loadScenarioWithMeta(currentText).migrated).toBe(false);
   });
 });

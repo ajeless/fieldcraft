@@ -8,6 +8,12 @@ import {
   readTextFile,
   writeTextFile
 } from "@tauri-apps/plugin-fs";
+import {
+  consumeDesktopAutomationExportPath,
+  consumeDesktopAutomationImportPath,
+  consumeDesktopAutomationOpenPath,
+  consumeDesktopAutomationSavePath
+} from "./desktop-automation";
 import browserRuntimeStyles from "./runtime-export/browser-runtime.css?raw";
 import browserRuntimeScript from "./runtime-export/browser-runtime.js?raw";
 import {
@@ -104,13 +110,17 @@ export async function openScenarioFile(
     return null;
   }
 
-  const selected = await open({
-    title: "Open Fieldcraft Scenario",
-    multiple: false,
-    directory: false,
-    filters: scenarioFileFilters
-  });
-  const selectedPath = Array.isArray(selected) ? selected[0] : selected;
+  const automationSelection = await consumeDesktopAutomationOpenPath();
+  const selectedPath = automationSelection.handled
+    ? automationSelection.value
+    : normalizeDialogPath(
+        await open({
+          title: "Open Fieldcraft Scenario",
+          multiple: false,
+          directory: false,
+          filters: scenarioFileFilters
+        })
+      );
 
   if (!selectedPath) {
     return {
@@ -164,11 +174,14 @@ export async function saveScenarioFile(scenario: Scenario): Promise<ScenarioStor
 
 export async function saveScenarioFileAs(scenario: Scenario): Promise<ScenarioStorageResult> {
   if (isTauri()) {
-    const selected = await save({
-      title: "Save Fieldcraft Scenario",
-      defaultPath: currentFilePath ?? getDefaultScenarioFileName(scenario),
-      filters: scenarioFileFilters
-    });
+    const automationSelection = await consumeDesktopAutomationSavePath();
+    const selected = automationSelection.handled
+      ? automationSelection.value
+      : await save({
+          title: "Save Fieldcraft Scenario",
+          defaultPath: currentFilePath ?? getDefaultScenarioFileName(scenario),
+          filters: scenarioFileFilters
+        });
 
     if (!selected) {
       return {
@@ -188,11 +201,14 @@ export async function exportScenarioBrowserRuntime(
   const html = await createBrowserRuntimeExportHtml(scenario);
 
   if (isTauri()) {
-    const selected = await save({
-      title: "Export Fieldcraft Browser Runtime",
-      defaultPath: createDefaultRuntimeExportFileName(scenario),
-      filters: browserRuntimeExportFileFilters
-    });
+    const automationSelection = await consumeDesktopAutomationExportPath();
+    const selected = automationSelection.handled
+      ? automationSelection.value
+      : await save({
+          title: "Export Fieldcraft Browser Runtime",
+          defaultPath: createDefaultRuntimeExportFileName(scenario),
+          filters: browserRuntimeExportFileFilters
+        });
 
     if (!selected) {
       return {
@@ -462,13 +478,17 @@ export async function importScenarioAssetFile(
     throw new Error("Save the scenario to a desktop file before importing package assets.");
   }
 
-  const selected = await open({
-    title: kind === "image" ? "Import Image Asset" : "Import Audio Asset",
-    multiple: false,
-    directory: false,
-    filters: kind === "image" ? imageAssetFileFilters : audioAssetFileFilters
-  });
-  const selectedPath = Array.isArray(selected) ? selected[0] : selected;
+  const automationSelection = await consumeDesktopAutomationImportPath(kind);
+  const selectedPath = automationSelection.handled
+    ? automationSelection.value
+    : normalizeDialogPath(
+        await open({
+          title: kind === "image" ? "Import Image Asset" : "Import Audio Asset",
+          multiple: false,
+          directory: false,
+          filters: kind === "image" ? imageAssetFileFilters : audioAssetFileFilters
+        })
+      );
 
   if (!selectedPath) {
     return {
@@ -507,20 +527,28 @@ export async function importScenarioAssetFile(
 }
 
 export function resolveScenarioAssetUrl(asset: ScenarioAsset): string | null {
-  if (!isTauri() || !currentFilePath) {
-    return null;
+  if (isTauri() && currentFilePath) {
+    const scenarioDirectoryPath = getParentDirectoryPath(currentFilePath);
+    if (!scenarioDirectoryPath) {
+      return null;
+    }
+
+    return convertFileSrc(resolveScenarioAssetFilePath(scenarioDirectoryPath, asset.path));
   }
 
-  const scenarioDirectoryPath = getParentDirectoryPath(currentFilePath);
-  if (!scenarioDirectoryPath) {
+  try {
+    return new URL(asset.path, window.location.href).toString();
+  } catch {
     return null;
   }
-
-  return convertFileSrc(resolveScenarioAssetFilePath(scenarioDirectoryPath, asset.path));
 }
 
 function getFileName(filePath: string): string {
   return filePath.split(/[\\/]/).pop() || filePath;
+}
+
+function normalizeDialogPath(value: string | string[] | null): string | null {
+  return Array.isArray(value) ? value[0] ?? null : value;
 }
 
 function getParentDirectoryPath(filePath: string): string | null {

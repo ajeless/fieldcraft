@@ -1,6 +1,8 @@
 import "./styles.css";
 import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
+import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import {
   type BoardViewportState,
   createBoardViewport,
@@ -14,6 +16,13 @@ import {
   createCommandRegistry,
   findCommandByShortcut
 } from "./commands";
+import {
+  consumeDesktopAutomationConfirmResponse,
+  getDesktopAutomationSession,
+  readDesktopAutomationQuery,
+  recordDesktopAutomationEvent,
+  writeDesktopAutomationResult
+} from "./desktop-automation";
 import {
   canRedoHistory,
   canUndoHistory,
@@ -40,12 +49,14 @@ import {
   defaultScaleUnit,
   getDefaultTileSize,
   getScenarioBackgroundImageAsset,
+  getScenarioPieceImageAsset,
   isTileScenarioSpace,
   maxFreeCoordinateBoardSize,
   maxTileGridSize,
   parseSupportedFreeCoordinateBoardSize,
   parseSupportedTileGridSize,
   parseSupportedTileSize,
+  scenarioStorageKey,
   scenarioToJson
 } from "./scenario";
 import {
@@ -147,6 +158,7 @@ const darkThemeBoardDefaults: ThemeBoardDefaults = {
   gridLineColor: "#536576",
   boardBackgroundColor: "#162129"
 };
+const desktopAutomationQuery = readDesktopAutomationQuery();
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
 
@@ -157,6 +169,14 @@ if (!appRoot) {
 const app = appRoot;
 let themePreference = readStoredThemePreference();
 applyTheme();
+if (desktopAutomationQuery?.kind === "desktop-smoke" && desktopAutomationQuery.phase === "phase1") {
+  try {
+    window.localStorage.removeItem(scenarioStorageKey);
+    window.localStorage.removeItem(editorSessionDraftStorageKey);
+  } catch {
+    // Ignore storage cleanup failures and continue booting.
+  }
+}
 const recoveredSessionDraft = readStoredEditorSessionDraft();
 if (recoveredSessionDraft) {
   setCurrentFilePath(recoveredSessionDraft.currentFilePath);
@@ -171,6 +191,7 @@ let sourceEditorErrorMessage: string | null = null;
 let sourceEditorErrorSelection: SourceEditorSelection | null = null;
 let selectedMarkerId: string | null = null;
 let commandRegistry: EditorCommands | null = null;
+let desktopAutomationStarted = false;
 const editorHistory = createHistoryState<EditorSnapshot>();
 let cleanScenarioSnapshot: Scenario | null = recoveredSessionDraft?.dirty
   ? null
@@ -186,6 +207,7 @@ window.addEventListener("pagehide", syncEditorSessionDraft);
 systemThemeMedia.addEventListener("change", handleSystemThemeChange);
 
 render();
+void runDesktopAutomationIfRequested();
 
 function render(): void {
   syncSelectedMarkerWithScenario();
@@ -789,6 +811,10 @@ function createBoard(options: {
     backgroundImageUrl: backgroundImageAsset
       ? resolveScenarioAssetUrl(backgroundImageAsset)
       : null,
+    getPieceImageUrl: (piece) => {
+      const imageAsset = getScenarioPieceImageAsset(scenario, piece);
+      return imageAsset ? resolveScenarioAssetUrl(imageAsset) : null;
+    },
     selectedPieceId: options.selectedMarkerId ?? null,
     state: options.state,
     onPieceSelect: options.onPieceSelect,
@@ -828,6 +854,7 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
 
   section.append(
     createMarkerLabelInput(selectedMarker),
+    createMarkerImageSelect(selectedMarker),
     createMarkerIdDisclosure(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
     metric("Kind", "Marker", "selected-marker-kind")
@@ -863,6 +890,42 @@ function createMarkerIdDisclosure(
   value.dataset.testid = "selected-marker-id";
   details.append(summary, value);
   return details;
+}
+
+function createMarkerImageSelect(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const imageAssets = scenario.assets
+    .filter((asset) => asset.kind === "image")
+    .sort((left, right) => left.id.localeCompare(right.id));
+
+  if (imageAssets.length === 0) {
+    return element(
+      "p",
+      "inspector-empty",
+      "Import an image asset to give this marker artwork."
+    );
+  }
+
+  const field = selectInput(
+    "Image",
+    [
+      {
+        label: "None",
+        value: ""
+      },
+      ...imageAssets.map((asset) => ({
+        label: asset.id,
+        value: asset.id
+      }))
+    ],
+    selectedMarker.imageAssetId ?? "",
+    "selected-marker-image-select"
+  );
+  field.input.addEventListener("change", () =>
+    updateSelectedMarkerImageAsset(field.input.value || null)
+  );
+  return field.label;
 }
 
 function createAssetLibrarySection(): HTMLElement {
@@ -1439,6 +1502,55 @@ function updateSelectedMarkerLabel(value: string): void {
       )
     };
   });
+}
+
+function updateSelectedMarkerImageAsset(assetId: string | null): void {
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker) {
+    return;
+  }
+
+  const nextImageAssetId = assetId || undefined;
+  if (selectedMarker.imageAssetId === nextImageAssetId) {
+    return;
+  }
+
+  commitUndoableChange(
+    nextImageAssetId ? "marker image assign" : "marker image clear",
+    nextImageAssetId ? "Marker image updated" : "Marker image cleared",
+    () => {
+      scenario = {
+        ...scenario,
+        pieces: scenario.pieces.map((piece) =>
+          piece.id === selectedMarker.id
+            ? updateMarkerImageAsset(piece, nextImageAssetId)
+            : piece
+        )
+      };
+    }
+  );
+}
+
+function updateMarkerImageAsset(
+  piece: Scenario["pieces"][number],
+  imageAssetId: string | undefined
+): Scenario["pieces"][number] {
+  if (imageAssetId) {
+    return {
+      ...piece,
+      imageAssetId
+    };
+  }
+
+  if (!piece.imageAssetId) {
+    return piece;
+  }
+
+  const nextPiece = {
+    ...piece
+  };
+  delete nextPiece.imageAssetId;
+  return nextPiece;
 }
 
 function deleteSelectedMarker(): void {
@@ -2451,6 +2563,11 @@ async function confirmDiscardUnsavedChanges(): Promise<boolean> {
     return true;
   }
 
+  const automationResponse = await consumeDesktopAutomationConfirmResponse();
+  if (automationResponse.handled) {
+    return automationResponse.value;
+  }
+
   if (!isTauri()) {
     return window.confirm("Discard unsaved changes?");
   }
@@ -2517,6 +2634,35 @@ function textInput(labelText: string, value: string, testId: string): {
   input.type = "text";
   input.value = value;
   input.dataset.testid = testId;
+  label.append(text, input);
+  return { label, input };
+}
+
+function selectInput(
+  labelText: string,
+  options: ReadonlyArray<{
+    label: string;
+    value: string;
+  }>,
+  value: string,
+  testId: string
+): {
+  label: HTMLElement;
+  input: HTMLSelectElement;
+} {
+  const label = element("label", "field-label");
+  const text = element("span", "", labelText);
+  const input = document.createElement("select");
+  input.dataset.testid = testId;
+
+  for (const optionValue of options) {
+    const option = document.createElement("option");
+    option.value = optionValue.value;
+    option.textContent = optionValue.label;
+    input.append(option);
+  }
+
+  input.value = value;
   label.append(text, input);
   return { label, input };
 }
@@ -2772,6 +2918,318 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function formatCoordinate(value: number): string {
   return Number.isInteger(value) ? String(value) : String(value);
+}
+
+async function runDesktopAutomationIfRequested(): Promise<void> {
+  if (desktopAutomationStarted) {
+    return;
+  }
+
+  try {
+    const automation = await getDesktopAutomationSession();
+    if (!automation) {
+      return;
+    }
+
+    desktopAutomationStarted = true;
+    await recordDesktopAutomationEvent(`desktop automation phase start: ${automation.spec.phase}`);
+    if (automation.spec.phase === "phase1") {
+      await runDesktopSmokePhase1();
+      return;
+    }
+
+    await runDesktopSmokePhase2();
+    try {
+      window.localStorage.removeItem(scenarioStorageKey);
+      window.localStorage.removeItem(editorSessionDraftStorageKey);
+    } catch {
+      // Ignore cleanup failures after the automation assertions finish.
+    }
+    await writeDesktopAutomationResult({
+      ok: true,
+      summary: "Desktop smoke phase 2 passed.",
+      details: {
+        title: scenario.title,
+        currentFilePath: getCurrentFilePath(),
+        dirty,
+        statusMessage
+      }
+    });
+  } catch (error) {
+    try {
+      await writeDesktopAutomationResult({
+        ok: false,
+        summary: getErrorMessage(error, "Desktop automation failed."),
+        details: {
+          title: scenario.title,
+          currentFilePath: getCurrentFilePath(),
+          dirty,
+          statusMessage,
+          route: getRoute()
+        }
+      });
+    } catch {
+      console.error(error);
+    }
+  }
+}
+
+async function runDesktopSmokePhase1(): Promise<void> {
+  const automation = await getDesktopAutomationSession();
+  if (!automation) {
+    return;
+  }
+
+  const paths = automation.spec.paths;
+  const blankTitle = createEmptyScenario().title;
+
+  assertAutomation(!recoveredSessionDraft, "Phase 1 should start without a recovered draft.");
+  assertAutomation(scenario.title === blankTitle, "Phase 1 should start from a blank scenario.");
+
+  updateScenarioTitle("Desktop Smoke Square");
+  createTileGrid({
+    type: "square-grid",
+    widthValue: "6",
+    heightValue: "5",
+    tileSizeValue: "48",
+    distancePerTileValue: "1",
+    scaleUnitValue: "tile",
+    gridLineColorValue: defaultGridLineColor,
+    gridLineOpacityValue: String(defaultGridLineOpacity),
+    backgroundColorValue: defaultBoardBackgroundColor
+  });
+  assertAutomation(scenario.space?.type === "square-grid", "Square board creation failed.");
+
+  placeDefaultMarker(1, 1);
+  placeDefaultMarker(3, 2);
+  assertAutomation(scenario.pieces.length === 2, "Square marker placement failed.");
+
+  launchRuntime();
+  await waitForAutomationCondition(() => getRoute() === "runtime");
+  navigate("editor");
+  await waitForAutomationCondition(() => getRoute() === "editor");
+
+  await saveCurrentScenarioForAutomation();
+  assertAutomation(
+    getCurrentFilePath() === paths.squareScenarioPath,
+    "Initial square save did not use the expected path."
+  );
+
+  placeDefaultMarker(4, 3);
+  await saveCurrentScenarioForAutomation();
+
+  await importScenarioAsset("image");
+  await importScenarioAsset("audio");
+  const importedImage = scenario.assets.find((asset) => asset.kind === "image");
+  const importedAudio = scenario.assets.find((asset) => asset.kind === "audio");
+  assertAutomation(Boolean(importedImage), "Image import did not produce an asset.");
+  assertAutomation(Boolean(importedAudio), "Audio import did not produce an asset.");
+  if (!importedImage) {
+    throw new Error("Image import failed.");
+  }
+
+  selectedMarkerId = scenario.pieces[0]?.id ?? null;
+  updateSelectedMarkerImageAsset(importedImage.id);
+  setBoardBackgroundImageAsset(importedImage.id);
+  await saveCurrentScenarioForAutomation();
+
+  await saveScenarioAsForAutomation();
+  assertAutomation(
+    getCurrentFilePath() === paths.squareCopyPath,
+    "Save As did not switch to the copied square path."
+  );
+
+  await exportRuntimeForAutomation();
+
+  updateScenarioTitle("Desktop Smoke Square Dirty");
+  await createNewScenario();
+  assertAutomation(
+    automation.counters.confirmRequests === 1,
+    "Dirty square scenario did not request the discard confirmation."
+  );
+  assertAutomation(
+    scenario.title === blankTitle && scenario.space === null,
+    "Creating a new scenario after the dirty square case failed."
+  );
+
+  updateScenarioTitle("Desktop Smoke Hex");
+  createTileGrid({
+    type: "hex-grid",
+    widthValue: "5",
+    heightValue: "4",
+    tileSizeValue: String(getDefaultTileSize("hex-grid")),
+    distancePerTileValue: "1",
+    scaleUnitValue: "tile",
+    gridLineColorValue: defaultGridLineColor,
+    gridLineOpacityValue: String(defaultGridLineOpacity),
+    backgroundColorValue: defaultBoardBackgroundColor
+  });
+  placeDefaultMarker(1, 1);
+  placeDefaultMarker(3, 2);
+  await saveCurrentScenarioForAutomation();
+  assertAutomation(
+    getCurrentFilePath() === paths.hexScenarioPath,
+    "Hex scenario did not save to the expected path."
+  );
+
+  await openCurrentScenarioForAutomation();
+  assertAutomation(
+    scenario.title === "Desktop Smoke Square",
+    "Opening the saved square scenario did not restore the square document."
+  );
+  const openedSquareSpace = scenario.space as Scenario["space"];
+  assertAutomation(
+    scenario.assets.length === 2 &&
+      isTileScenarioSpace(openedSquareSpace) &&
+      openedSquareSpace.width === 6 &&
+      openedSquareSpace.height === 5,
+    "Opened square scenario did not restore its assets and board."
+  );
+
+  await createNewScenario();
+  updateScenarioTitle("Desktop Smoke Free");
+  createFreeCoordinateBoard({
+    xValue: "-50",
+    yValue: "-25",
+    widthValue: "100",
+    heightValue: "80",
+    distancePerWorldUnitValue: "1",
+    scaleUnitValue: "unit",
+    backgroundColorValue: defaultBoardBackgroundColor
+  });
+  const freeSpace = scenario.space as Scenario["space"];
+  assertAutomation(
+    freeSpace !== null && !isTileScenarioSpace(freeSpace),
+    "Free-coordinate board creation failed."
+  );
+  placeDefaultMarker(-40, -10);
+  placeDefaultMarker(25.5, 12.25);
+  await saveCurrentScenarioForAutomation();
+  assertAutomation(
+    getCurrentFilePath() === paths.freeScenarioPath,
+    "Free-coordinate scenario did not save to the expected path."
+  );
+
+  launchRuntime();
+  await waitForAutomationCondition(() => getRoute() === "runtime");
+  navigate("editor");
+  await waitForAutomationCondition(() => getRoute() === "editor");
+
+  const savedFreeText = await readTextFile(paths.freeScenarioPath);
+  updateScenarioTitle("Desktop Smoke Free Draft Recovery");
+  assertAutomation(dirty, "Draft-recovery setup should leave the scenario dirty.");
+  const onDiskFreeText = await readTextFile(paths.freeScenarioPath);
+  assertAutomation(
+    savedFreeText === onDiskFreeText &&
+      !onDiskFreeText.includes("Desktop Smoke Free Draft Recovery"),
+    "Unsaved free-coordinate recovery change leaked to disk before the crash phase."
+  );
+
+  await writeDesktopAutomationResult({
+    ok: true,
+    summary: "Desktop smoke phase 1 reached the crash checkpoint.",
+    details: {
+      title: scenario.title,
+      currentFilePath: getCurrentFilePath(),
+      dirty,
+      statusMessage,
+      squareScenarioExists: await exists(paths.squareScenarioPath),
+      squareCopyExists: await exists(paths.squareCopyPath),
+      hexScenarioExists: await exists(paths.hexScenarioPath),
+      freeScenarioExists: await exists(paths.freeScenarioPath),
+      exportExists: await exists(paths.exportPath)
+    }
+  });
+
+  await closeDesktopAutomationWindow();
+}
+
+async function runDesktopSmokePhase2(): Promise<void> {
+  const automation = await getDesktopAutomationSession();
+  if (!automation) {
+    return;
+  }
+
+  const { freeScenarioPath } = automation.spec.paths;
+  assertAutomation(Boolean(recoveredSessionDraft), "Phase 2 should recover the phase 1 draft.");
+  assertAutomation(
+    statusMessage === "Recovered session draft",
+    "Phase 2 did not report draft recovery."
+  );
+  assertAutomation(
+    scenario.title === "Desktop Smoke Free Draft Recovery" && dirty,
+    "Recovered phase 1 draft state was not restored."
+  );
+  assertAutomation(
+    getCurrentFilePath() === freeScenarioPath,
+    "Recovered draft did not point at the saved free-coordinate scenario."
+  );
+
+  const onDiskFreeText = await readTextFile(freeScenarioPath);
+  assertAutomation(
+    !onDiskFreeText.includes("Desktop Smoke Free Draft Recovery"),
+    "Recovered draft changes should still be absent from disk before an explicit save."
+  );
+}
+
+async function saveCurrentScenarioForAutomation(): Promise<void> {
+  applyStorageResult(await saveScenarioFile(scenario));
+  await waitForAutomationFrame();
+  assertAutomation(statusMessage.startsWith("Saved "), "Save did not report success.");
+}
+
+async function saveScenarioAsForAutomation(): Promise<void> {
+  applyStorageResult(await saveScenarioFileAs(scenario));
+  await waitForAutomationFrame();
+  assertAutomation(statusMessage.startsWith("Saved "), "Save As did not report success.");
+}
+
+async function exportRuntimeForAutomation(): Promise<void> {
+  applyStorageResult(await exportScenarioBrowserRuntime(scenario));
+  await waitForAutomationFrame();
+  assertAutomation(statusMessage.startsWith("Exported runtime "), "Runtime export failed.");
+}
+
+async function closeDesktopAutomationWindow(): Promise<void> {
+  await recordDesktopAutomationEvent("desktop automation closing window");
+  await getCurrentWindow().close();
+}
+
+async function openCurrentScenarioForAutomation(): Promise<void> {
+  applyStorageResult(await openScenarioFile(document.createElement("input")));
+  await waitForAutomationFrame();
+  assertAutomation(
+    statusMessage.startsWith("Opened "),
+    "Opening a saved scenario did not report success."
+  );
+}
+
+function assertAutomation(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+async function waitForAutomationCondition(
+  condition: () => boolean,
+  timeoutMs = 3000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (condition()) {
+      return;
+    }
+
+    await waitForAutomationFrame();
+  }
+
+  throw new Error("Timed out waiting for a desktop automation condition.");
+}
+
+async function waitForAutomationFrame(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
 }
 
 function cloneScenarioValue(value: Scenario): Scenario {

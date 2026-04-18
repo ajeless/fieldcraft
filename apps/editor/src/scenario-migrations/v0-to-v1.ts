@@ -1,4 +1,6 @@
-import { schemaIdentifier, currentSchemaVersion } from "../scenario";
+import { schemaIdentifier } from "../scenario";
+
+const v1SchemaVersion = 1;
 
 export type MigrateV0ToV1Options = {
   generateId: () => string;
@@ -18,7 +20,7 @@ export function migrateV0ToV1(
   const output: Record<string, unknown> = {
     ...input,
     schema: schemaIdentifier,
-    schemaVersion: currentSchemaVersion,
+    schemaVersion: v1SchemaVersion,
     pieces: migratedPieces
   };
 

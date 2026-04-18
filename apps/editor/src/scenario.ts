@@ -4,7 +4,7 @@ import {
 } from "./spatial";
 
 export const schemaIdentifier = "fieldcraft.scenario";
-export const currentSchemaVersion = 1;
+export const currentSchemaVersion = 2;
 
 export const maxTileGridSize = 64;
 export const maxFreeCoordinateBoardSize = 100000;
@@ -35,6 +35,7 @@ export type ScenarioPiece = {
   side: "neutral";
   x: number;
   y: number;
+  imageAssetId?: string;
 };
 
 export type ScenarioTileSpaceType = "square-grid" | "hex-grid";
@@ -344,22 +345,41 @@ function validateUniquePieceIds(scenario: Scenario): void {
 
 function validateScenarioAssetReferences(scenario: Scenario): void {
   const backgroundImageAssetId = scenario.space?.background.imageAssetId;
-  if (!backgroundImageAssetId) {
-    return;
-  }
-
-  const backgroundImageAsset = scenario.assets.find(
-    (asset) => asset.id === backgroundImageAssetId
-  );
-
-  if (!backgroundImageAsset) {
-    throw new Error(
-      `Scenario background references missing image asset ID: ${backgroundImageAssetId}`
+  if (backgroundImageAssetId) {
+    const backgroundImageAsset = scenario.assets.find(
+      (asset) => asset.id === backgroundImageAssetId
     );
+
+    if (!backgroundImageAsset) {
+      throw new Error(
+        `Scenario background references missing image asset ID: ${backgroundImageAssetId}`
+      );
+    }
+
+    if (backgroundImageAsset.kind !== "image") {
+      throw new Error(
+        `Scenario background asset must be an image: ${backgroundImageAssetId}`
+      );
+    }
   }
 
-  if (backgroundImageAsset.kind !== "image") {
-    throw new Error(`Scenario background asset must be an image: ${backgroundImageAssetId}`);
+  for (const piece of scenario.pieces) {
+    if (!piece.imageAssetId) {
+      continue;
+    }
+
+    const imageAsset = scenario.assets.find((asset) => asset.id === piece.imageAssetId);
+    if (!imageAsset) {
+      throw new Error(
+        `Marker ${piece.id} references missing image asset ID: ${piece.imageAssetId}`
+      );
+    }
+
+    if (imageAsset.kind !== "image") {
+      throw new Error(
+        `Marker ${piece.id} image asset must be an image: ${piece.imageAssetId}`
+      );
+    }
   }
 }
 
@@ -423,6 +443,12 @@ function parseScenarioPieces(
 
     const x = piece.x;
     const y = piece.y;
+    const imageAssetId =
+      piece.imageAssetId === undefined ? undefined : parseScenarioAssetId(piece.imageAssetId);
+
+    if (piece.imageAssetId !== undefined && !imageAssetId) {
+      return null;
+    }
 
     if (isTileScenarioSpace(space)) {
       if (
@@ -453,7 +479,8 @@ function parseScenarioPieces(
       kind: "marker",
       side: "neutral",
       x,
-      y
+      y,
+      ...(imageAssetId ? { imageAssetId } : {})
     });
   }
 
@@ -745,4 +772,11 @@ export function getScenarioAssetById(
 
 export function getScenarioBackgroundImageAsset(scenario: Scenario): ScenarioAsset | null {
   return getScenarioAssetById(scenario, scenario.space?.background.imageAssetId);
+}
+
+export function getScenarioPieceImageAsset(
+  scenario: Scenario,
+  piece: ScenarioPiece
+): ScenarioAsset | null {
+  return getScenarioAssetById(scenario, piece.imageAssetId);
 }

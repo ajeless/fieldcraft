@@ -4,11 +4,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
-import { isProcessRunning, readState, repoRoot } from "./process-utils.mjs";
+import {
+  checkPort,
+  pnpmCommand,
+  repoRoot,
+  stopProcessTree,
+  waitForUrl
+} from "./process-utils.mjs";
 
-const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:5173/";
-const startScript = path.join(repoRoot, "scripts", "start.mjs");
-const stopScript = path.join(repoRoot, "scripts", "stop.mjs");
+const browserSmokePort = Number.parseInt(process.env.FIELDCRAFT_BROWSER_SMOKE_PORT ?? "5182", 10);
+const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${browserSmokePort}/`;
 const smokeDir = path.join(repoRoot, ".fieldcraft", "smoke");
 const menuOpenFixturePath = path.join(smokeDir, "menu-open-scenario.fieldcraft.json");
 const oversizedGridFixturePath = path.join(
@@ -20,6 +25,7 @@ const duplicateMarkerIdFixturePath = path.join(
   "duplicate-marker-id-scenario.fieldcraft.json"
 );
 const legacyV0FixturePath = path.join(smokeDir, "legacy-v0-scenario.fieldcraft.json");
+const currentSchemaVersion = 2;
 
 fs.mkdirSync(smokeDir, { recursive: true });
 fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
@@ -27,15 +33,7 @@ fs.writeFileSync(oversizedGridFixturePath, createOversizedGridFixture(), "utf8")
 fs.writeFileSync(duplicateMarkerIdFixturePath, createDuplicateMarkerIdFixture(), "utf8");
 fs.writeFileSync(legacyV0FixturePath, createLegacyV0Fixture(), "utf8");
 
-const before = await readState();
-const beforePid = before?.pid;
-const beforeWasRunning = beforePid ? isProcessRunning(beforePid) : false;
-
-await runNodeScript(startScript);
-
-const after = await readState();
-const afterPid = after?.pid;
-const startedForSmoke = Boolean(afterPid && (!beforeWasRunning || afterPid !== beforePid));
+const frontend = process.env.PLAYWRIGHT_BASE_URL ? null : await startFrontendServer();
 
 let browser;
 
@@ -229,7 +227,7 @@ try {
   const upgradedScenario = JSON.parse(upgradedScenarioText);
   if (
     upgradedScenario.schema !== "fieldcraft.scenario" ||
-    upgradedScenario.schemaVersion !== 1
+    upgradedScenario.schemaVersion !== currentSchemaVersion
   ) {
     throw new Error(
       `Saved upgraded scenario has wrong schema fields: ${upgradedScenario.schema} / ${upgradedScenario.schemaVersion}`
@@ -446,12 +444,12 @@ try {
       {
         id: "test-board-image",
         kind: "image",
-        path: "assets/checkerboard-32.png"
+        path: "export-fixtures/checkerboard-32.png"
       },
       {
         id: "test-tone",
         kind: "audio",
-        path: "assets/test-tone-440hz.wav"
+        path: "export-fixtures/test-tone-440hz.wav"
       }
     ];
     scenario.space.background.imageAssetId = "test-board-image";
@@ -474,6 +472,24 @@ try {
   await page.click('[data-testid="reset-source"]');
   await expectStatusLine(page, "Source reset to editor state");
   await expectSourceEditorErrorState(page, false);
+  await clickTile(page, "board-surface", 0, 0);
+  await expectSelectedMarker(page, {
+    position: "Tile 0, 0"
+  });
+  const squareImageMarkerId = await page.locator('[data-testid="selected-marker-id"]').textContent();
+  if (!squareImageMarkerId) {
+    throw new Error("Could not read the selected square marker id.");
+  }
+  await page.selectOption('[data-testid="selected-marker-image-select"]', "test-board-image");
+  await expectStatusLine(page, "Marker image updated");
+  await page.waitForFunction(
+    (pieceId) => {
+      const states =
+        document.querySelector('[data-testid="board-surface"]')?.dataset.markerImageStates ?? "";
+      return states.split(" ").includes(`${pieceId}:ready`);
+    },
+    squareImageMarkerId
+  );
 
   await page.click('[data-testid="save-scenario"]');
   await expectStatusLine(page, "Scenario saved");
@@ -481,7 +497,11 @@ try {
   const savedScenario = await page.evaluate(() =>
     window.localStorage.getItem("fieldcraft:last-scenario")
   );
-  if (!savedScenario || !savedScenario.includes('"schema": "fieldcraft.scenario"') || !savedScenario.includes('"schemaVersion": 1')) {
+  if (
+    !savedScenario ||
+    !savedScenario.includes('"schema": "fieldcraft.scenario"') ||
+    !savedScenario.includes(`"schemaVersion": ${currentSchemaVersion}`)
+  ) {
     throw new Error("Scenario was not saved to browser storage.");
   }
   const parsedScenario = JSON.parse(savedScenario);
@@ -509,6 +529,9 @@ try {
     parsedScenario.pieces.length !== 4 ||
     parsedScenario.pieces.filter((piece) => piece.x === 32 && piece.y === 32).length !== 3 ||
     !parsedScenario.pieces.some((piece) => piece.x === 0 && piece.y === 0) ||
+    !parsedScenario.pieces.some(
+      (piece) => piece.id === squareImageMarkerId && piece.imageAssetId === "test-board-image"
+    ) ||
     !parsedScenario.pieces.some((piece) => piece.label === "source-stack-marker") ||
     parsedScenario.pieces.some((piece) => piece.id === deletedStackedMarkerId) ||
     parsedScenario.pieces.some((piece) => piece.x === 63 && piece.y === 63)
@@ -571,6 +594,15 @@ try {
   await waitForMarker(page, "runtime-board-surface", "32-32");
   await expectMarkerPositionOccurrences(page, "runtime-board-surface", "32-32", 3);
   await waitForMarker(page, "runtime-board-surface", "0-0");
+  await page.waitForFunction(
+    (pieceId) => {
+      const states =
+        document.querySelector('[data-testid="runtime-board-surface"]')?.dataset
+          .markerImageStates ?? "";
+      return states.split(" ").includes(`${pieceId}:ready`);
+    },
+    squareImageMarkerId
+  );
   await expectMarkerMissing(page, "runtime-board-surface", "63-63");
   await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
@@ -589,6 +621,14 @@ try {
       }
     ];
     scenario.space.background.imageAssetId = "export-board-image";
+    scenario.pieces = scenario.pieces.map((piece) =>
+      piece.id === squareImageMarkerId
+        ? {
+            ...piece,
+            imageAssetId: "export-board-image"
+          }
+        : piece
+    );
     return scenario;
   });
   await page.click('[data-testid="apply-source"]');
@@ -916,34 +956,54 @@ try {
     await browser.close();
   }
 
-  if (startedForSmoke) {
-    await runNodeScript(stopScript);
+  if (frontend) {
+    await stopProcessTree(frontend.pid);
   }
 }
 
-function runNodeScript(scriptPath) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [scriptPath], {
-      cwd: repoRoot,
-      stdio: "inherit"
-    });
+async function startFrontendServer() {
+  const smokeUrl = new URL(baseUrl);
+  const port = Number.parseInt(smokeUrl.port, 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid browser smoke port: ${smokeUrl.port}`);
+  }
 
-    child.once("error", reject);
-    child.once("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${path.basename(scriptPath)} exited with code ${code}`));
-      }
-    });
+  const portCheck = await checkPort(smokeUrl.hostname, port);
+  if (!portCheck.available) {
+    throw new Error(
+      `Browser smoke port ${port} is unavailable: ${portCheck.message ?? "already in use"}`
+    );
+  }
+
+  const frontend = pnpmCommand([
+    "--dir",
+    "apps/editor",
+    "exec",
+    "vite",
+    "--host",
+    smokeUrl.hostname,
+    "--port",
+    String(port),
+    "--strictPort"
+  ]);
+  const child = spawn(frontend.command, frontend.args, {
+    cwd: repoRoot,
+    detached: process.platform !== "win32",
+    shell: process.platform === "win32",
+    stdio: "ignore"
   });
+
+  await waitForUrl(smokeUrl.href, 20000);
+  return {
+    pid: child.pid
+  };
 }
 
 function createMenuOpenFixture() {
   return `${JSON.stringify(
     {
       schema: "fieldcraft.scenario",
-      schemaVersion: 1,
+      schemaVersion: currentSchemaVersion,
       title: "Menu Open Fixture",
       space: {
         type: "square-grid",
@@ -986,7 +1046,7 @@ function createOversizedGridFixture() {
   return `${JSON.stringify(
     {
       schema: "fieldcraft.scenario",
-      schemaVersion: 1,
+      schemaVersion: currentSchemaVersion,
       title: "Oversized Grid Fixture",
       space: {
         type: "square-grid",
@@ -1020,7 +1080,7 @@ function createDuplicateMarkerIdFixture() {
   return `${JSON.stringify(
     {
       schema: "fieldcraft.scenario",
-      schemaVersion: 1,
+      schemaVersion: currentSchemaVersion,
       title: "Duplicate Marker Id Fixture",
       space: {
         type: "square-grid",

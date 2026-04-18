@@ -2,7 +2,7 @@ const homePadding = 40;
 const minZoom = 0.04;
 const maxZoom = 5;
 const resizeRecoveryVisibleRatio = 0.08;
-const backgroundImageCache = new Map();
+const imageResourceCache = new Map();
 
 const app = document.querySelector("#app");
 const bundleElement = document.querySelector("#fieldcraft-runtime-export-bundle");
@@ -85,8 +85,9 @@ function createBoardViewport() {
   const geometry = createGridGeometry(space);
   const backgroundImageUrl = resolveBackgroundImageUrl();
   const backgroundImageResource = backgroundImageUrl
-    ? getBackgroundImageResource(backgroundImageUrl)
+    ? getImageResource(backgroundImageUrl)
     : null;
+  const pieceImageResources = createPieceImageResourceMap(scenario.pieces);
   const state = {
     boardKey: null,
     transform: null,
@@ -186,6 +187,9 @@ function createBoardViewport() {
     draw();
   };
   backgroundImageResource?.listeners.add(handleBackgroundImageUpdate);
+  for (const resource of pieceImageResources.values()) {
+    resource.listeners.add(handleBackgroundImageUpdate);
+  }
 
   const cleanupObserver = new MutationObserver(() => {
     if (!viewport.isConnected) {
@@ -193,6 +197,9 @@ function createBoardViewport() {
       cleanupObserver.disconnect();
       window.removeEventListener("resize", handleWindowResize);
       backgroundImageResource?.listeners.delete(handleBackgroundImageUpdate);
+      for (const resource of pieceImageResources.values()) {
+        resource.listeners.delete(handleBackgroundImageUpdate);
+      }
     }
   });
   cleanupObserver.observe(document.body, {
@@ -264,11 +271,19 @@ function createBoardViewport() {
     drawMarkers(context, geometry, scenario.pieces, {
       scale: transform.scale,
       markerFill,
-      markerRing
+      markerRing,
+      pieceImageResources
     });
     context.restore();
 
-    updateSurfaceData(surface, geometry, transform, scenario.pieces);
+    updateSurfaceData(
+      surface,
+      geometry,
+      transform,
+      scenario.pieces,
+      backgroundImageResource,
+      pieceImageResources
+    );
     surface.dataset.backgroundImageStatus = backgroundImageResource?.status ?? "none";
     zoomLabel.textContent = `${Math.round(transform.scale * 100)}%`;
   }
@@ -420,8 +435,8 @@ function createFreeCoordinateGeometry(space) {
   };
 }
 
-function getBackgroundImageResource(url) {
-  const cached = backgroundImageCache.get(url);
+function getImageResource(url) {
+  const cached = imageResourceCache.get(url);
   if (cached) {
     return cached;
   }
@@ -447,8 +462,23 @@ function getBackgroundImageResource(url) {
     notifyListeners();
   });
   image.src = url;
-  backgroundImageCache.set(url, resource);
+  imageResourceCache.set(url, resource);
   return resource;
+}
+
+function createPieceImageResourceMap(pieces) {
+  const resources = new Map();
+
+  for (const piece of pieces) {
+    const imageUrl = resolvePieceImageUrl(piece);
+    if (!imageUrl) {
+      continue;
+    }
+
+    resources.set(piece.id, getImageResource(imageUrl));
+  }
+
+  return resources;
 }
 
 function createPointerPanController(options) {
@@ -651,18 +681,46 @@ function drawMarkers(context, geometry, pieces, options) {
     const center = layout?.center ?? geometry.pieceToWorldPoint(piece);
     const radius = layout?.radius ?? baseRadius;
 
-    context.beginPath();
-    context.arc(center.x, center.y, radius, 0, Math.PI * 2);
-    context.fillStyle = options.markerFill;
-    context.fill();
-    context.lineWidth = Math.max(2 / options.scale, 1.5);
-    context.strokeStyle = options.markerRing;
-    context.stroke();
-    context.beginPath();
-    context.arc(center.x, center.y, radius * 0.58, 0, Math.PI * 2);
-    context.strokeStyle = "rgba(255, 255, 255, 0.58)";
-    context.stroke();
+    const imageResource = options.pieceImageResources.get(piece.id);
+    if (imageResource?.status === "ready") {
+      drawMarkerImage(context, center, radius, imageResource.image);
+      context.beginPath();
+      context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      context.lineWidth = Math.max(2 / options.scale, 1.5);
+      context.strokeStyle = options.markerRing;
+      context.stroke();
+      context.beginPath();
+      context.arc(center.x, center.y, radius * 0.84, 0, Math.PI * 2);
+      context.strokeStyle = "rgba(255, 255, 255, 0.34)";
+      context.stroke();
+      continue;
+    }
+
+    drawDefaultMarker(context, center, radius, options.scale, options.markerFill, options.markerRing);
   }
+}
+
+function drawDefaultMarker(context, center, radius, scale, markerFill, markerRing) {
+  context.beginPath();
+  context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  context.fillStyle = markerFill;
+  context.fill();
+  context.lineWidth = Math.max(2 / scale, 1.5);
+  context.strokeStyle = markerRing;
+  context.stroke();
+  context.beginPath();
+  context.arc(center.x, center.y, radius * 0.58, 0, Math.PI * 2);
+  context.strokeStyle = "rgba(255, 255, 255, 0.58)";
+  context.stroke();
+}
+
+function drawMarkerImage(context, center, radius, image) {
+  context.save();
+  context.beginPath();
+  context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  context.clip();
+  context.drawImage(image, center.x - radius, center.y - radius, radius * 2, radius * 2);
+  context.restore();
 }
 
 function createPieceRenderLayouts(pieces, geometry, scale) {
@@ -729,12 +787,20 @@ function syncCanvasSize(canvas, surface) {
   return { width, height };
 }
 
-function updateSurfaceData(surface, geometry, transform, pieces) {
+function updateSurfaceData(
+  surface,
+  geometry,
+  transform,
+  pieces,
+  backgroundImageResource,
+  pieceImageResources
+) {
   surface.dataset.viewReady = "true";
   surface.dataset.viewScale = String(transform.scale);
   surface.dataset.viewRotation = String(transform.rotation);
   surface.dataset.viewPanX = String(transform.panX);
   surface.dataset.viewPanY = String(transform.panY);
+  surface.dataset.backgroundImageStatus = backgroundImageResource?.status ?? "none";
   surface.dataset.boardSpaceType = geometry.spaceType;
   surface.dataset.boardBoundsX = String(geometry.bounds.x);
   surface.dataset.boardBoundsY = String(geometry.bounds.y);
@@ -748,6 +814,20 @@ function updateSurfaceData(surface, geometry, transform, pieces) {
     surface.dataset.boardRows = String(geometry.rows);
   }
   surface.dataset.markerPositions = getMarkerPositions(pieces, geometry.spaceType);
+  const markerImageStates = getMarkerImageStates(pieces, pieceImageResources);
+  if (markerImageStates) {
+    surface.dataset.markerImageStates = markerImageStates;
+  } else {
+    delete surface.dataset.markerImageStates;
+  }
+}
+
+function getMarkerImageStates(pieces, pieceImageResources) {
+  return pieces
+    .filter((piece) => piece.imageAssetId)
+    .map((piece) => `${piece.id}:${pieceImageResources.get(piece.id)?.status ?? "missing"}`)
+    .sort((left, right) => left.localeCompare(right))
+    .join(" ");
 }
 
 function getMarkerPositions(pieces, spaceType) {
@@ -892,6 +972,15 @@ function resolveBackgroundImageUrl() {
   return bundledAssets[backgroundAsset.path]?.dataUrl ?? null;
 }
 
+function resolvePieceImageUrl(piece) {
+  const imageAsset = getPieceImageAsset(piece);
+  if (!imageAsset) {
+    return null;
+  }
+
+  return bundledAssets[imageAsset.path]?.dataUrl ?? null;
+}
+
 function getBackgroundImageAsset(scenarioValue) {
   const backgroundImageAssetId = scenarioValue?.space?.background?.imageAssetId;
   if (!backgroundImageAssetId) {
@@ -899,6 +988,14 @@ function getBackgroundImageAsset(scenarioValue) {
   }
 
   return scenarioValue.assets.find((asset) => asset.id === backgroundImageAssetId) ?? null;
+}
+
+function getPieceImageAsset(piece) {
+  if (!piece?.imageAssetId) {
+    return null;
+  }
+
+  return scenario.assets.find((asset) => asset.id === piece.imageAssetId) ?? null;
 }
 
 function getBackgroundImagePath() {
