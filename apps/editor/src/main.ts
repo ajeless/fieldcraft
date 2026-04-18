@@ -1900,10 +1900,12 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
       previousBoardKey !== getScenarioBoardKey(scenario) ||
       shouldClearUndoHistory;
   }
-  if (result.scenario && result.dirty === false) {
+  if (result.scenario) {
     markScenarioClean(result.scenario);
   }
-  if (result.dirty !== undefined) {
+  if (result.migrated) {
+    dirty = true;
+  } else if (result.dirty !== undefined) {
     dirty = result.dirty;
   }
   if (shouldClearUndoHistory) {
