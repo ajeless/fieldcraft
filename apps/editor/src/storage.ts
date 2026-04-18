@@ -14,15 +14,16 @@ import {
   type Scenario,
   type ScenarioAsset,
   type ScenarioAssetKind,
-  parseScenario,
   prepareScenarioForSave,
   scenarioStorageKey,
   scenarioToJson
 } from "./scenario";
+import { loadScenarioWithMeta } from "./scenario-migrations";
 
 export type ScenarioStorageResult = {
   scenario?: Scenario;
   dirty?: boolean;
+  migrated?: boolean;
   statusMessage: string;
 };
 
@@ -118,24 +119,26 @@ export async function openScenarioFile(
   }
 
   const contents = await readTextFile(selectedPath);
-  const scenario = parseScenario(contents);
+  const { scenario, migrated } = loadScenarioWithMeta(contents);
   currentFilePath = selectedPath;
   rememberScenario(scenario);
 
   return {
     scenario,
-    dirty: false,
+    dirty: migrated,
+    migrated,
     statusMessage: `Opened ${getFileName(selectedPath)}`
   };
 }
 
 export async function openBrowserScenarioFile(file: File): Promise<ScenarioStorageResult> {
-  const scenario = parseScenario(await file.text());
+  const { scenario, migrated } = loadScenarioWithMeta(await file.text());
   currentFilePath = null;
 
   return {
     scenario,
-    dirty: false,
+    dirty: migrated,
+    migrated,
     statusMessage: `Loaded ${file.name}`
   };
 }

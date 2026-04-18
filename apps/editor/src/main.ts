@@ -44,11 +44,11 @@ import {
   maxFreeCoordinateBoardSize,
   maxTileGridSize,
   parseSupportedFreeCoordinateBoardSize,
-  parseScenario,
   parseSupportedTileGridSize,
   parseSupportedTileSize,
   scenarioToJson
 } from "./scenario";
+import { loadScenarioWithMeta } from "./scenario-migrations";
 import {
   type ScenarioStorageResult,
   canImportScenarioAssets,
@@ -1749,18 +1749,21 @@ function clearBoardBackgroundImageAsset(): void {
 
 function applyScenarioSource(): void {
   try {
-    const parsedScenario = parseScenario(sourceDraft);
+    const { scenario: parsedScenario, migrated } = loadScenarioWithMeta(sourceDraft);
     const appliedSource = scenarioToJson(parsedScenario);
+    const statusText = migrated
+      ? "Source applied and upgraded to current format"
+      : "Source applied";
 
     if (scenariosEqual(parsedScenario, scenario)) {
       sourceDraft = appliedSource;
       clearSourceEditorError();
-      statusMessage = "Source applied";
+      statusMessage = statusText;
       render();
       return;
     }
 
-    commitUndoableChange("source apply", "Source applied", () => {
+    commitUndoableChange("source apply", statusText, () => {
       scenario = parsedScenario;
       sourceDraft = appliedSource;
       clearSourceEditorError();
@@ -1909,7 +1912,10 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
   if (shouldResetViewport) {
     resetBoardViewportStates();
   }
-  statusMessage = result.statusMessage;
+  statusMessage =
+    result.migrated && result.scenario
+      ? `${result.statusMessage} (upgraded to current format)`
+      : result.statusMessage;
   render();
 }
 
@@ -2182,7 +2188,9 @@ function parseStoredEditorSessionDraft(value: unknown): StoredEditorSessionDraft
   }
 
   try {
-    const parsedScenario = parseScenario(JSON.stringify(value.scenario));
+    const { scenario: parsedScenario, migrated } = loadScenarioWithMeta(
+      JSON.stringify(value.scenario)
+    );
 
     return {
       version: 2,
@@ -2190,7 +2198,7 @@ function parseStoredEditorSessionDraft(value: unknown): StoredEditorSessionDraft
       boardSetupDraft:
         parseStoredBoardSetupDraft(value.boardSetupDraft) ??
         createDefaultBoardSetupDraft(getActiveTheme()),
-      dirty: value.dirty,
+      dirty: value.dirty || migrated,
       currentFilePath: typeof value.currentFilePath === "string" ? value.currentFilePath : null,
       sourceDraft:
         typeof value.sourceDraft === "string"
