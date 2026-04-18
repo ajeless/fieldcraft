@@ -100,7 +100,7 @@ These are actively-rejected directions, not deferred work. Revisit by writing a 
 
 - Tick-based or event-driven time models (see decision `005`).
 - Embedded scripting (Python, Lua, etc.) or pure structured-data rules without an expression language (see decision `006`).
-- Full browser/desktop editor parity (see decision `009`).
+- Full browser/desktop editor parity (see decisions `009` and `010`). Browser authoring polish aimed at a hypothetical browser-authoring user is out of scope; the browser editor exists for agent testing and as the export-runtime mirror.
 - Server-hosted or multiplayer game hosting driving current editor architecture.
 - An editor plugin system before at least two real editor workflows justify it.
 
