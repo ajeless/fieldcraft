@@ -63,3 +63,24 @@ The browser editor is kept as a constrained development, testing, review, and de
 Desktop-only capabilities such as native file handling, project/package management, and export/packaging may remain desktop-first without being blocked on equivalent browser support.
 
 Rationale: the browser editor is valuable for fast iteration, smoke testing, and agent-assisted development, but browser sandbox limits should not drive or narrow the main authoring architecture.
+
+See decision `010` for the sharpened purpose of the browser editor surface.
+
+## 010 — Browser editor is an agent-testing and export-runtime surface
+
+The browser editor is maintained primarily for two purposes:
+
+1. As a compatibility surface that coding agents can drive via headless browser automation (Playwright, WebDriver) to validate editor behavior.
+2. As the authoring mirror for the browser runtime export target (decision `007`).
+
+It is not maintained as a human-facing browser authoring tool. Human authoring is desktop-first (decision `009`).
+
+Rationale: reliable agent automation of the Tauri desktop shell — native file dialogs, IPC, OS-level input — is not a cheap path today. The browser is. Naming this purpose explicitly prevents the browser editor from accumulating parity debt and gives clear guidance on when to expand or shrink its feature surface.
+
+Consequences:
+
+- The browser editor should retain the flows agents need to exercise end to end: board creation, marker placement and selection, undo/redo, source editing, save/open through the browser fallback, runtime view, and export. Regressions in these flows are release-blocking.
+- Desktop-only capabilities — native file dialogs, package-local asset import, packaging, and any future desktop-first IPC — may remain desktop-only without a browser fallback. Do not add browser approximations unless an agent test or the export runtime genuinely needs them.
+- Browser smoke coverage is sized for agent-driven regression catching, not for human feature validation. It should grow when agents need to test new flows and contract when a flow is covered by a better layer (unit tests on pure-logic modules, desktop manual smoke).
+- Do not invest in browser-authoring polish or UX for its own sake. Polish that happens to serve agent testability or the export runtime is fine; polish aimed at a hypothetical browser-authoring user is not.
+- If native desktop automation ever becomes cheap enough (for example via `tauri-driver` with manageable setup), revisit this decision. Until then, the browser-as-agent-surface is load-bearing.
