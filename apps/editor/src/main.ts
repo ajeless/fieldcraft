@@ -49,6 +49,7 @@ import {
   scenarioToJson
 } from "./scenario";
 import { loadScenarioWithMeta } from "./scenario-migrations";
+import { generatePieceId } from "./scenario-migrations/identity";
 import {
   type ScenarioStorageResult,
   canImportScenarioAssets,
@@ -1446,7 +1447,8 @@ function placeDefaultMarker(x: number, y: number): void {
     return;
   }
 
-  const markerId = createMarkerId(x, y, scenario.pieces);
+  const existingIds = new Set(scenario.pieces.map((piece) => piece.id));
+  const markerId = generatePieceId(existingIds);
 
   commitUndoableChange("marker placement", "Marker placed", () => {
     scenario = {
@@ -2739,28 +2741,6 @@ function isScenarioSpaceType(value: unknown): value is ScenarioSpaceType {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function createMarkerId(x: number, y: number, pieces: Scenario["pieces"]): string {
-  const baseId =
-    Number.isInteger(x) && Number.isInteger(y)
-      ? `marker-${x}-${y}`
-      : `marker-${formatCoordinateForId(x)}-${formatCoordinateForId(y)}`;
-
-  if (!pieces.some((piece) => piece.id === baseId)) {
-    return baseId;
-  }
-
-  let suffix = 2;
-  while (pieces.some((piece) => piece.id === `${baseId}-${suffix}`)) {
-    suffix += 1;
-  }
-
-  return `${baseId}-${suffix}`;
-}
-
-function formatCoordinateForId(value: number): string {
-  return String(value).replace("-", "neg").replace(".", "p");
 }
 
 function formatCoordinate(value: number): string {
