@@ -1,8 +1,9 @@
 import { parseScenario, schemaIdentifier, type Scenario } from "../scenario";
 import { generatePieceId } from "./identity";
 import { migrateV0ToV1 } from "./v0-to-v1";
+import { migrateV1ToV2 } from "./v1-to-v2";
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 type MigrationStep = {
   from: number;
@@ -24,6 +25,11 @@ const migrations: readonly MigrationStep[] = [
         }
       });
     }
+  },
+  {
+    from: 1,
+    to: 2,
+    migrate: migrateV1ToV2
   }
 ];
 
@@ -83,7 +89,9 @@ export function loadScenarioWithMeta(text: string): {
   } catch (error) {
     throw new ScenarioLoadError(
       "invalid-payload",
-      error instanceof Error ? error.message : "Payload failed v1 validation."
+      error instanceof Error
+        ? error.message
+        : `Payload failed v${CURRENT_SCHEMA_VERSION} validation.`
     );
   }
   return { scenario, migrated };

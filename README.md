@@ -8,7 +8,7 @@ Fieldcraft aims to be an editor-first environment for designing, play-testing, a
 
 ## Status
 
-The editor can author small tactical scenarios end to end: create square, pointy-top hex, and free-coordinate boards; place, select, and delete colocated markers; save, open, and recover scenario JSON; edit that JSON inline with validation; import package-local image/audio assets on desktop; launch a read-only runtime view; and export a self-contained browser runtime with bundled assets.
+The editor can author small tactical scenarios end to end: create square, pointy-top hex, and free-coordinate boards; place, select, and delete colocated markers; save, open, and recover scenario JSON; edit that JSON inline with validation; import package-local image/audio assets on desktop; assign imported image artwork to markers; launch a read-only runtime view; and export a self-contained browser runtime with bundled assets. Automated smoke now covers both the browser support surface and the desktop dev-shell semantics.
 
 The desktop editor is the authoritative authoring surface (decision `009`). The browser editor is a constrained development, testing, and demo surface, not a parity promise.
 
@@ -151,6 +151,12 @@ Run the desktop preflight first:
 corepack pnpm desktop:check
 ```
 
+Run the automated desktop semantic smoke:
+
+```sh
+corepack pnpm test:desktop:smoke
+```
+
 Run the Tauri desktop shell for development:
 
 ```sh
@@ -159,9 +165,12 @@ corepack pnpm desktop
 
 The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, starts or reuses the tracked browser dev server, launches the Tauri development shell, and stops only the server it started.
 
-Desktop coverage is currently manual and release-significant per decision `009`. A passing browser smoke run does not replace native desktop verification. See `DESKTOP-TESTING.md` for the checklist.
+Desktop coverage now splits in two layers:
 
-`DESKTOP-TESTING.md` now includes a repeatable scratch-package flow, suggested filenames, and the local fixture assets to use for the release-significant pass.
+- `corepack pnpm test:desktop:smoke` automates the desktop semantic pass in the Tauri dev shell: save/open behavior, asset import/copying, `Save As`, runtime launch, export, and draft recovery.
+- `DESKTOP-TESTING.md` is the residual human-only checklist for native OS dialog presentation and packaged-build sanity.
+
+The smoke script writes reusable artifacts under `/tmp/fieldcraft-desktop-smoke/`, which the human-only pass can reuse when you want concrete files to open or save against.
 
 Manual desktop test flow:
 

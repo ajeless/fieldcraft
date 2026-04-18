@@ -6,13 +6,23 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Keep the editor visibly trustworthy while broader editor systems are still small. Today's baseline covers board setup across square, pointy-top hex, and free-coordinate models; permissive colocated marker placement, selection, and deletion; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a small command registry for file actions; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; a read-only in-app runtime view; browser runtime export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, `Save As` carrying assets forward); and the v1 scenario format with opaque piece ids, author-facing labels, and a chained migration registry that upgrades older files on load.
+Keep the editor visibly trustworthy while broader editor systems are still small. Today's baseline covers board setup across square, pointy-top hex, and free-coordinate models; permissive colocated marker placement, selection, and deletion; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a small command registry for file actions; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; a read-only in-app runtime view; browser runtime export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, `Save As` carrying assets forward); the v2 scenario format with opaque piece ids, author-facing labels, optional marker image refs, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
 
 The first asset slice behaves well enough to treat as baseline. Audio import is intentionally storage-only for now; playback wiring waits for a concrete runtime need.
 
-Automation still primarily exercises the browser support surface. Desktop-native behavior remains release-significant even when browser smoke is green, but the manual pass now has a documented preflight and scratch-package workflow in `DESKTOP-TESTING.md`.
+Automation now covers both the browser support surface and a scripted desktop-semantic pass in the Tauri dev shell. Native desktop dialogs and packaged-build sanity remain release-significant manual checks even when both automated suites are green; the residual human-only pass lives in `DESKTOP-TESTING.md`.
 
 ## Recently Completed Baseline Slices
+
+- `codex/desktop-semantic-smoke-automation`
+  - `corepack pnpm test:desktop:smoke` now runs a scripted Tauri dev-shell pass that covers save/open semantics, package-local asset import and copying, `Save As` asset carry-forward, runtime launch, browser-runtime export, and draft-recovery behavior.
+  - The desktop automation seam is intentionally narrow and test-only: canned dialog responses and file paths are injected only when the desktop smoke script launches the app with an explicit automation spec.
+  - `DESKTOP-TESTING.md` is now the residual human-only checklist for native dialog presentation and packaged-build sanity, rather than a full manual regression sweep.
+
+- `codex/asset-library-follow-ons`
+  - Imported image assets now have a second concrete authored use beyond board backgrounds: markers can reference image assets through the selection inspector and render that artwork in the editor board and the browser runtime.
+  - The browser support surface now resolves scenario asset refs when the paths are reachable from the app URL, which keeps marker-art and background-art scenarios testable without inventing browser-only import flows.
+  - Scenario files moved to `schemaVersion: 2` so the new marker image ref field is migration-aware instead of being silently droppable by older builds.
 
 - `codex/desktop-release-smoke`
   - The desktop smoke pass is now a concrete, repeatable release checklist rather than a loose reminder.
@@ -53,18 +63,13 @@ Current manual testing pressure points are captured in the branch sequence below
 
 ## Near-Term Branch Sequence
 
-1. `codex/asset-library-follow-ons`
-   - Add follow-on authoring pressure after the first package asset baseline proves itself in real scenarios.
-   - Treat token images, sprite sheets, board tile imagery, and richer media workflows as separate pressure from simple board backgrounds.
-   - Keep polish work such as better previewing, error surfacing, and image-fit controls out of this branch unless real use makes them trust-blocking.
-
-2. `codex/rules-expression-spike`
+1. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-3. `codex/unit-entity-model`
+2. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
@@ -72,22 +77,22 @@ Current manual testing pressure points are captured in the branch sequence below
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-4. `codex/editor-help-overlay`
+3. `codex/editor-help-overlay`
    - Add a lightweight, discoverable help surface for existing keyboard shortcuts and command affordances.
    - Prefer a single overlay or menu-tooltip pass over a per-surface help scheme.
    - Keep content data-driven so commands added later surface automatically.
 
-5. `codex/token-styling`
+4. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-6. `codex/rules-authoring-system`
+5. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
 
-7. `codex/standalone-runtime-export`
+6. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.
@@ -139,6 +144,8 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 
 ### Assets and author media
 
+- Sprite-sheet region authoring after single-image marker art proves the asset-reference shape and a concrete scenario needs sub-image addressing.
+- Board tile imagery after a concrete scenario needs per-cell art rather than full-board backgrounds plus marker artwork.
 - A built-in sprite creator, relevant after the first package asset baseline has real scenario pressure.
 - Audio playback wiring (import is storage-only today); pair with a concrete runtime workflow.
 - Asset licensing/attribution metadata once bundled-export scenarios ship third-party media.
@@ -184,6 +191,11 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 
 - Packaged binary distribution of the editor itself is future work beyond repo-based development.
 - Keep future network play possible, but do not let it drive current editor architecture.
+
+### Desktop automation
+
+- Full end-to-end desktop automation, including real native dialog interaction, OS-level window/input control, and packaged-binary coverage, once the tool stack is practical enough (`tauri-driver` or equivalent plus any required OS automation helpers).
+- Keep the current scripted desktop-semantic smoke as the intermediate layer until the true end-to-end path is cheap and reliable.
 
 ### Animation authoring
 
