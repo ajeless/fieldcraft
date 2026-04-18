@@ -10,9 +10,14 @@ Keep the editor visibly trustworthy while broader editor systems are still small
 
 The first asset slice behaves well enough to treat as baseline. Audio import is intentionally storage-only for now; playback wiring waits for a concrete runtime need.
 
-Automation still primarily exercises the browser support surface. Desktop-native behavior remains a manual testing pressure point and is release-significant even when browser smoke is green (decision `009`, checklist in `DESKTOP-TESTING.md`).
+Automation still primarily exercises the browser support surface. Desktop-native behavior remains release-significant even when browser smoke is green, but the manual pass now has a documented preflight and scratch-package workflow in `DESKTOP-TESTING.md`.
 
 ## Recently Completed Baseline Slices
+
+- `codex/desktop-release-smoke`
+  - The desktop smoke pass is now a concrete, repeatable release checklist rather than a loose reminder.
+  - `DESKTOP-TESTING.md` now spells out preflight, scratch workspace layout, fixture assets, suggested filenames, and the order of operations for native file handling, asset import, runtime launch, export, and draft recovery.
+  - Root tooling now exposes `corepack pnpm desktop:check` so the Tauri desktop-shell preflight can run without opening the app.
 
 - `codex/object-occupancy-semantics`
   - Tile markers can share a tile, and free-coordinate markers can share authored positions without rounded display precision becoming an occupancy rule.
@@ -48,23 +53,18 @@ Current manual testing pressure points are captured in the branch sequence below
 
 ## Near-Term Branch Sequence
 
-1. `codex/desktop-release-smoke`
-   - Operationalize decision `009` with a documented, repeatable manual desktop smoke pass.
-   - Keep the checklist in `DESKTOP-TESTING.md`; cover native open/save/save-as, asset import, `Save As` asset carry-forward, runtime launch, and browser export from the desktop shell.
-   - Consider a small scripted helper only if manual execution becomes the slowest part of releasing a slice.
-
-2. `codex/asset-library-follow-ons`
+1. `codex/asset-library-follow-ons`
    - Add follow-on authoring pressure after the first package asset baseline proves itself in real scenarios.
    - Treat token images, sprite sheets, board tile imagery, and richer media workflows as separate pressure from simple board backgrounds.
    - Keep polish work such as better previewing, error surfacing, and image-fit controls out of this branch unless real use makes them trust-blocking.
 
-3. `codex/rules-expression-spike`
+2. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-4. `codex/unit-entity-model`
+3. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
@@ -72,22 +72,22 @@ Current manual testing pressure points are captured in the branch sequence below
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-5. `codex/editor-help-overlay`
+4. `codex/editor-help-overlay`
    - Add a lightweight, discoverable help surface for existing keyboard shortcuts and command affordances.
    - Prefer a single overlay or menu-tooltip pass over a per-surface help scheme.
    - Keep content data-driven so commands added later surface automatically.
 
-6. `codex/token-styling`
+5. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-7. `codex/rules-authoring-system`
+6. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
 
-8. `codex/standalone-runtime-export`
+7. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.

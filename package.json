@@ -10,6 +10,7 @@
     "start": "node scripts/start.mjs",
     "stop": "node scripts/stop.mjs",
     "desktop": "node scripts/desktop-dev.mjs",
+    "desktop:check": "node scripts/desktop-dev.mjs --check",
     "doctor": "node scripts/doctor.mjs",
     "build": "corepack pnpm --dir apps/editor build",
     "dev": "corepack pnpm --dir apps/editor dev",

@@ -145,6 +145,12 @@ corepack pnpm test:unit
 
 Use the desktop flow when you need to verify native dialogs, restart behavior, package-local asset imports, or the Tauri shell itself. This is the authoritative authoring path and the path that corresponds to the standalone binary target.
 
+Run the desktop preflight first:
+
+```sh
+corepack pnpm desktop:check
+```
+
 Run the Tauri desktop shell for development:
 
 ```sh
@@ -154,6 +160,8 @@ corepack pnpm desktop
 The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, starts or reuses the tracked browser dev server, launches the Tauri development shell, and stops only the server it started.
 
 Desktop coverage is currently manual and release-significant per decision `009`. A passing browser smoke run does not replace native desktop verification. See `DESKTOP-TESTING.md` for the checklist.
+
+`DESKTOP-TESTING.md` now includes a repeatable scratch-package flow, suggested filenames, and the local fixture assets to use for the release-significant pass.
 
 Manual desktop test flow:
 
