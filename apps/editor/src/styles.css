@@ -1060,5 +1060,5 @@ button:disabled {
   border-radius: 3px;
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 11px;
-  color: var(--fg, inherit);
+  color: var(--ink);
 }
