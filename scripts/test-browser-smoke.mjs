@@ -19,11 +19,13 @@ const duplicateMarkerIdFixturePath = path.join(
   smokeDir,
   "duplicate-marker-id-scenario.fieldcraft.json"
 );
+const legacyV0FixturePath = path.join(smokeDir, "legacy-v0-scenario.fieldcraft.json");
 
 fs.mkdirSync(smokeDir, { recursive: true });
 fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
 fs.writeFileSync(oversizedGridFixturePath, createOversizedGridFixture(), "utf8");
 fs.writeFileSync(duplicateMarkerIdFixturePath, createDuplicateMarkerIdFixture(), "utf8");
+fs.writeFileSync(legacyV0FixturePath, createLegacyV0Fixture(), "utf8");
 
 const before = await readState();
 const beforePid = before?.pid;
@@ -204,6 +206,48 @@ try {
   await page.click('[data-testid="mode-editor"]');
   await page.waitForSelector('[data-view="editor"]');
   await clickMenuItem(page, "file", "menu-new-scenario");
+  await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await expectMarkerCount(page, "0");
+
+  // Exercise the v0 → v1 upgrade path on file open.
+  await openScenarioFromMenu(page, legacyV0FixturePath);
+  await expectStatusLine(page, `Loaded ${path.basename(legacyV0FixturePath)} (upgraded to current format)`);
+  await expectMarkerCount(page, "2");
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await waitForMarker(page, "board-surface", "0-0");
+  await waitForMarker(page, "board-surface", "2-1");
+
+  await page.click('[data-testid="save-scenario"]');
+  await expectStatusLine(page, "Scenario saved");
+
+  const upgradedScenarioText = await page.evaluate(() =>
+    window.localStorage.getItem("fieldcraft:last-scenario")
+  );
+  if (!upgradedScenarioText) {
+    throw new Error("Upgraded scenario did not write to browser storage.");
+  }
+  const upgradedScenario = JSON.parse(upgradedScenarioText);
+  if (
+    upgradedScenario.schema !== "fieldcraft.scenario" ||
+    upgradedScenario.schemaVersion !== 1
+  ) {
+    throw new Error(
+      `Saved upgraded scenario has wrong schema fields: ${upgradedScenario.schema} / ${upgradedScenario.schemaVersion}`
+    );
+  }
+  if (
+    !upgradedScenario.pieces.every(
+      (piece) => typeof piece.label === "string" && /^piece_[0-9A-Z]{6}$/.test(piece.id)
+    )
+  ) {
+    throw new Error("Upgraded scenario pieces missing opaque id or label field.");
+  }
+  const labels = upgradedScenario.pieces.map((piece) => piece.label);
+  if (!labels.includes("marker-0-0") || !labels.includes("scout-alpha")) {
+    throw new Error(`Upgraded scenario lost original ids as labels: ${JSON.stringify(labels)}`);
+  }
+
+  await page.click('[data-testid="new-scenario"]');
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
   await expectMarkerCount(page, "0");
 
@@ -1021,6 +1065,32 @@ function createDuplicateMarkerIdFixture() {
     null,
     2
   )}\n`;
+}
+
+function createLegacyV0Fixture() {
+  return JSON.stringify(
+    {
+      schema: "fieldcraft.scenario.v0",
+      title: "Legacy upgrade sample",
+      space: {
+        type: "square-grid",
+        width: 4,
+        height: 3,
+        tileSize: 48,
+        scale: { distancePerTile: 1, unit: "tile" },
+        grid: { lineColor: "#aeb8c1", lineOpacity: 1 },
+        background: { color: "#f9fbfb" }
+      },
+      assets: [],
+      pieces: [
+        { id: "marker-0-0", kind: "marker", side: "neutral", x: 0, y: 0 },
+        { id: "scout-alpha", kind: "marker", side: "neutral", x: 2, y: 1 }
+      ],
+      metadata: { editorVersion: "0.1.0-experiment", savedAt: "2026-03-01T00:00:00.000Z" }
+    },
+    null,
+    2
+  );
 }
 
 async function createGrid(page, gridType, width, height, options = {}) {
