@@ -824,7 +824,8 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
   }
 
   section.append(
-    createMarkerIdInput(selectedMarker),
+    createMarkerLabelInput(selectedMarker),
+    createMarkerIdDisclosure(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
     metric("Kind", "Marker", "selected-marker-kind")
   );
@@ -832,10 +833,33 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
   return section;
 }
 
-function createMarkerIdInput(selectedMarker: Scenario["pieces"][number]): HTMLElement {
-  const field = textInput("Marker ID", selectedMarker.id, "selected-marker-id-input");
-  field.input.addEventListener("change", () => updateSelectedMarkerId(field.input.value));
+function createMarkerLabelInput(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const field = textInput(
+    "Label",
+    selectedMarker.label,
+    "selected-marker-label-input"
+  );
+  field.input.placeholder = "Name this marker";
+  field.input.addEventListener("change", () =>
+    updateSelectedMarkerLabel(field.input.value)
+  );
   return field.label;
+}
+
+function createMarkerIdDisclosure(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const details = document.createElement("details");
+  details.className = "inspector-disclosure";
+  const summary = document.createElement("summary");
+  summary.className = "inspector-disclosure-summary";
+  summary.textContent = "Show id";
+  const value = element("code", "inspector-id-value", selectedMarker.id);
+  value.dataset.testid = "selected-marker-id";
+  details.append(summary, value);
+  return details;
 }
 
 function createAssetLibrarySection(): HTMLElement {
@@ -1393,37 +1417,24 @@ function updateScenarioTitle(value: string): void {
   });
 }
 
-function updateSelectedMarkerId(value: string): void {
+function updateSelectedMarkerLabel(value: string): void {
   const selectedMarker = getSelectedMarker();
   if (!selectedMarker) {
     return;
   }
 
-  const nextId = value.trim();
-  if (!nextId) {
-    statusMessage = "Marker ID cannot be empty";
-    render();
+  const nextLabel = value;
+  if (nextLabel === selectedMarker.label) {
     return;
   }
 
-  if (nextId === selectedMarker.id) {
-    return;
-  }
-
-  if (scenario.pieces.some((piece) => piece.id === nextId)) {
-    statusMessage = "Marker ID already exists";
-    render();
-    return;
-  }
-
-  commitUndoableChange("marker inspector edit", "Marker ID updated", () => {
+  commitUndoableChange("marker label edit", "Marker label updated", () => {
     scenario = {
       ...scenario,
       pieces: scenario.pieces.map((piece) =>
-        piece.id === selectedMarker.id ? { ...piece, id: nextId } : piece
+        piece.id === selectedMarker.id ? { ...piece, label: nextLabel } : piece
       )
     };
-    selectedMarkerId = nextId;
   });
 }
 
