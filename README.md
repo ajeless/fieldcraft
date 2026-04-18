@@ -8,7 +8,11 @@ Fieldcraft aims to be an editor-first environment for designing, play-testing, a
 
 ## Status
 
-First vertical slices are in place: the editor can create square-grid, pointy-top hex, and free-coordinate boards, configure board scale and styling, place colocated markers through a canvas-backed viewport, select and delete the current selection, pan/zoom/reset the board view, save and open human-readable scenario JSON documents, recover unsaved session drafts, edit scenario JSON in an inline source pane with validation and targeted syntax errors, import package-local image/audio assets in the desktop editor, assign board background images, launch a read-only runtime view from the current scenario, and export a self-contained browser runtime with bundled assets. The editor also has persisted `System`/`Light`/`Dark` theme support, dark-theme board defaults for newly created boards, unsaved-change confirmation before destructive `New` and `Open` actions replace dirty work, a stable top command bar for document actions, a stable contextual tool slot in the left panel, and shared board validation so unsupported tile-grid sizes and duplicate marker ids are rejected before they enter partially supported states. See `PLAN.md` for the current near-term branch sequence.
+The editor can author small tactical scenarios end to end: create square, pointy-top hex, and free-coordinate boards; place, select, and delete colocated markers; save, open, and recover scenario JSON; edit that JSON inline with validation; import package-local image/audio assets on desktop; launch a read-only runtime view; and export a self-contained browser runtime with bundled assets.
+
+The desktop editor is the authoritative authoring surface (decision `009`). The browser editor is a constrained development, testing, and demo surface, not a parity promise.
+
+See `PLAN.md` for slice-level baseline detail and the current near-term branch sequence.
 
 ## Stack
 
@@ -26,8 +30,6 @@ Prerequisites:
 - Google Chrome or Playwright-managed Chromium for browser smoke tests
 
 The browser editor/runtime loop only needs Node.js, Corepack, and pnpm. Desktop commands also need Rust and native system packages.
-
-Per decision `009`, the desktop editor is the authoritative authoring environment. The browser editor remains a constrained development, testing, review, and demo surface, not a parity promise with the desktop shell.
 
 ### Platform Setup
 
@@ -131,7 +133,7 @@ If Google Chrome is unavailable locally, install Playwright's Chromium first:
 corepack pnpm exec playwright install chromium
 ```
 
-The smoke test starts the tracked dev server if needed, exercises browser file/menu commands, verifies theme persistence and dark board defaults, checks draft recovery, creates square, hex, and free-coordinate boards, verifies canvas-backed rendering, places/selects/deletes colocated markers across those board types, checks source-editor apply/reset behavior and invalid JSON handling, checks dirty-state confirmation for destructive file actions, saves scenario JSON, launches the runtime, verifies persisted marker state renders there, verifies bundled browser runtime export, and stops any server it started.
+The smoke test exercises the main browser editor and runtime flows end to end. See `scripts/test-browser-smoke.mjs` for the current coverage surface.
 
 ### Desktop Testing
 
@@ -145,7 +147,7 @@ corepack pnpm desktop
 
 The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, starts or reuses the tracked browser dev server, launches the Tauri development shell, and stops only the server it started.
 
-Desktop coverage is currently manual. A passing browser smoke run is useful, but it does not replace native desktop verification for file dialogs, desktop saves, asset import, or packaging behavior.
+Desktop coverage is currently manual and release-significant per decision `009`. A passing browser smoke run does not replace native desktop verification. See `DESKTOP-TESTING.md` for the checklist.
 
 Manual desktop test flow:
 
@@ -195,4 +197,4 @@ References:
 
 ## Docs
 
-Project docs are intentionally small. `AGENTS.md` covers contribution workflow and doc ownership, `DECISIONS.md` records settled choices, `PLAN.md` tracks mutable plans and open design work, and `CLAUDE.md` is a compatibility pointer to `AGENTS.md`.
+See `AGENTS.md` for contribution workflow and doc ownership. See `DECISIONS.md` for settled architectural choices.

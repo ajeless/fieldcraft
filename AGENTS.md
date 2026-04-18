@@ -2,8 +2,7 @@
 
 This file is the primary guide for coding agents working in this repo.
 
-If `CLAUDE.md` or another agent-oriented file exists, it should point here.
-If this file conflicts with `DECISIONS.md` on a settled architectural point, follow `DECISIONS.md` and update `AGENTS.md`.
+`CLAUDE.md` and any other agent-oriented file should point here. `DECISIONS.md` is canonical for settled architectural points; if this file conflicts with it, follow `DECISIONS.md` and update this file.
 
 ## What this project is
 
@@ -43,6 +42,8 @@ Preferred loop:
 5. Repeat
 
 Use the editor to build the editor. Once the tool can author scenarios at all, every subsequent feature should be built by authoring a scenario that needs that feature, then adding support for it.
+
+Bootstrap exception: features whose authoring UI does not yet exist (for example, the first pass at a rules expression language, or the first entity-model foundation) may ship behind a source-editor-only path. Add the editor surface in the next slice once the authored shape settles. Do not use this exception to skip authoring surfaces once they are practical to add.
 
 Prefer short-lived, descriptively named branches for ideas, comparisons, and spikes.
 Name branches for the question or capability they explore, not by phase or sequence.
@@ -90,11 +91,23 @@ Keep docs light and split by ownership:
 - `AGENTS.md` is for agent workflow and contribution guardrails.
 - `DECISIONS.md` is for settled architectural and design choices.
 - `PLAN.md` is for mutable branch plans, open questions, and deferred design space.
+- `DESKTOP-TESTING.md` is the manual desktop smoke checklist (release-significant per decision `009`).
 - `CLAUDE.md` is only a compatibility pointer to `AGENTS.md`.
 
 When a durable architectural choice is made, record it once in `DECISIONS.md` instead of duplicating rationale across files.
 
 Do not create planning or process docs until the work earns them.
+
+### Maintaining these docs
+
+When landing a slice, update `PLAN.md`:
+- Add the slice to "Recently Completed Baseline Slices".
+- Remove any deferred items the slice closed.
+- Prune deferred items whose motivation has faded.
+
+When a slice changes settled architecture, add or update a decision in `DECISIONS.md` rather than layering rationale into other docs.
+
+Treat the status and near-term sections in `README.md` and `PLAN.md` as append-light: prefer replacing a stale sentence over extending a growing one.
 
 ## Runtime behavior
 
@@ -106,3 +119,7 @@ When scripts are added and they launch processes, they should:
 - free known ports on teardown
 
 The project should play nice on Linux, macOS, and Windows.
+
+## Release testing
+
+Per decision `009`, the desktop editor is authoritative. A passing browser smoke run does not imply a releasable desktop build. Desktop verification — native file dialogs, asset import, save-as carrying packaged assets forward, runtime launch, and export — is manual and release-significant. The current desktop checklist lives in `DESKTOP-TESTING.md`.
