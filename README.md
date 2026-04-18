@@ -8,7 +8,7 @@ Fieldcraft aims to be an editor-first environment for designing, play-testing, a
 
 ## Status
 
-First vertical slices are in place: the editor can create square-grid, pointy-top hex, and free-coordinate boards, configure board scale and styling, place markers through a canvas-backed viewport, select markers, inspect and delete the current selection, pan/zoom/reset the board view, save and open human-readable scenario JSON documents, recover unsaved session drafts, and launch a read-only runtime view from the current scenario. The editor now also has persisted `System`/`Light`/`Dark` theme support, dark-theme board defaults for newly created boards, unsaved-change confirmation before destructive `New` and `Open` actions replace dirty work, a stable top command bar for document actions, a stable contextual tool slot in the left panel, and shared board validation so unsupported tile-grid sizes are rejected consistently in setup and file-open flows. See `PLAN.md` for the current near-term branch sequence.
+First vertical slices are in place: the editor can create square-grid, pointy-top hex, and free-coordinate boards, configure board scale and styling, place colocated markers through a canvas-backed viewport, select and delete the current selection, pan/zoom/reset the board view, save and open human-readable scenario JSON documents, recover unsaved session drafts, edit scenario JSON in an inline source pane with validation and targeted syntax errors, import package-local image/audio assets in the desktop editor, assign board background images, launch a read-only runtime view from the current scenario, and export a self-contained browser runtime with bundled assets. The editor also has persisted `System`/`Light`/`Dark` theme support, dark-theme board defaults for newly created boards, unsaved-change confirmation before destructive `New` and `Open` actions replace dirty work, a stable top command bar for document actions, a stable contextual tool slot in the left panel, and shared board validation so unsupported tile-grid sizes and duplicate marker ids are rejected before they enter partially supported states. See `PLAN.md` for the current near-term branch sequence.
 
 ## Stack
 
@@ -26,6 +26,8 @@ Prerequisites:
 - Google Chrome or Playwright-managed Chromium for browser smoke tests
 
 The browser editor/runtime loop only needs Node.js, Corepack, and pnpm. Desktop commands also need Rust and native system packages.
+
+Per decision `009`, the desktop editor is the authoritative authoring environment. The browser editor remains a constrained development, testing, review, and demo surface, not a parity promise with the desktop shell.
 
 ### Platform Setup
 
@@ -84,7 +86,7 @@ corepack pnpm run doctor
 
 ### Browser Testing
 
-Use the browser flow when you want the fastest editor loop and when you are testing browser-specific file behavior such as file-picker import and JSON download.
+Use the browser flow when you want the fastest editor loop and when you are testing browser-specific file behavior such as file-picker import and JSON download. This is also the current automated coverage path for the repo.
 
 Start the browser editor:
 
@@ -129,11 +131,11 @@ If Google Chrome is unavailable locally, install Playwright's Chromium first:
 corepack pnpm exec playwright install chromium
 ```
 
-The smoke test starts the tracked dev server if needed, exercises browser file/menu commands, verifies theme persistence and dark board defaults, checks draft recovery, creates square, hex, and free-coordinate boards, verifies canvas-backed rendering, places/selects/deletes markers across those board types, checks dirty-state confirmation for destructive file actions, checks pan/zoom/reset behavior, saves scenario JSON, launches the runtime, verifies persisted marker state renders there, and stops any server it started.
+The smoke test starts the tracked dev server if needed, exercises browser file/menu commands, verifies theme persistence and dark board defaults, checks draft recovery, creates square, hex, and free-coordinate boards, verifies canvas-backed rendering, places/selects/deletes colocated markers across those board types, checks source-editor apply/reset behavior and invalid JSON handling, checks dirty-state confirmation for destructive file actions, saves scenario JSON, launches the runtime, verifies persisted marker state renders there, verifies bundled browser runtime export, and stops any server it started.
 
 ### Desktop Testing
 
-Use the desktop flow when you need to verify native dialogs, restart behavior, or the Tauri shell itself. This is the path that corresponds to the standalone binary target.
+Use the desktop flow when you need to verify native dialogs, restart behavior, package-local asset imports, or the Tauri shell itself. This is the authoritative authoring path and the path that corresponds to the standalone binary target.
 
 Run the Tauri desktop shell for development:
 
@@ -142,6 +144,8 @@ corepack pnpm desktop
 ```
 
 The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, starts or reuses the tracked browser dev server, launches the Tauri development shell, and stops only the server it started.
+
+Desktop coverage is currently manual. A passing browser smoke run is useful, but it does not replace native desktop verification for file dialogs, desktop saves, asset import, or packaging behavior.
 
 Manual desktop test flow:
 
