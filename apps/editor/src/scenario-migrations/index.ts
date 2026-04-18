@@ -35,11 +35,13 @@ export type ScenarioLoadErrorKind =
 
 export class ScenarioLoadError extends Error {
   readonly kind: ScenarioLoadErrorKind;
+  readonly cause?: unknown;
 
-  constructor(kind: ScenarioLoadErrorKind, message: string) {
+  constructor(kind: ScenarioLoadErrorKind, message: string, cause?: unknown) {
     super(message);
     this.name = "ScenarioLoadError";
     this.kind = kind;
+    this.cause = cause;
   }
 }
 
@@ -93,7 +95,8 @@ function safeJsonParse(text: string): unknown {
   } catch (error) {
     throw new ScenarioLoadError(
       "invalid-json",
-      error instanceof Error ? error.message : "Could not parse JSON."
+      error instanceof Error ? error.message : "Could not parse JSON.",
+      error
     );
   }
 }

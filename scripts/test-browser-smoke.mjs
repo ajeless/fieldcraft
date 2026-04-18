@@ -475,10 +475,7 @@ try {
   const invalidSquareSource = '{\n  "schema": "fieldcraft.scenario"\n';
   await setSourceEditorValue(page, invalidSquareSource);
   await page.click('[data-testid="apply-source"]');
-  await page.waitForFunction(() => {
-    const text = document.querySelector(".status-line")?.textContent ?? "";
-    return text.includes("line 3") && text.includes("column 1");
-  });
+  await expectStatusLine(page, "Source is not valid JSON at line 3, column 1.");
   await expectSourceEditorErrorState(page, true);
   await expectMarkerCount(page, "4");
   await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);

@@ -48,7 +48,10 @@ import {
   parseSupportedTileSize,
   scenarioToJson
 } from "./scenario";
-import { loadScenarioWithMeta } from "./scenario-migrations";
+import {
+  loadScenarioWithMeta,
+  ScenarioLoadError
+} from "./scenario-migrations";
 import { generatePieceId } from "./scenario-migrations/identity";
 import {
   type ScenarioStorageResult,
@@ -1965,8 +1968,9 @@ function getScenarioSourceErrorDetails(
   message: string;
   selection: SourceEditorSelection | null;
 } {
-  if (error instanceof SyntaxError) {
-    const location = getJsonSyntaxErrorLocation(input, error);
+  const syntaxError = unwrapJsonSyntaxError(error);
+  if (syntaxError) {
+    const location = getJsonSyntaxErrorLocation(input, syntaxError);
     if (location) {
       return {
         message: `Source is not valid JSON at line ${location.line}, column ${location.column}.`,
@@ -1984,6 +1988,18 @@ function getScenarioSourceErrorDetails(
     message: getErrorMessage(error, "Could not apply source."),
     selection: null
   };
+}
+
+function unwrapJsonSyntaxError(error: unknown): SyntaxError | null {
+  if (error instanceof SyntaxError) {
+    return error;
+  }
+
+  if (error instanceof ScenarioLoadError && error.kind === "invalid-json" && error.cause instanceof SyntaxError) {
+    return error.cause;
+  }
+
+  return null;
 }
 
 function getJsonSyntaxErrorLocation(
