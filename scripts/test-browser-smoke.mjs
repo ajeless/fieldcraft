@@ -62,6 +62,7 @@ try {
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
   await expectCommandDisabled(page, "palette-marker");
   await expectCommandDisabled(page, "export-runtime-scenario");
+  await activateInspectorTab(page, "assets");
   if (!(await page.locator('[data-testid="import-image-asset"]').isDisabled())) {
     throw new Error("Browser mode should not enable desktop image imports.");
   }
@@ -271,9 +272,19 @@ try {
   await page.waitForTimeout(100);
   await expectMarkerCount(page, "0");
   await expectNoSelectedMarker(page);
+  await activateInspectorTab(page, "scenario");
   await placeMarkerFromPalette(page, "board-surface", 32, 32);
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "32-32");
+  // Placing a marker while the Scenario tab is active should auto-promote
+  // the Selection tab (decision 012 / BRIEF § Selection tab).
+  await expectActiveInspectorTab(page, "selection");
+  await expectSelectionTabCount(page, 1);
+  await expectInspectorTabContentVisible(page, "selected-marker-label-input");
+  // Navigating away from Selection while a marker is selected should hide
+  // the Selection content (only the active tab body renders).
+  await activateInspectorTab(page, "scenario");
+  await expectInspectorTabContentHidden(page, "selected-marker-label-input");
   await expectSelectedMarker(page, {
     id: "",
     position: "Tile 32, 32"
@@ -406,8 +417,11 @@ try {
     });
     return scenario;
   });
-  await page.click('[data-testid="apply-source"]');
+  await applySourceEditor(page);
   await expectStatusLine(page, "Source applied");
+  // Applying a source edit must leave the Source tab active; a re-render
+  // should not yank the power user back to another tab.
+  await expectActiveInspectorTab(page, "source");
   await expectInputValue(page, '[data-testid="scenario-title-input"]', "Source Applied Fixture");
   await expectMarkerCount(page, "4");
   await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
@@ -455,21 +469,23 @@ try {
     scenario.space.background.imageAssetId = "test-board-image";
     return scenario;
   });
-  await page.click('[data-testid="apply-source"]');
+  await applySourceEditor(page);
   await expectStatusLine(page, "Source applied");
   await expectMetricValue(page, "asset-count", "2");
+  await activateInspectorTab(page, "scenario");
   await expectMetricValue(page, "board-background-image-asset", "test-board-image");
 
   await updateSourceEditorJson(page, (scenario) => {
     scenario.space.background.imageAssetId = "test-tone";
     return scenario;
   });
-  await page.click('[data-testid="apply-source"]');
+  await applySourceEditor(page);
   await expectStatusLine(page, "Scenario background asset must be an image: test-tone");
   await expectSourceEditorErrorState(page, true);
   await expectMetricValue(page, "asset-count", "2");
+  await activateInspectorTab(page, "scenario");
   await expectMetricValue(page, "board-background-image-asset", "test-board-image");
-  await page.click('[data-testid="reset-source"]');
+  await resetSourceEditor(page);
   await expectStatusLine(page, "Source reset to editor state");
   await expectSourceEditorErrorState(page, false);
   await clickTile(page, "board-surface", 0, 0);
@@ -541,13 +557,14 @@ try {
 
   const invalidSquareSource = '{\n  "schema": "fieldcraft.scenario"\n';
   await setSourceEditorValue(page, invalidSquareSource);
-  await page.click('[data-testid="apply-source"]');
+  await applySourceEditor(page);
   await expectStatusLine(page, "Source is not valid JSON at line 3, column 1.");
   await expectSourceEditorErrorState(page, true);
   await expectMarkerCount(page, "4");
   await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
   await dismissConfirm(page, () => page.click('[data-testid="new-scenario"]'));
   await expectMarkerCount(page, "4");
+  await activateInspectorTab(page, "source");
   await expectInputValue(page, '[data-testid="scenario-source-input"]', invalidSquareSource);
   await page.reload();
   await page.waitForSelector('[data-view="editor"]');
@@ -556,8 +573,9 @@ try {
   await expectSourceEditorErrorState(page, false);
   await expectMarkerCount(page, "4");
   await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
+  await activateInspectorTab(page, "source");
   await expectInputValue(page, '[data-testid="scenario-source-input"]', invalidSquareSource);
-  await page.click('[data-testid="reset-source"]');
+  await resetSourceEditor(page);
   await expectStatusLine(page, "Source reset to editor state");
   await expectSourceEditorErrorState(page, false);
   const resetSquareSource = JSON.parse(await readSourceEditorValue(page));
@@ -573,12 +591,12 @@ try {
     });
     return scenario;
   });
-  await page.click('[data-testid="apply-source"]');
+  await applySourceEditor(page);
   await expectStatusLine(page, "Scenario contains duplicate marker ID: source-stack-marker");
   await expectSourceEditorErrorState(page, true);
   await expectMarkerCount(page, "4");
   await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
-  await page.click('[data-testid="reset-source"]');
+  await resetSourceEditor(page);
   await expectStatusLine(page, "Source reset to editor state");
   await expectSourceEditorErrorState(page, false);
 
@@ -631,7 +649,7 @@ try {
     );
     return scenario;
   });
-  await page.click('[data-testid="apply-source"]');
+  await applySourceEditor(page);
   await expectStatusLine(page, "Source applied");
   const squareRuntimeExport = await expectRuntimeExportDownload(page, () =>
     page.click('[data-testid="export-runtime-scenario"]')
@@ -856,7 +874,7 @@ try {
     });
     return scenario;
   });
-  await page.click('[data-testid="apply-source"]');
+  await applySourceEditor(page);
   await expectStatusLine(page, "Source applied");
   await expectMarkerCount(page, "5");
   await expectFreeMarkerCountNear(page, "board-surface", 73.25, 18.5, 3);
@@ -920,7 +938,7 @@ try {
     scenario.space.background.imageAssetId = "free-export-board-image";
     return scenario;
   });
-  await page.click('[data-testid="apply-source"]');
+  await applySourceEditor(page);
   await expectStatusLine(page, "Source applied");
   const freeRuntimeExport = await expectRuntimeExportDownload(page, () =>
     clickMenuItem(page, "file", "menu-export-runtime-scenario")
@@ -1429,11 +1447,69 @@ async function setInputValue(page, selector, value) {
   }, value);
 }
 
+async function activateInspectorTab(page, tab) {
+  const tabSelector = `[data-testid="inspector-tab-${tab}"]`;
+  const isActive = await page.evaluate((selector) => {
+    const button = document.querySelector(selector);
+    return button instanceof HTMLElement && button.classList.contains("is-active");
+  }, tabSelector);
+  if (isActive) {
+    return;
+  }
+
+  await page.click(tabSelector);
+  await page.waitForFunction((selector) => {
+    const button = document.querySelector(selector);
+    return button instanceof HTMLElement && button.classList.contains("is-active");
+  }, tabSelector);
+}
+
+async function expectActiveInspectorTab(page, tab) {
+  await page.waitForFunction((expected) => {
+    const button = document.querySelector(`[data-testid="inspector-tab-${expected}"]`);
+    return button instanceof HTMLElement && button.classList.contains("is-active");
+  }, tab);
+}
+
+async function expectSelectionTabCount(page, count) {
+  await page.waitForFunction((expected) => {
+    const button = document.querySelector('[data-testid="inspector-tab-selection"]');
+    if (!(button instanceof HTMLElement)) {
+      return false;
+    }
+
+    const label = button.textContent ?? "";
+    return expected > 0 ? label.includes(`· ${expected}`) : !label.includes("·");
+  }, count);
+}
+
+async function expectInspectorTabContentVisible(page, testId) {
+  await page.waitForSelector(`[data-testid="${testId}"]`, { state: "attached" });
+}
+
+async function expectInspectorTabContentHidden(page, testId) {
+  await page.waitForFunction((id) => {
+    return document.querySelector(`[data-testid="${id}"]`) === null;
+  }, testId);
+}
+
+async function applySourceEditor(page) {
+  await activateInspectorTab(page, "source");
+  await page.click('[data-testid="apply-source"]');
+}
+
+async function resetSourceEditor(page) {
+  await activateInspectorTab(page, "source");
+  await page.click('[data-testid="reset-source"]');
+}
+
 async function readSourceEditorValue(page) {
+  await activateInspectorTab(page, "source");
   return page.locator('[data-testid="scenario-source-input"]').inputValue();
 }
 
 async function setSourceEditorSelection(page, start, end = start) {
+  await activateInspectorTab(page, "source");
   await page.locator('[data-testid="scenario-source-input"]').evaluate((input, selection) => {
     if (!(input instanceof HTMLTextAreaElement)) {
       throw new Error("Target is not a textarea.");
@@ -1445,6 +1521,7 @@ async function setSourceEditorSelection(page, start, end = start) {
 }
 
 async function setSourceEditorValue(page, value) {
+  await activateInspectorTab(page, "source");
   await page.locator('[data-testid="scenario-source-input"]').evaluate((input, nextValue) => {
     if (!(input instanceof HTMLTextAreaElement)) {
       throw new Error("Target is not a textarea.");
@@ -1463,6 +1540,7 @@ async function updateSourceEditorJson(page, mutate) {
 }
 
 async function expectSourceEditorErrorState(page, expected) {
+  await activateInspectorTab(page, "source");
   await page.waitForFunction((hasError) => {
     const input = document.querySelector('[data-testid="scenario-source-input"]');
     return (
@@ -1473,6 +1551,7 @@ async function expectSourceEditorErrorState(page, expected) {
 }
 
 async function expectSourceEditorFocused(page) {
+  await activateInspectorTab(page, "source");
   await page.waitForFunction(() => {
     const input = document.querySelector('[data-testid="scenario-source-input"]');
     return input instanceof HTMLTextAreaElement && document.activeElement === input;
@@ -1947,6 +2026,7 @@ async function expectBoardSetupVisible(page) {
 }
 
 async function expectSelectedMarker(page, expected = {}) {
+  await activateInspectorTab(page, "selection");
   await page.waitForFunction(({ id, position, near }) => {
     const emptyState = document.querySelector('[data-testid="selected-marker-empty"]');
     const kind = document.querySelector('[data-testid="selected-marker-kind"]')?.textContent;
@@ -1993,6 +2073,7 @@ async function expectSelectedMarker(page, expected = {}) {
 }
 
 async function expectNoSelectedMarker(page) {
+  await activateInspectorTab(page, "selection");
   await page.waitForFunction(() => {
     const emptyState = document.querySelector('[data-testid="selected-marker-empty"]');
     const deleteButton = document.querySelector('[data-testid="delete-selected-marker"]');
@@ -2006,6 +2087,7 @@ async function expectNoSelectedMarker(page) {
 }
 
 async function getSelectedMarkerId(page) {
+  await activateInspectorTab(page, "selection");
   return page.evaluate(() => {
     const code = document.querySelector('[data-testid="selected-marker-id"]');
 
@@ -2014,6 +2096,7 @@ async function getSelectedMarkerId(page) {
 }
 
 async function updateSelectedMarkerLabel(page, value) {
+  await activateInspectorTab(page, "selection");
   const input = page.locator('[data-testid="selected-marker-label-input"]');
   await input.fill(value);
   await input.blur();
