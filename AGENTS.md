@@ -56,7 +56,7 @@ Do not merge into `main` until something has been manually tested and shown usef
 
 Settled architecture lives in `DECISIONS.md`. Do not reopen those choices casually.
 
-Relevant decisions: `001` (editor-first), `004` (two space models), `005` (plotted simultaneous turns), `006` (structured data plus expression language), `007` (browser and binary exports), `008` (human-readable scenario files), and `011` (scenario identity, migration, and forward-version policy).
+Relevant decisions: `001` (editor-first), `004` (two space models), `005` (plotted simultaneous turns), `006` (structured data plus expression language), `007` (browser and binary exports), `008` (human-readable scenario files), `011` (scenario identity, migration, and forward-version policy), and `012` (editor information architecture).
 
 Establish the structural seams that those decisions require early. Generalize specific mechanics, rule patterns, or UI workflows only after at least two concrete scenarios justify it.
 

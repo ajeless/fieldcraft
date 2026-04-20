@@ -104,3 +104,20 @@ When a migration actually runs, the load reports a `migrated` flag. The editor u
 ### Forward-version policy
 
 A file whose `schemaVersion` is higher than the current build's `currentSchemaVersion` is hard-rejected with a readable error that names both versions. The editor does not attempt a best-effort read, and it does not silently drop unknown fields on save. A forward-version file almost always contains a field the current build does not understand, and silently dropping it would corrupt the author's work the next time they save.
+
+## 012 — Editor information architecture
+
+The editor is organized around a named UI vocabulary so that new features register into existing surfaces instead of stacking into the right column. Six structural commitments define that vocabulary:
+
+- **Four-tab inspector.** The right column is a single docked panel with four peer tabs — Scenario, Selection, Assets, Source. Each tab has a distinct scope: scenario-wide state, per-selection detail, asset picking, and power-user source. Selection auto-promotes to active when something is selected.
+- **Tool rail on the left.** A vertical rail holds icon-only tool buttons. Tools register into the rail; the rail's position on the left is load-bearing.
+- **Bottom asset strip.** A horizontal strip below the board shows asset thumbnails. It filters contextually to the active tool and is collapsible.
+- **Status bar at the bottom.** A thin bottom strip surfaces structured OS-style fields — cursor position, active tool, space model, selection count, piece and asset counts, dirty state, and save-shortcut hint. It replaces status-as-sidebar-item.
+- **Command palette.** `⌘K` / `Ctrl+K` opens a fuzzy-searchable overlay over the existing command registry. It is a discoverability layer over the menu bar and command bar, not a replacement for either.
+- **Full-page New Scenario flow.** New scenarios begin on a dedicated page presenting the three space-model choices (square, pointy-top hex, free-coordinate) with miniature board previews, followed by scenario details. The same form is reachable post-creation as an Edit Board Setup modal, so setup stops being a one-way door.
+
+Rationale: the editor grew feature-first, and each new feature accreted into the right column because there was no UI vocabulary — no Inspector, no ToolRail, no StatusBar — for features to register into. This decision names that vocabulary so future branches plug into named surfaces instead of stacking.
+
+`docs/redesign/BRIEF.md` is the implementation spec for shape, pixel dimensions, tab contents, and interaction patterns. Specific values there (tab labels, widths, contextual filter behaviors) are tactical; this decision records the architectural shape.
+
+Out of scope for this decision, and reserved for later entries when their branches ship: author-defined sides at the scenario level (a scenario-format change that lands with the entity model), coordinate-label stage rulers, and any floating or collapsible inspector variant beyond the docked baseline.
