@@ -1,5 +1,6 @@
 import "./styles.css";
 import { isTauri } from "@tauri-apps/api/core";
+import { type Theme, applyTokensToRoot, getTokens } from "./design-tokens";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
@@ -98,7 +99,6 @@ type EditorCommandId =
 type EditorCommand = CommandDefinition<EditorCommandId>;
 type EditorCommands = CommandRegistry<EditorCommandId>;
 type MenuEntry = EditorCommandId | "separator";
-type Theme = "light" | "dark";
 type ThemePreference = Theme | null;
 
 type BoardSetupDraft = {
@@ -119,11 +119,6 @@ type BoardSetupDraft = {
   freeScaleUnitValue: string;
   freeBackgroundColorValue: string;
   tileSizeEdited: boolean;
-};
-
-type ThemeBoardDefaults = {
-  gridLineColor: string;
-  boardBackgroundColor: string;
 };
 
 type StoredEditorSessionDraft = {
@@ -154,10 +149,6 @@ const documentCommandGroups = [
 const themeStorageKey = "fieldcraft:theme";
 const editorSessionDraftStorageKey = "fieldcraft:editor-session-draft";
 const systemThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
-const darkThemeBoardDefaults: ThemeBoardDefaults = {
-  gridLineColor: "#536576",
-  boardBackgroundColor: "#162129"
-};
 const desktopAutomationQuery = readDesktopAutomationQuery();
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
@@ -2267,19 +2258,8 @@ function getActiveTheme(): Theme {
   return themePreference ?? (systemThemeMedia.matches ? "dark" : "light");
 }
 
-function getThemeBoardDefaults(theme: Theme): ThemeBoardDefaults {
-  return theme === "dark"
-    ? darkThemeBoardDefaults
-    : {
-        gridLineColor: defaultGridLineColor,
-        boardBackgroundColor: defaultBoardBackgroundColor
-      };
-}
-
 function applyTheme(): void {
-  const activeTheme = getActiveTheme();
-  document.documentElement.dataset.theme = activeTheme;
-  document.documentElement.style.colorScheme = activeTheme;
+  applyTokensToRoot(getActiveTheme());
 }
 
 function setThemePreference(preference: ThemePreference): void {
@@ -2469,24 +2449,24 @@ function syncBoardSetupDraftThemeDefaults(previousTheme: Theme, nextTheme: Theme
     return;
   }
 
-  const previousDefaults = getThemeBoardDefaults(previousTheme);
-  const nextDefaults = getThemeBoardDefaults(nextTheme);
+  const previousTokens = getTokens(previousTheme);
+  const nextTokens = getTokens(nextTheme);
   boardSetupDraft = {
     ...boardSetupDraft,
     gridLineColorValue: replaceDefaultThemeColor(
       boardSetupDraft.gridLineColorValue,
-      previousDefaults.gridLineColor,
-      nextDefaults.gridLineColor
+      previousTokens.boardGrid,
+      nextTokens.boardGrid
     ),
     backgroundColorValue: replaceDefaultThemeColor(
       boardSetupDraft.backgroundColorValue,
-      previousDefaults.boardBackgroundColor,
-      nextDefaults.boardBackgroundColor
+      previousTokens.boardBg,
+      nextTokens.boardBg
     ),
     freeBackgroundColorValue: replaceDefaultThemeColor(
       boardSetupDraft.freeBackgroundColorValue,
-      previousDefaults.boardBackgroundColor,
-      nextDefaults.boardBackgroundColor
+      previousTokens.boardBg,
+      nextTokens.boardBg
     )
   };
 }
@@ -3299,7 +3279,7 @@ function cloneBoardSetupDraftValue(value: BoardSetupDraft): BoardSetupDraft {
 }
 
 function createDefaultBoardSetupDraft(theme: Theme = getActiveTheme()): BoardSetupDraft {
-  const themeBoardDefaults = getThemeBoardDefaults(theme);
+  const tokens = getTokens(theme);
 
   return {
     type: "square-grid",
@@ -3308,16 +3288,16 @@ function createDefaultBoardSetupDraft(theme: Theme = getActiveTheme()): BoardSet
     tileSizeValue: String(getDefaultTileSize("square-grid")),
     distancePerTileValue: String(defaultScaleDistancePerTile),
     scaleUnitValue: defaultScaleUnit,
-    gridLineColorValue: themeBoardDefaults.gridLineColor,
+    gridLineColorValue: tokens.boardGrid,
     gridLineOpacityValue: String(defaultGridLineOpacity),
-    backgroundColorValue: themeBoardDefaults.boardBackgroundColor,
+    backgroundColorValue: tokens.boardBg,
     freeXValue: "0",
     freeYValue: "0",
     freeWidthValue: "100",
     freeHeightValue: "100",
     freeDistancePerWorldUnitValue: String(defaultFreeCoordinateDistancePerWorldUnit),
     freeScaleUnitValue: defaultFreeCoordinateScaleUnit,
-    freeBackgroundColorValue: themeBoardDefaults.boardBackgroundColor,
+    freeBackgroundColorValue: tokens.boardBg,
     tileSizeEdited: false
   };
 }

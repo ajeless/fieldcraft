@@ -14,6 +14,11 @@ Automation now covers both the browser support surface and a scripted desktop-se
 
 ## Recently Completed Baseline Slices
 
+- `codex/design-tokens-foundation`
+  - The editor's color, font, radius, and shadow values live in a typed `apps/editor/src/design-tokens.ts` module that exposes `darkTokens`, `lightTokens`, and `applyTokensToRoot(theme)`; `styles.css` now consumes only `--fc-*` CSS custom properties written to `:root` at runtime.
+  - Token values follow `docs/redesign/reference/components/tokens.jsx` (OKLCH accents, reference chrome/board values), which shifts new-scenario default grid and background colors for both themes toward the redesign reference while preserving the `fieldcraft:theme` preference key and theme-switch behavior.
+  - `main.ts` reads themed board-setup draft defaults from the token module and drops the local `darkThemeBoardDefaults`/`getThemeBoardDefaults` helpers; `board-viewport.ts` now reads `--fc-board-bg`, `--fc-board-grid`, `--fc-marker*`, etc. from computed styles.
+
 - `codex/readme-workflow-clarity`
   - `README.md` now explains the repo in workflow terms instead of assuming familiarity with Tauri and Vite conventions.
   - The main development paths are now explicit: desktop dev shell, packaged debug desktop binary, release-style desktop build, and browser checks.
