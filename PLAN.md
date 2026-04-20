@@ -23,7 +23,6 @@ Automation now covers both the browser support surface and a scripted desktop-se
   - Manual packaged-debug desktop checks now have a single launcher: `corepack pnpm desktop:debug` rebuilds the standalone Tauri debug binary before starting it.
   - Desktop docs now call out that `apps/editor/src-tauri/target/debug/fieldcraft` is reused by dev flows, so a stale dev artifact can fail with `Could not connect to 127.0.0.1: Connection refused`.
   - The manual desktop checklist now points testers at the wrapper command instead of assuming the raw binary path is always safe to run.
-
 - `codex/desktop-semantic-smoke-automation`
   - `corepack pnpm test:desktop:smoke` now runs a scripted Tauri dev-shell pass that covers save/open semantics, package-local asset import and copying, `Save As` asset carry-forward, runtime launch, browser-runtime export, and draft-recovery behavior.
   - The desktop automation seam is intentionally narrow and test-only: canned dialog responses and file paths are injected only when the desktop smoke script launches the app with an explicit automation spec.
