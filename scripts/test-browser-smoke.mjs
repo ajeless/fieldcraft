@@ -71,14 +71,14 @@ try {
   await page.click('[data-testid="theme-dark"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
   await expectStoredTheme(page, "dark");
-  await expectInputValue(page, '[data-testid="grid-line-color-input"]', "#536576");
-  await expectInputValue(page, '[data-testid="board-background-input"]', "#162129");
+  await expectInputValue(page, '[data-testid="grid-line-color-input"]', "#1e2a36");
+  await expectInputValue(page, '[data-testid="board-background-input"]', "#0d131a");
   await page.reload();
   await page.waitForSelector('[data-view="editor"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
-  await expectInputValue(page, '[data-testid="grid-line-color-input"]', "#536576");
-  await expectInputValue(page, '[data-testid="board-background-input"]', "#162129");
+  await expectInputValue(page, '[data-testid="grid-line-color-input"]', "#1e2a36");
+  await expectInputValue(page, '[data-testid="board-background-input"]', "#0d131a");
 
   await createGrid(page, "square", 6, 5);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
@@ -753,9 +753,9 @@ try {
     tileSize: 28,
     distancePerTile: 1,
     scaleUnit: "tile",
-    gridLineColor: "#536576",
+    gridLineColor: "#1e2a36",
     gridLineOpacity: 1,
-    backgroundColor: "#162129"
+    backgroundColor: "#0d131a"
   });
   if (
     parsedHexScenario.space?.type !== "hex-grid" ||

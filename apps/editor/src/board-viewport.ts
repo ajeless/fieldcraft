@@ -311,23 +311,27 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
     const styles = getComputedStyle(viewport);
     const colors = {
       boardFill:
-        options.space.background.color || cssVariable(styles, "--board-fill", "#f9fbfb"),
+        options.space.background.color || cssVariable(styles, "--fc-board-bg", "#e8ebe6"),
       boardLine: isTileScenarioSpace(options.space)
-        ? options.space.grid.lineColor || cssVariable(styles, "--board-line", "#aeb8c1")
-        : cssVariable(styles, "--board-edge", "#8794a0"),
+        ? options.space.grid.lineColor || cssVariable(styles, "--fc-board-grid", "#c4c8c0")
+        : cssVariable(styles, "--fc-board-grid-strong", "#9ea29a"),
       boardLineOpacity: isTileScenarioSpace(options.space)
         ? options.space.grid.lineOpacity
         : 1
     };
-    const markerFill = cssVariable(styles, "--marker", "#d24b3f");
-    const markerRing = cssVariable(styles, "--marker-ring", "#61221e");
+    const markerFill = cssVariable(styles, "--fc-marker", "#c85448");
+    const markerRing = cssVariable(styles, "--fc-marker-ring", "#7a2a22");
     const markerSelectionGlow = cssVariable(
       styles,
-      "--marker-selection-glow",
+      "--fc-marker-selection-glow",
       "rgba(31, 122, 104, 0.18)"
     );
-    const markerSelectionRing = cssVariable(styles, "--marker-selection-ring", "#0f7c68");
-    const viewportFill = cssVariable(styles, "--viewport-fill", "#e7ecef");
+    const markerSelectionRing = cssVariable(
+      styles,
+      "--fc-marker-selection-ring",
+      "#0f7c68"
+    );
+    const viewportFill = cssVariable(styles, "--fc-bg0", "#f5f6f4");
     const devicePixelRatio = window.devicePixelRatio || 1;
 
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
