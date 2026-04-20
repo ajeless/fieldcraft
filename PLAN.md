@@ -191,6 +191,7 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 - A built-in sprite creator, relevant after the first package asset baseline has real scenario pressure.
 - Audio playback wiring (import is storage-only today); pair with a concrete runtime workflow.
 - Asset licensing/attribution metadata once bundled-export scenarios ship third-party media.
+- Surface board-background change/clear affordances next to the Scenario tab's Board Background row. Today Clear Background and Set Background live only in the Assets tab, so authors who read scenario-wide state from the Scenario tab do not see a way to modify it there. Likely lands with `codex/asset-strip` or `codex/new-scenario-page` rather than as its own branch.
 
 ### Scenario source and packaging
 
@@ -208,6 +209,7 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 
 ### Selection and board editing
 
+- Direct drag-to-reposition for placed markers and future tokens on both tile and free-coordinate boards. Today placement happens by dragging from the palette onto the board, but an already-placed marker cannot be moved with the mouse; only source edits or delete-and-replace work. Should respect the active space model (tile snap vs. continuous) and integrate with undo/redo.
 - Marquee or drag selection for tokens and other board objects once multi-object authoring pressure is real.
 - Pair multi-selection with bulk move operations rather than treating drag selection as an isolated gesture-only feature.
 
@@ -244,6 +246,10 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 - In-game animation matters for digital board game feel (weapon fire, torpedoes, movement previews, resolution effects).
 - Animation tools wait for board viewport, runtime playback, and scenario rule resolution to have more shape.
 - Likely future need: timeline or event-effect authoring that stays data-driven and inspectable.
+
+### Editor session and reload
+
+- Reloading the editor with a clean (saved, unmodified) scenario currently drops back to the Board Setup screen instead of restoring the open scenario. Session-draft recovery only fires when `dirty` is true, and the remembered file path alone is not enough to rehydrate the scenario; on clean reloads the editor boots from an empty scenario. Expected: if a scenario is open and current, reload should restore it regardless of dirty state. Not caused by `codex/inspector-tabbed-rewrite` — lurking behavior surfaced during its manual testing.
 
 ### Cross-cutting
 
