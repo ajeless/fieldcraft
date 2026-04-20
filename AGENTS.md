@@ -56,7 +56,7 @@ Do not merge into `main` until something has been manually tested and shown usef
 
 Settled architecture lives in `DECISIONS.md`. Do not reopen those choices casually.
 
-Relevant decisions: `001` (editor-first), `004` (two space models), `005` (plotted simultaneous turns), `006` (structured data plus expression language), `007` (browser and binary exports), and `008` (human-readable scenario files).
+Relevant decisions: `001` (editor-first), `004` (two space models), `005` (plotted simultaneous turns), `006` (structured data plus expression language), `007` (browser and binary exports), `008` (human-readable scenario files), and `011` (scenario identity, migration, and forward-version policy).
 
 Establish the structural seams that those decisions require early. Generalize specific mechanics, rule patterns, or UI workflows only after at least two concrete scenarios justify it.
 
@@ -93,6 +93,7 @@ Keep docs light and split by ownership:
 - `PLAN.md` is for mutable branch plans, open questions, and deferred design space.
 - `DESKTOP-TESTING.md` is the manual desktop smoke checklist (release-significant per decision `009`).
 - `CLAUDE.md` is only a compatibility pointer to `AGENTS.md`.
+- `docs/redesign/BRIEF.md` is the durable spec for the editor UX/UI redesign; `docs/redesign/reference/` holds the mockup bundle it references.
 
 When a durable architectural choice is made, record it once in `DECISIONS.md` instead of duplicating rationale across files.
 
@@ -123,5 +124,3 @@ The project should play nice on Linux, macOS, and Windows.
 ## Release testing
 
 Per decision `009`, the desktop editor is authoritative. A passing browser smoke run does not imply a releasable desktop build. Desktop verification — native file dialogs, asset import, save-as carrying packaged assets forward, runtime launch, and export — is manual and release-significant. The current desktop checklist lives in `DESKTOP-TESTING.md`.
-
-- `docs/redesign/BRIEF.md` is the durable spec for the editor UX/UI redesign; `docs/redesign/reference/` contains the mockup bundle it references.

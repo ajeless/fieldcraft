@@ -84,3 +84,23 @@ Consequences:
 - Browser smoke coverage is sized for agent-driven regression catching, not for human feature validation. It should grow when agents need to test new flows and contract when a flow is covered by a better layer (unit tests on pure-logic modules, desktop manual smoke).
 - Do not invest in browser-authoring polish or UX for its own sake. Polish that happens to serve agent testability or the export runtime is fine; polish aimed at a hypothetical browser-authoring user is not.
 - If native desktop automation ever becomes cheap enough (for example via `tauri-driver` with manageable setup), revisit this decision. Until then, the browser-as-agent-surface is load-bearing.
+
+## 011 — Scenario format: identity, migration, and forward-version policy
+
+Three commitments make the scenario format safe to evolve: identity that survives renaming and merging, a migration registry that upgrades older files on load, and a hard reject on forward-version files rather than silent data loss. Per decision `008`, the format stays human-readable; these contracts are orthogonal to readability.
+
+### Identity model
+
+Pieces have opaque ids, prefixed `piece_` and followed by 6 Crockford base32 characters (the digits plus uppercase letters with `I`, `L`, `O`, and `U` excluded). Ids are generated at piece creation and on `v0 → v1` migration, and are unique within a scenario.
+
+An author-facing `label` is a separate free-form string; labels are not unique and carry no identity weight. Identity and display are decoupled so renaming never breaks references, and opaque ids survive copy, merge, and asset binding without label-coupling bugs.
+
+### Migration registry contract
+
+Scenario files carry an integer `schemaVersion`. The editor upgrades older files through a chain of per-adjacent-version migration steps registered at `apps/editor/src/scenario-migrations/`. Every load path runs the chain: file open, source-editor apply, and draft recovery.
+
+When a migration actually runs, the load reports a `migrated` flag. The editor uses that flag to dirty the in-memory document so the author is prompted to save the upgraded file through the normal save flow. Migrations do not overwrite files on disk as a side effect of loading.
+
+### Forward-version policy
+
+A file whose `schemaVersion` is higher than the current build's `currentSchemaVersion` is hard-rejected with a readable error that names both versions. The editor does not attempt a best-effort read, and it does not silently drop unknown fields on save. A forward-version file almost always contains a field the current build does not understand, and silently dropping it would corrupt the author's work the next time they save.

@@ -33,7 +33,7 @@ These are the checks that remain manual today:
 - native unsaved-changes warning dialog presentation
 - packaged-binary sanity beyond the scripted dev-shell path
 
-Use the automated smoke artifacts under `/tmp/fieldcraft-desktop-smoke/` if you want ready-made scenarios and package folders for the manual pass.
+Use the automated smoke artifacts under the OS temp directory (typically `/tmp/fieldcraft-desktop-smoke/` on Linux; platform-equivalent locations on macOS and Windows, as determined by Node's `os.tmpdir()`) if you want ready-made scenarios and package folders for the manual pass.
 
 ## Human Pass
 
@@ -53,7 +53,7 @@ corepack pnpm desktop:debug
 
 Recommended quick pass:
 
-1. Open any saved smoke scenario from `/tmp/fieldcraft-desktop-smoke/package-a/` or `/tmp/fieldcraft-desktop-smoke/package-b/`.
+1. Open any saved smoke scenario from `package-a/` or `package-b/` under the smoke scratch root (typically `/tmp/fieldcraft-desktop-smoke/` on Linux; platform-equivalent elsewhere).
 2. Dirty the document.
 3. Trigger **New Scenario** and confirm the native unsaved-changes dialog appears. Cancel once, then accept once.
 4. Trigger **Open Scenario** and confirm the native OS open dialog appears. Cancel once, then reopen a saved smoke scenario through the dialog.

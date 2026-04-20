@@ -2,6 +2,8 @@
 
 Durable reference for the editor UX/UI redesign. This file is the spec; the mockups in `reference/` are the illustration. When the two disagree, this file wins.
 
+Reference bundle revision: April 2026. Future design iterations must update this file or ship a replacement bundle alongside it; otherwise the reference silently drifts from the spec.
+
 ## Why this exists
 
 Fieldcraft's editor grew feature-first. `main.ts` reached 3,338 lines and 152 functions before a structural UI pass happened. Every new feature accreted as another stacked section in the right column, because there was no UI vocabulary — no `Inspector`, no `ToolRail`, no `StatusBar`, no overlay primitive — for features to plug into.
