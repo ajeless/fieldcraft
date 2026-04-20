@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FieldCraft Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #060a0e; color: #dbe6f0;
+    font-family: 'Inter', system-ui, sans-serif; height: 100%; overflow: hidden;
+    transition: background-color 0.15s ease; }
+  html[data-theme="light"], html[data-theme="light"] body { background: #f5f6f4; color: #1c2326; }
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #22303d; border-radius: 999px; border: 2px solid #0a0e12; }
+  ::-webkit-scrollbar-thumb:hover { background: #2d3d4d; }
+  html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c4c8c0; border-color: #f5f6f4; }
+  html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #9ea29a; }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="components/tokens.jsx"></script>
+<script type="text/babel" src="components/primitives.jsx"></script>
+<script type="text/babel" src="components/boards.jsx"></script>
+<script type="text/babel" src="components/chrome.jsx"></script>
+<script type="text/babel" src="components/scenario.jsx"></script>
+<script type="text/babel" src="components/editor.jsx"></script>
+<script type="text/babel" src="components/new-scenario.jsx"></script>
+<script type="text/babel" src="components/asset-library.jsx"></script>
+<script type="text/babel" src="components/asset-strip.jsx"></script>
+<script type="text/babel" src="components/runtime.jsx"></script>
+<script type="text/babel" src="components/palette.jsx"></script>
+
+<script type="text/babel">
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "screen": "runtime",
+  "spaceModel": "square"
+}/*EDITMODE-END*/;
+
+const SCENARIO = {
+  title: 'Untitled Fieldcraft Scenario',
+  file: 'atester1.fieldcraft.json',
+  w: 8, h: 8, tile: 48, scale: 1, unit: 'tile',
+  assets: 1,
+  sides: [
+    { id: 'fed', label: 'Federation',     color: '#5ea7e0' },
+    { id: 'kli', label: 'Klingon Empire', color: '#e06a5e' },
+  ],
+  markers: [
+    { x: 2, y: 3, sideId: 'fed' },
+    { x: 5, y: 4, sideId: 'kli' },
+  ],
+};
+
+function App() {
+  const [screen, setScreen] = React.useState(TWEAKS.screen);
+  const [theme, setThemeRaw] = React.useState('dark');
+  const [route, setRoute] = React.useState('editor');
+  const [palette, setPalette] = React.useState(false);
+  const [tweaksOpen, setTweaksOpen] = React.useState(false);
+
+  // Apply tokens synchronously BEFORE React renders so the fresh tree
+  // reads the right palette. Mutates FC_TOKENS in place.
+  const setTheme = React.useCallback((t) => {
+    window.applyTheme(t);
+    setThemeRaw(t);
+  }, []);
+  // Ensure initial tokens are applied at mount
+  React.useEffect(() => {
+    if (document.documentElement.dataset.theme !== theme) {
+      window.applyTheme(theme);
+    }
+  }, [theme]);
+
+  // Persist screen to localStorage for refresh-safety
+  React.useEffect(() => {
+    const saved = localStorage.getItem('fc-state');
+    if (saved) {
+      try { const s = JSON.parse(saved); setScreen(s.screen || TWEAKS.screen); }
+      catch(e){}
+    }
+  }, []);
+  React.useEffect(() => {
+    localStorage.setItem('fc-state', JSON.stringify({ screen }));
+  }, [screen]);
+
+  // ⌘K palette
+  React.useEffect(() => {
+    const h = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setPalette(p => !p); }
+      if (e.key === 'Escape') { setPalette(false); setTweaksOpen(false); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+
+  // Edit-mode protocol
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === '__activate_edit_mode') setTweaksOpen(true);
+      if (e.data?.type === '__deactivate_edit_mode') setTweaksOpen(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  // Keep screen and route in lockstep for the runtime view, without two
+  // mutually-triggering effects (which produced an infinite update loop).
+  const handleRouteChange = React.useCallback((r) => {
+    setRoute(r);
+    if (r === 'runtime') setScreen('runtime');
+    else setScreen(s => (s === 'runtime' ? 'editor' : s));
+  }, []);
+  const handleScreenChange = React.useCallback((s) => {
+    setScreen(s);
+    setRoute(s === 'runtime' ? 'runtime' : 'editor');
+  }, []);
+
+  return (
+    <div data-screen-label={screen} data-theme={theme} key={theme} style={{
+      height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column',
+      background: window.FC_TOKENS.bg0,
+    }}>
+      <TitleBar title={`Fieldcraft — ${SCENARIO.title}${screen !== 'editor' ? ` · ${screen}` : ''}`} />
+      <MenuBar
+        theme={theme} setTheme={setTheme}
+        route={route} setRoute={handleRouteChange}
+        onOpenPalette={() => setPalette(true)}
+        dirty
+      />
+      {screen === 'editor' && (
+        <EditorCommandBar
+          onNewScenario={() => handleScreenChange('new')}
+          onAssetLibrary={() => handleScreenChange('assets')}
+        />
+      )}
+
+      {screen === 'editor' && <EditorScreen dirty scenario={SCENARIO} onOpenLibrary={() => handleScreenChange('assets')} />}
+      {screen === 'new' && (
+        <NewScenarioScreen
+          onCancel={() => handleScreenChange('editor')}
+          onCreate={() => handleScreenChange('editor')}
+        />
+      )}
+      {screen === 'assets' && <AssetLibraryScreen onClose={() => handleScreenChange('editor')} />}
+      {screen === 'runtime' && <RuntimeScreen />}
+
+      {palette && <CommandPalette onClose={() => setPalette(false)} />}
+      {tweaksOpen && (
+        <TweaksPanel
+          screen={screen} setScreen={(s) => {
+            handleScreenChange(s);
+            window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { screen: s } }, '*');
+          }}
+          onClose={() => setTweaksOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditorCommandBar({ onNewScenario, onAssetLibrary }) {
+  const T = window.FC_TOKENS;
+  const K = window.FC_KEYS;
+  return (
+    <CommandBar>
+      <div style={{ display: 'flex', gap: 2 }}>
+        <CmdBtn icon={<Icons.Undo s={11} />} label="Undo" kbd={`${K.MOD}Z`} iconOnly disabled />
+        <CmdBtn icon={<Icons.Redo s={11} />} label="Redo" kbd={`${K.SHIFT_MOD}Z`} iconOnly disabled />
+      </div>
+      <div style={{ width: 1, height: 20, background: T.line, margin: '0 4px' }} />
+      <div style={{ display: 'flex', gap: 2 }}>
+        <CmdBtn icon={<Icons.FilePlus s={12} />} label="New" kbd={`${K.MOD}N`} iconOnly onClick={onNewScenario} />
+        <CmdBtn icon={<Icons.FolderOpen s={12} />} label="Open" kbd={`${K.MOD}O`} iconOnly />
+        <CmdBtn icon={<Icons.Save s={12} />} label="Save" kbd={`${K.MOD}S`} iconOnly primary />
+        <CmdBtn icon={<Icons.SaveAs s={12} />} label="Save As" kbd={`${K.SHIFT_MOD}S`} iconOnly />
+      </div>
+      <div style={{ width: 1, height: 20, background: T.line, margin: '0 4px' }} />
+      <CmdBtn icon={<Icons.Library s={12} />} label="Asset Library" iconOnly onClick={onAssetLibrary} />
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{
+          fontFamily: T.fontMono, fontSize: 10, color: T.inkDim, letterSpacing: 0.4,
+        }}>{SCENARIO.file}</span>
+      </div>
+    </CommandBar>
+  );
+}
+
+function TweaksPanel({ screen, setScreen, onClose }) {
+  const T = window.FC_TOKENS;
+  const K = window.FC_KEYS;
+  return (
+    <div style={{
+      position: 'fixed', right: 16, bottom: 16, width: 280, zIndex: 90,
+      background: T.bg2, border: `1px solid ${T.lineStrong}`, borderRadius: 6,
+      boxShadow: T.shadow2, overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: T.bg1, borderBottom: `1px solid ${T.line}`,
+      }}>
+        <span style={{
+          fontFamily: T.fontMono, fontSize: 10, letterSpacing: 1.2,
+          textTransform: 'uppercase', color: T.accent,
+        }}>Tweaks</span>
+        <button onClick={onClose} style={{
+          width: 20, height: 20, border: 0, background: 'transparent',
+          color: T.inkMuted, cursor: 'pointer', display: 'grid', placeItems: 'center',
+        }}><Icons.Close s={10} /></button>
+      </div>
+      <div style={{ padding: 12, display: 'grid', gap: 14 }}>
+        <div>
+          <div style={{ fontFamily: T.fontMono, fontSize: 9, color: T.inkDim,
+            letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>Screen</div>
+          <div style={{ display: 'grid', gap: 3 }}>
+            {[
+              { v: 'editor', l: 'Main editor' },
+              { v: 'new', l: 'New scenario setup' },
+              { v: 'assets', l: 'Asset library' },
+              { v: 'runtime', l: 'Runtime preview' },
+            ].map(o => (
+              <button key={o.v} onClick={() => setScreen(o.v)} style={{
+                height: 28, padding: '0 10px', textAlign: 'left',
+                border: `1px solid ${screen === o.v ? T.accent : T.line}`, borderRadius: 3,
+                background: screen === o.v ? T.accentWash : T.bg0,
+                color: screen === o.v ? T.accent : T.ink,
+                cursor: 'pointer', fontFamily: T.fontUi, fontSize: 12,
+              }}>{o.l}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ fontFamily: T.fontUi, fontSize: 11, color: T.inkDim, lineHeight: 1.5 }}>
+          Press <span style={{ fontFamily: T.fontMono, color: T.inkMuted }}>{K.MOD}K</span> to open the
+          command palette.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.App = App;
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

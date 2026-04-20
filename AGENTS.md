@@ -123,3 +123,5 @@ The project should play nice on Linux, macOS, and Windows.
 ## Release testing
 
 Per decision `009`, the desktop editor is authoritative. A passing browser smoke run does not imply a releasable desktop build. Desktop verification — native file dialogs, asset import, save-as carrying packaged assets forward, runtime launch, and export — is manual and release-significant. The current desktop checklist lives in `DESKTOP-TESTING.md`.
+
+- `docs/redesign/BRIEF.md` is the durable spec for the editor UX/UI redesign; `docs/redesign/reference/` contains the mockup bundle it references.
