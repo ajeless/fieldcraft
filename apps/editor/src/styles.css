@@ -323,6 +323,71 @@ button:disabled {
   gap: 18px;
 }
 
+.inspector-panel {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.inspector-tab-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  min-height: 34px;
+  border-bottom: 1px solid var(--fc-line);
+  background: var(--fc-bg2);
+}
+
+.inspector-tab-button {
+  flex: 1;
+  min-height: 34px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--fc-ink-muted);
+  font-family: var(--fc-font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0 6px;
+}
+
+.inspector-tab-button:hover {
+  color: var(--fc-ink);
+}
+
+.inspector-tab-button:focus-visible {
+  color: var(--fc-ink);
+  outline: 2px solid var(--fc-accent-wash);
+  outline-offset: -2px;
+}
+
+.inspector-tab-button.is-active {
+  color: var(--fc-accent);
+  border-bottom-color: var(--fc-accent);
+}
+
+.inspector-tab-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+  overflow: auto;
+}
+
+.inspector-tab {
+  display: grid;
+  gap: 18px;
+}
+
+.inspector-tab-header {
+  min-height: 0;
+  justify-content: flex-end;
+}
+
 .eyebrow {
   margin: 0 0 14px;
   color: var(--fc-accent-dim);
@@ -852,9 +917,13 @@ button:disabled {
 .source-editor-section {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .source-editor-input {
+  flex: 1;
   width: 100%;
   min-height: 180px;
   overflow: auto;
@@ -867,7 +936,7 @@ button:disabled {
   font-size: 0.78rem;
   line-height: 1.45;
   white-space: pre;
-  resize: vertical;
+  resize: none;
   font-family: var(--fc-font-mono);
 }
 

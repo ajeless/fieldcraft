@@ -14,6 +14,13 @@ Automation now covers both the browser support surface and a scripted desktop-se
 
 ## Recently Completed Baseline Slices
 
+- `codex/inspector-tabbed-rewrite`
+  - The right column is now a single docked panel with four peer tabs — Scenario, Selection, Assets, Source — replacing the previous vertical stack of sections per decision `012`.
+  - The Scenario tab mirrors scenario-wide state (Title, Space, Contents, File) with Board Background surfaced as a Contents metric; the Selection tab auto-promotes when a marker is selected from the Scenario tab, while explicit navigation to Source or Assets is never yanked away.
+  - Selection, Assets, and Source reuse the existing inspector renderers wholesale — source-editor line/column diagnostics, Apply/Reset, draft state, and Tab-key indent behavior are preserved verbatim.
+  - The left sidebar, Board Setup modal, contextual asset picker, author-defined sides, and floating/collapsible inspector variants are deliberately out of scope for this branch and tracked against later branches.
+  - Browser and desktop smoke helpers now switch tabs before interacting with tab-scoped content, and two new tab-behavior steps cover auto-promotion on selection and Source tab persistence after Apply.
+
 - PR #16 — audit mechanical fixes and scenario-format decision
   - Applied the mechanical follow-ups from `docs/doc-audit-2026-04.md`: refreshed `README.md`'s Current Baseline against shipped capabilities, added the redesign docs to `README.md`'s Docs list, moved the redesign-docs bullet into `AGENTS.md`'s Docs section, normalized `DESKTOP-TESTING.md`'s tmpdir phrasing, and pruned stray reference-bundle assets.
   - Added decision `011` capturing scenario format v2's identity model (opaque `piece_` ids with author-facing `label`), migration registry contract, and forward-version hard-reject policy; cross-referenced it from `AGENTS.md`'s Architecture guardrails.
@@ -82,24 +89,18 @@ Current manual testing pressure points are captured in the branch sequence below
 
 ## Near-Term Branch Sequence
 
-1. `codex/inspector-tabbed-rewrite`
-   - Convert the right column into the four-tab inspector (Scenario / Selection / Assets / Source) per `docs/redesign/BRIEF.md` § Tab contents, with Selection auto-promoting on active selection.
-   - Reuse the current docked column geometry; the goal is information architecture, not layout changes.
-   - Preserve the source pane's targeted line/column diagnostics when source moves into the Source tab.
-   - Not in scope: floating/collapsible inspector variants, coordinate-label stage rulers, author-defined sides — those are later branches.
-
-2. `codex/rules-expression-spike`
+1. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-3. `codex/status-bar`
+2. `codex/status-bar`
    - Promote the status line from a sidebar item to a thin bottom strip carrying structured fields — cursor position, active tool, space model, selection count, piece/asset counts, dirty state, save-shortcut hint.
    - Move the dirty indicator to a dot in the menu bar and retire the old sidebar status item.
    - Not in scope: inventing new status semantics beyond what the current status surface already exposes.
 
-4. `codex/unit-entity-model`
+3. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
@@ -108,36 +109,36 @@ Current manual testing pressure points are captured in the branch sequence below
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-5. `codex/asset-strip`
+4. `codex/asset-strip`
    - Add the bottom asset strip below the board with pinned-first thumbnail ordering and an Import drop card at the end.
    - Filter contextually — for example, auto-filter to image assets when the Marker tool is armed.
    - Remove the redundant Assets section from the inspector once the strip is primary; the Assets tab remains as the per-selection picker.
 
-6. `codex/command-palette`
+5. `codex/command-palette`
    - Wire `⌘K` / `Ctrl+K` to a fuzzy-searchable overlay over the existing command registry.
    - Treat the palette as a discoverability layer alongside the menu bar and command bar — not a replacement for either.
    - Subsumes the previously-planned `codex/editor-help-overlay`: shortcut and command discoverability is handled here instead of in a parallel help surface.
 
-7. `codex/new-scenario-page`
+6. `codex/new-scenario-page`
    - Replace the in-viewport dashed-border setup form with a full-page chooser: three space-model cards (square, pointy-top hex, free-coordinate) with miniature board previews, followed by scenario details.
    - Ship the same fields as an Edit Board Setup modal reachable post-creation from the Board menu and the Scenario tab's Space section, closing the one-way-door problem.
    - Not in scope: full modal polish beyond what it takes to make post-creation edits safe and reversible.
 
-8. `codex/token-styling`
+7. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Slot new styling controls into the Selection tab introduced by `codex/inspector-tabbed-rewrite`; avoid regrowing the old right-column stack.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-9. `codex/rules-authoring-system`
+8. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
 
-10. `codex/standalone-runtime-export`
-    - Package a finished game as a standalone Tauri binary after the browser export path is working.
-    - Reuse the browser runtime/export shape where possible.
-    - Add platform-specific packaging incrementally instead of trying to support every target at once.
+9. `codex/standalone-runtime-export`
+   - Package a finished game as a standalone Tauri binary after the browser export path is working.
+   - Reuse the browser runtime/export shape where possible.
+   - Add platform-specific packaging incrementally instead of trying to support every target at once.
 
 ## Out of Scope
 
@@ -190,6 +191,7 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 - A built-in sprite creator, relevant after the first package asset baseline has real scenario pressure.
 - Audio playback wiring (import is storage-only today); pair with a concrete runtime workflow.
 - Asset licensing/attribution metadata once bundled-export scenarios ship third-party media.
+- Surface board-background change/clear affordances next to the Scenario tab's Board Background row. Today Clear Background and Set Background live only in the Assets tab, so authors who read scenario-wide state from the Scenario tab do not see a way to modify it there. Likely lands with `codex/asset-strip` or `codex/new-scenario-page` rather than as its own branch.
 
 ### Scenario source and packaging
 
@@ -207,6 +209,7 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 
 ### Selection and board editing
 
+- Direct drag-to-reposition for placed markers and future tokens on both tile and free-coordinate boards. Today placement happens by dragging from the palette onto the board, but an already-placed marker cannot be moved with the mouse; only source edits or delete-and-replace work. Should respect the active space model (tile snap vs. continuous) and integrate with undo/redo.
 - Marquee or drag selection for tokens and other board objects once multi-object authoring pressure is real.
 - Pair multi-selection with bulk move operations rather than treating drag selection as an isolated gesture-only feature.
 
@@ -243,6 +246,10 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 - In-game animation matters for digital board game feel (weapon fire, torpedoes, movement previews, resolution effects).
 - Animation tools wait for board viewport, runtime playback, and scenario rule resolution to have more shape.
 - Likely future need: timeline or event-effect authoring that stays data-driven and inspectable.
+
+### Editor session and reload
+
+- Reloading the editor with a clean (saved, unmodified) scenario currently drops back to the Board Setup screen instead of restoring the open scenario. Session-draft recovery only fires when `dirty` is true, and the remembered file path alone is not enough to rehydrate the scenario; on clean reloads the editor boots from an empty scenario. Expected: if a scenario is open and current, reload should restore it regardless of dirty state. Not caused by `codex/inspector-tabbed-rewrite` — lurking behavior surfaced during its manual testing.
 
 ### Cross-cutting
 

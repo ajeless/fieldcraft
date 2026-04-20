@@ -86,6 +86,8 @@ import {
 
 type Route = "editor" | "runtime";
 
+type InspectorTab = "scenario" | "selection" | "assets" | "source";
+
 type EditorCommandId =
   | "undo"
   | "redo"
@@ -181,6 +183,7 @@ let sourceDraft = recoveredSessionDraft?.sourceDraft ?? scenarioToJson(scenario)
 let sourceEditorErrorMessage: string | null = null;
 let sourceEditorErrorSelection: SourceEditorSelection | null = null;
 let selectedMarkerId: string | null = null;
+let inspectorTab: InspectorTab = "scenario";
 let commandRegistry: EditorCommands | null = null;
 let desktopAutomationStarted = false;
 const editorHistory = createHistoryState<EditorSnapshot>();
@@ -205,6 +208,23 @@ function render(): void {
   syncEditorSessionDraft();
   app.innerHTML = "";
   app.append(createShell(getRoute()));
+}
+
+function promoteSelectionTabFromScenario(): void {
+  // Auto-promote only from Scenario so explicit navigation to Source or
+  // Assets is not yanked away when a new marker is selected.
+  if (inspectorTab === "scenario") {
+    inspectorTab = "selection";
+  }
+}
+
+function setInspectorTab(tab: InspectorTab): void {
+  if (inspectorTab === tab) {
+    return;
+  }
+
+  inspectorTab = tab;
+  render();
 }
 
 function createShell(route: Route): HTMLElement {
@@ -273,9 +293,12 @@ function themeButton(
 }
 
 function createEditorView(): HTMLElement {
+  // TODO(codex/status-bar): the Scenario tab intentionally mirrors the
+  // left-sidebar metrics (Title/Board/Markers/Assets/File) today. The left
+  // sidebar's rewrite lands with the status-bar + tool-rail branches, which
+  // resolve that duplication.
   const view = element("section", "workspace");
   view.dataset.view = "editor";
-  const selectedMarker = getSelectedMarker();
 
   const sidebar = element("aside", "panel left-panel");
   sidebar.append(
@@ -304,28 +327,187 @@ function createEditorView(): HTMLElement {
       : createBoardSetup()
   );
 
-  const inspector = element("aside", "panel right-panel");
-  inspector.append(createSelectionInspector(selectedMarker));
-  inspector.append(createAssetLibrarySection());
+  const inspector = element("aside", "panel right-panel inspector-panel");
+  inspector.append(createInspectorTabBar());
+  const body = element("div", "inspector-tab-body");
+  body.append(renderActiveInspectorTab());
+  inspector.append(body);
+
+  view.append(sidebar, boardStage, inspector);
+  return view;
+}
+
+function createInspectorTabBar(): HTMLElement {
+  const bar = element("nav", "inspector-tab-bar");
+  bar.setAttribute("aria-label", "Inspector tabs");
+  const selectedMarker = getSelectedMarker();
+  const selectionLabel = selectedMarker ? "Selection · 1" : "Selection";
+  const tabs: ReadonlyArray<{ id: InspectorTab; label: string }> = [
+    { id: "scenario", label: "Scenario" },
+    { id: "selection", label: selectionLabel },
+    { id: "assets", label: "Assets" },
+    { id: "source", label: "Source" }
+  ];
+
+  for (const tab of tabs) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      inspectorTab === tab.id ? "inspector-tab-button is-active" : "inspector-tab-button";
+    button.textContent = tab.label;
+    button.dataset.testid = `inspector-tab-${tab.id}`;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", inspectorTab === tab.id ? "true" : "false");
+    button.addEventListener("click", () => setInspectorTab(tab.id));
+    bar.append(button);
+  }
+
+  return bar;
+}
+
+function renderActiveInspectorTab(): HTMLElement {
+  switch (inspectorTab) {
+    case "scenario":
+      return createScenarioTab();
+    case "selection":
+      return createSelectionTab(getSelectedMarker());
+    case "assets":
+      return createAssetsTab();
+    case "source":
+      return createSourceTab();
+  }
+}
+
+function createScenarioTab(): HTMLElement {
+  const tab = element("section", "inspector-tab inspector-tab-scenario");
+  tab.dataset.testid = "inspector-tab-body-scenario";
+
+  tab.append(
+    labeledInput("Title", scenario.title, updateScenarioTitle, "scenario-tab-title-input")
+  );
+
+  const spaceSection = element("section", "inspector-section");
+  spaceSection.append(element("p", "eyebrow", "Space"));
+  for (const row of getScenarioSpaceMetrics()) {
+    spaceSection.append(metric(row.label, row.value, row.testId));
+  }
+  // TODO(codex/new-scenario-page): Scenario tab's Space section should expose
+  // an "Edit…" button that opens the Edit Board Setup modal. Until that
+  // branch lands, board setup is reachable only by creating a new scenario.
+  tab.append(spaceSection);
+
+  const contentsSection = element("section", "inspector-section");
+  const backgroundAsset = getScenarioBackgroundImageAsset(scenario);
+  contentsSection.append(
+    element("p", "eyebrow", "Contents"),
+    metric("Markers", String(scenario.pieces.length), "scenario-tab-marker-count"),
+    metric("Assets", String(scenario.assets.length), "scenario-tab-asset-count"),
+    metric(
+      "Board Background",
+      backgroundAsset?.id ?? "None",
+      "board-background-image-asset"
+    )
+  );
+  tab.append(contentsSection);
+
+  // TODO(codex/unit-entity-model): Scenario tab should host a Sides section
+  // with author-defined sides. Sides are a scenario-format change that lands
+  // with the entity-model branch (schemaVersion: 3).
+
+  const fileSection = element("section", "inspector-section");
   const savedAt = scenario.metadata.savedAt
     ? new Date(scenario.metadata.savedAt).toLocaleString()
     : "Not saved";
   const currentFilePath = getCurrentFilePath();
-  const savedGameSection = element("section", "inspector-section");
-  savedGameSection.append(
-    element("p", "eyebrow", "Saved Game"),
-    metric("State", getDocumentState()),
-    metric("Mode", getStorageModeLabel()),
-    metric("Last Save", savedAt)
+  fileSection.append(
+    element("p", "eyebrow", "File"),
+    metric("State", getDocumentState(), "scenario-tab-document-state"),
+    metric("Mode", getStorageModeLabel(), "scenario-tab-storage-mode"),
+    metric("Last Save", savedAt, "scenario-tab-last-save")
   );
   if (currentFilePath) {
-    savedGameSection.append(metric("Path", currentFilePath));
+    fileSection.append(metric("Path", currentFilePath, "scenario-tab-file-path"));
   }
-  inspector.append(savedGameSection);
-  inspector.append(createSourceEditorSection());
+  tab.append(fileSection);
 
-  view.append(sidebar, boardStage, inspector);
-  return view;
+  return tab;
+}
+
+function getScenarioSpaceMetrics(): ReadonlyArray<{
+  label: string;
+  value: string;
+  testId: string;
+}> {
+  const space = scenario.space;
+  if (!space) {
+    return [
+      {
+        label: "Model",
+        value: "No board configured",
+        testId: "scenario-tab-space-model"
+      }
+    ];
+  }
+
+  if (isTileScenarioSpace(space)) {
+    const modelLabel = space.type === "hex-grid" ? "Hex grid" : "Square grid";
+    return [
+      { label: "Model", value: modelLabel, testId: "scenario-tab-space-model" },
+      {
+        label: "Dimensions",
+        value: `${space.width} × ${space.height}`,
+        testId: "scenario-tab-space-dimensions"
+      },
+      {
+        label: "Tile size",
+        value: `${space.tileSize}px`,
+        testId: "scenario-tab-space-tile-size"
+      },
+      {
+        label: "Scale",
+        value: `${space.scale.distancePerTile} ${space.scale.unit}/tile`,
+        testId: "scenario-tab-space-scale"
+      }
+    ];
+  }
+
+  const bounds = space.bounds;
+  return [
+    {
+      label: "Model",
+      value: "Free-coordinate",
+      testId: "scenario-tab-space-model"
+    },
+    {
+      label: "Dimensions",
+      value: `${bounds.width} × ${bounds.height}`,
+      testId: "scenario-tab-space-dimensions"
+    },
+    {
+      label: "Origin",
+      value: `${bounds.x}, ${bounds.y}`,
+      testId: "scenario-tab-space-origin"
+    },
+    {
+      label: "Scale",
+      value: `${space.scale.distancePerWorldUnit} ${space.scale.unit}/unit`,
+      testId: "scenario-tab-space-scale"
+    }
+  ];
+}
+
+function createSelectionTab(
+  selectedMarker: Scenario["pieces"][number] | null
+): HTMLElement {
+  return createSelectionInspector(selectedMarker);
+}
+
+function createAssetsTab(): HTMLElement {
+  return createAssetLibrarySection();
+}
+
+function createSourceTab(): HTMLElement {
+  return createSourceEditorSection();
 }
 
 function createOpenScenarioInput(): HTMLInputElement {
@@ -821,8 +1003,8 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
     "action-button compact-action destructive-action",
     "Delete"
   );
-  const header = element("div", "inspector-section-header");
-  header.append(element("p", "eyebrow", "Selection"), deleteButton);
+  const header = element("div", "inspector-section-header inspector-tab-header");
+  header.append(deleteButton);
 
   section.append(header);
   if (!scenario.space) {
@@ -951,7 +1133,7 @@ function createAssetLibrarySection(): HTMLElement {
   importImageButton.className = "action-button compact-action";
   importAudioButton.className = "action-button compact-action";
   clearBackgroundButton.className = "action-button compact-action";
-  header.append(element("p", "eyebrow", "Assets"));
+  header.classList.add("inspector-tab-header");
   actions.append(importImageButton, importAudioButton, clearBackgroundButton);
   header.append(actions);
   section.append(header);
@@ -1068,7 +1250,7 @@ function createSourceEditorSection(): HTMLElement {
 
   applyButton.className = "action-button compact-action";
   resetButton.className = "action-button compact-action";
-  header.append(element("p", "eyebrow", "Source"));
+  header.classList.add("inspector-tab-header");
   actions.append(applyButton, resetButton);
   header.append(actions);
 
@@ -1471,6 +1653,9 @@ function handleSelectedMarkerChange(pieceId: string | null): void {
   }
 
   selectedMarkerId = pieceId;
+  if (pieceId) {
+    promoteSelectionTabFromScenario();
+  }
   render();
 }
 
@@ -1597,6 +1782,7 @@ function placeDefaultMarker(x: number, y: number): void {
       ]
     };
     selectedMarkerId = markerId;
+    promoteSelectionTabFromScenario();
   });
 }
 
