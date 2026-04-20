@@ -46,9 +46,10 @@ corepack pnpm desktop
 For packaged-build-significant work, also launch the debug binary once:
 
 ```sh
-corepack pnpm --dir apps/editor tauri build --debug --no-bundle
-./apps/editor/src-tauri/target/debug/fieldcraft
+corepack pnpm desktop:debug
 ```
+
+`target/debug/fieldcraft` is reused by both dev and packaged-debug flows. If you launch that path directly without rebuilding first and see `Could not connect to 127.0.0.1: Connection refused`, you are running a dev-style artifact that still expects the Vite server.
 
 Recommended quick pass:
 

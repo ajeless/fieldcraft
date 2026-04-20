@@ -14,6 +14,16 @@ Automation now covers both the browser support surface and a scripted desktop-se
 
 ## Recently Completed Baseline Slices
 
+- `codex/readme-workflow-clarity`
+  - `README.md` now explains the repo in workflow terms instead of assuming familiarity with Tauri and Vite conventions.
+  - The main development paths are now explicit: desktop dev shell, packaged debug desktop binary, release-style desktop build, and browser checks.
+  - Setup and test guidance now explains why each command exists so community contributors can choose the right path without reverse-engineering the toolchain.
+
+- `codex/desktop-debug-launch-clarity`
+  - Manual packaged-debug desktop checks now have a single launcher: `corepack pnpm desktop:debug` rebuilds the standalone Tauri debug binary before starting it.
+  - Desktop docs now call out that `apps/editor/src-tauri/target/debug/fieldcraft` is reused by dev flows, so a stale dev artifact can fail with `Could not connect to 127.0.0.1: Connection refused`.
+  - The manual desktop checklist now points testers at the wrapper command instead of assuming the raw binary path is always safe to run.
+
 - `codex/desktop-semantic-smoke-automation`
   - `corepack pnpm test:desktop:smoke` now runs a scripted Tauri dev-shell pass that covers save/open semantics, package-local asset import and copying, `Save As` asset carry-forward, runtime launch, browser-runtime export, and draft-recovery behavior.
   - The desktop automation seam is intentionally narrow and test-only: canned dialog responses and file paths are injected only when the desktop smoke script launches the app with an explicit automation spec.
@@ -59,17 +69,22 @@ Automation now covers both the browser support surface and a scripted desktop-se
   - Opening a v0 file migrates in memory, dirties the doc, and saves as v1 through the normal save flow; source-editor line/column diagnostics are preserved through the `ScenarioLoadError` wrapper.
   - Vitest is the new unit-test runner, co-located at `apps/editor/src/**/*.test.ts`; pre/post fixture pairs cover tile, free-coord (with negative positions), and empty scenarios.
 
-Current manual testing pressure points are captured in the branch sequence below. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
+Current manual testing pressure points are captured in the branch sequence below. The next branch is intentionally a no-code redesign planning and ideation pass before more editor surface area lands. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/rules-expression-spike`
+1. `codex/editor-ux-redesign-planning`
+   - Run a no-code planning and ideation session focused on editor layout, discoverability, command surfaces, and inspector information architecture before more authoring features compound the current crowding.
+   - Use current pain points from manual testing to identify what belongs in persistent chrome, what should be contextual, and what should move behind overlays, tabs, or disclosure.
+   - Leave implementation out of scope for this branch; the goal is a clearer redesign brief and a small set of candidate directions.
+
+2. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor.
 
-2. `codex/unit-entity-model`
+3. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
@@ -77,22 +92,22 @@ Current manual testing pressure points are captured in the branch sequence below
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-3. `codex/editor-help-overlay`
+4. `codex/editor-help-overlay`
    - Add a lightweight, discoverable help surface for existing keyboard shortcuts and command affordances.
    - Prefer a single overlay or menu-tooltip pass over a per-surface help scheme.
    - Keep content data-driven so commands added later surface automatically.
 
-4. `codex/token-styling`
+5. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-5. `codex/rules-authoring-system`
+6. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
 
-6. `codex/standalone-runtime-export`
+7. `codex/standalone-runtime-export`
    - Package a finished game as a standalone Tauri binary after the browser export path is working.
    - Reuse the browser runtime/export shape where possible.
    - Add platform-specific packaging incrementally instead of trying to support every target at once.

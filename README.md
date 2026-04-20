@@ -1,35 +1,48 @@
 # Fieldcraft
 
-A visual authoring tool for turn-based tactical board game experiences.
+Fieldcraft is a visual authoring tool for turn-based tactical board game experiences.
 
-## Vision
+The editor is the product. The engine, rules interpreter, and export pipeline exist to support authoring inside that editor. The intended loop is: design a scenario, play-test it, revise it, and export it without leaving the same environment.
 
-Fieldcraft aims to be an editor-first environment for designing, play-testing, and exporting tactical scenarios. Scenario authors should be able to draw maps, define units, author rules in a small expression language, and play-test without leaving the editor. Finished work should export to a playable browser build or a standalone desktop binary.
+## Current Baseline
 
-## Status
+Fieldcraft can already author small scenarios end to end:
 
-The editor can author small tactical scenarios end to end: create square, pointy-top hex, and free-coordinate boards; place, select, and delete colocated markers; save, open, and recover scenario JSON; edit that JSON inline with validation; import package-local image/audio assets on desktop; assign imported image artwork to markers; launch a read-only runtime view; and export a self-contained browser runtime with bundled assets. Automated smoke now covers both the browser support surface and the desktop dev-shell semantics.
+- square, pointy-top hex, and free-coordinate boards
+- marker placement, selection, deletion, and colocated marker handling
+- in-app scenario JSON editing with validation
+- desktop save/open flows and draft recovery
+- desktop package-local image and audio import
+- marker artwork from imported image assets
+- a read-only in-app runtime view
+- a self-contained browser runtime export with bundled assets
 
-The desktop editor is the authoritative authoring surface (decision `009`). The browser editor is a constrained development, testing, and demo surface, not a parity promise.
+The desktop editor is the authoritative authoring surface. The browser surface is useful for development, smoke testing, and demos, but it is not a parity promise.
 
-See `PLAN.md` for slice-level baseline detail and the current near-term branch sequence.
+See `PLAN.md` for the current branch plan and near-term slices.
 
 ## Stack
 
-- **Editor shell:** Tauri
-- **Engine and editor UI:** TypeScript
-- **Package manager:** pnpm
-- **Export targets:** Browser bundle, Tauri standalone binary
+- Editor shell: Tauri
+- Editor and engine logic: TypeScript
+- Package manager: pnpm
+- Desktop toolchain: Rust
+- Export targets: browser runtime and Tauri desktop binary
 
-## Development
+## Before You Start
+
+You do not need the full desktop toolchain for every task.
+
+- Browser-only work needs Node.js, Corepack, and pnpm.
+- Desktop work also needs Rust plus Tauri's native OS dependencies.
 
 Prerequisites:
 
-- Node.js 22.12 or newer with Corepack
-- Rust, Cargo, rustup, and [platform Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop commands
+- Node.js `22.12` or newer
+- Corepack enabled
+- Rust, Cargo, and rustup for desktop commands
+- Tauri platform prerequisites for your OS
 - Google Chrome or Playwright-managed Chromium for browser smoke tests
-
-The browser editor/runtime loop only needs Node.js, Corepack, and pnpm. Desktop commands also need Rust and native system packages.
 
 ### Platform Setup
 
@@ -56,64 +69,189 @@ xcode-select --install
 
 #### Windows
 
-- Install Microsoft C++ Build Tools with the "Desktop development with C++" workload
-- Install Microsoft Edge WebView2 Runtime if it is not already present
-- Install Rust with the MSVC toolchain
+- Install Microsoft C++ Build Tools with the `Desktop development with C++` workload.
+- Install Microsoft Edge WebView2 Runtime if it is not already present.
+- Install Rust with the MSVC toolchain.
 
-Rust can be installed with rustup:
+Install Rust with rustup:
 
 ```sh
 curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
 . "$HOME/.cargo/env"
 ```
 
-On Windows, Rust can also be installed with winget:
+Windows alternative:
 
 ```powershell
 winget install --id Rustlang.Rustup
 rustup default stable-msvc
 ```
 
-Install dependencies:
+### One-Time Repo Setup
+
+Install JavaScript dependencies:
 
 ```sh
 corepack pnpm install
 ```
 
-Check the local developer environment:
+Run the environment check:
 
 ```sh
 corepack pnpm run doctor
 ```
 
-### Browser Testing
+`doctor` is the fastest way to catch missing Node, pnpm, Rust, or Linux desktop packages before you spend time on a build that was never going to start.
 
-Use the browser flow when you want the fastest editor loop and when you are testing browser-specific file behavior such as file-picker import and JSON download. This is also the current automated coverage path for the repo.
+## Understand The Three Main Workflows
 
-Start the browser editor:
+If you are not used to Tauri/Vite projects, the important distinction is this:
+
+- `corepack pnpm desktop` runs the desktop development shell. It uses a live frontend dev server at `http://127.0.0.1:5173/`.
+- `corepack pnpm desktop:debug` rebuilds and launches a packaged-style debug desktop app. It does not depend on the dev server after the build.
+- `corepack pnpm tauri:build` produces a release-style desktop build and installer artifacts.
+
+That difference matters because a binary in `target/debug/` may have been produced by either a dev flow or a packaged build flow. The wrapper commands exist so you do not have to remember which artifact is safe to launch for which purpose.
+
+## 1. Build And Test The Desktop Debug Workflow
+
+Use this when you want the normal day-to-day desktop development loop: native shell, native dialogs, and fast frontend iteration.
+
+Run the desktop preflight:
+
+```sh
+corepack pnpm desktop:check
+```
+
+Run the automated desktop semantic smoke:
+
+```sh
+corepack pnpm test:desktop:smoke
+```
+
+Launch the desktop development shell:
+
+```sh
+corepack pnpm desktop
+```
+
+What this does:
+
+- checks that the Tauri desktop dev port is usable
+- starts or reuses the tracked Vite dev server at `http://127.0.0.1:5173/`
+- launches the Tauri desktop shell against that live frontend
+- stops only the dev server it started
+
+This is the best path for:
+
+- routine editor development
+- manual testing of native dialogs and desktop-only file behavior
+- validating that the desktop shell still matches the editor's current frontend state
+
+Files written by the tracked browser server:
+
+- process state: `.fieldcraft/run/dev-server.json`
+- logs: `.fieldcraft/logs/dev-server.log`
+
+If you want the human-only desktop checklist after the automated smoke, use `DESKTOP-TESTING.md`.
+
+## 2. Build And Run A Packaged Desktop Binary
+
+Use this when you want to verify startup and packaging behavior without depending on the live Vite dev server.
+
+### Fast packaged debug path
+
+This is the safest manual command for a packaged local binary:
+
+```sh
+corepack pnpm desktop:debug
+```
+
+That command:
+
+- rebuilds the standalone Tauri debug binary with `tauri build --debug --no-bundle`
+- launches the resulting binary from `apps/editor/src-tauri/target/debug/`
+
+This is the right choice for:
+
+- packaged-debug startup checks
+- manual sanity checks for desktop packaging behavior
+- avoiding stale `target/debug/fieldcraft` artifacts left behind by `tauri dev`
+
+If you want to build it manually instead of using the wrapper:
+
+```sh
+corepack pnpm --dir apps/editor tauri build --debug --no-bundle
+```
+
+Unix-like systems:
+
+```sh
+./apps/editor/src-tauri/target/debug/fieldcraft
+```
+
+Windows:
+
+```powershell
+.\apps\editor\src-tauri\target\debug\fieldcraft.exe
+```
+
+If you see `Could not connect to 127.0.0.1: Connection refused`, you launched a dev-style artifact that still expects the Vite server. Rebuild first with `corepack pnpm desktop:debug`.
+
+### Release-style desktop build
+
+If you want the actual release binary and installer artifacts, build them with:
+
+```sh
+corepack pnpm tauri:build
+```
+
+Typical outputs:
+
+- release binary: `apps/editor/src-tauri/target/release/fieldcraft`
+- Linux bundle artifacts: `apps/editor/src-tauri/target/release/bundle/`
+
+On Linux in this repo, that bundle directory currently contains formats such as `.deb` and `.rpm` when the build succeeds. Other platforms will produce their platform-appropriate outputs through Tauri.
+
+Use the release-style build when you are checking:
+
+- production-like startup behavior
+- installer and bundle generation
+- release-significant packaging changes
+
+## 3. Check Whether The Web Version Is Working
+
+Use this when you want the fastest editor loop or need to verify browser-specific behavior.
+
+Start the tracked browser dev server:
 
 ```sh
 corepack pnpm start
 ```
 
-The tracked Vite dev server runs at `http://127.0.0.1:5173/` by default, writes process state to `.fieldcraft/run/dev-server.json`, and writes logs to `.fieldcraft/logs/dev-server.log`. Desktop dev mode uses this server; production desktop builds bundle static assets from `apps/editor/dist/` and do not require Vite.
+Then open:
 
-Manual browser test flow:
+```text
+http://127.0.0.1:5173/
+```
 
-1. Run `corepack pnpm start`.
-2. Open `http://127.0.0.1:5173/` in a browser.
-3. Exercise editor and runtime flows in the browser UI.
-4. Verify browser-specific file behavior:
-   - **Open Scenario** uses the browser file picker.
-   - **Save Scenario** updates the browser fallback save state.
-   - **Download JSON** writes a downloaded copy.
-5. Stop the tracked dev server when finished.
-
-Stop the browser editor:
+When you are done, stop that tracked server:
 
 ```sh
 corepack pnpm stop
 ```
+
+This is the right path for:
+
+- quick UI checks
+- browser-only file behavior
+- smoke-testing the exported runtime support surface
+
+Browser-specific expectations:
+
+- **Open Scenario** uses the browser file picker
+- **Save Scenario** uses the browser fallback save state
+- **Download JSON** writes a downloaded copy instead of saving in place
 
 Build the browser app:
 
@@ -127,97 +265,34 @@ Run the browser smoke test:
 corepack pnpm test:smoke
 ```
 
-If Google Chrome is unavailable locally, install Playwright's Chromium first:
+If Chrome is not available locally, install Playwright's Chromium first:
 
 ```sh
 corepack pnpm exec playwright install chromium
 ```
 
-The smoke test exercises the main browser editor and runtime flows end to end. See `scripts/test-browser-smoke.mjs` for the current coverage surface.
+## Other Useful Commands
 
-Run the editor unit tests (identity generator, scenario migrations, and the `loadScenario` entry point):
+Run the unit tests:
 
 ```sh
 corepack pnpm test:unit
 ```
 
-### Desktop Testing
-
-Use the desktop flow when you need to verify native dialogs, restart behavior, package-local asset imports, or the Tauri shell itself. This is the authoritative authoring path and the path that corresponds to the standalone binary target.
-
-Run the desktop preflight first:
-
-```sh
-corepack pnpm desktop:check
-```
-
-Run the automated desktop semantic smoke:
-
-```sh
-corepack pnpm test:desktop:smoke
-```
-
-Run the Tauri desktop shell for development:
-
-```sh
-corepack pnpm desktop
-```
-
-The desktop script checks the Tauri dev port, uses the local Rust toolchain from `~/.cargo/bin` when needed, starts or reuses the tracked browser dev server, launches the Tauri development shell, and stops only the server it started.
-
-Desktop coverage now splits in two layers:
-
-- `corepack pnpm test:desktop:smoke` automates the desktop semantic pass in the Tauri dev shell: save/open behavior, asset import/copying, `Save As`, runtime launch, export, and draft recovery.
-- `DESKTOP-TESTING.md` is the residual human-only checklist for native OS dialog presentation and packaged-build sanity.
-
-The smoke script writes reusable artifacts under `/tmp/fieldcraft-desktop-smoke/`, which the human-only pass can reuse when you want concrete files to open or save against.
-
-Manual desktop test flow:
-
-1. Run `corepack pnpm desktop`.
-2. Wait for the Tauri editor window to open.
-3. Exercise the same editor and runtime flows there.
-4. Verify desktop-specific behavior:
-   - **Open Scenario** and **Save As** use native file dialogs.
-   - **Save Scenario** writes directly to the current file once the scenario already has a path; otherwise it falls back to **Save As**.
-   - Closing and relaunching the app preserves any expected desktop session behavior you are testing.
-   - Saved files on disk only change after explicit `Save` or `Save As`.
-
-A debug desktop binary built with `corepack pnpm --dir apps/editor tauri build --debug --no-bundle` lives at `apps/editor/src-tauri/target/debug/fieldcraft`.
-
-Build the debug desktop binary:
-
-```sh
-corepack pnpm --dir apps/editor tauri build --debug --no-bundle
-```
-
-Run it directly on Unix-like systems:
-
-```sh
-./apps/editor/src-tauri/target/debug/fieldcraft
-```
-
-Run it directly on Windows:
-
-```powershell
-.\apps\editor\src-tauri\target\debug\fieldcraft.exe
-```
-
-In the desktop shell, **Open Scenario** and **Save As** use native file dialogs, while **Save Scenario** writes directly to the current file after the scenario has a path. In the browser fallback, **Open Scenario** imports JSON through the browser file picker and **Download JSON** saves a copy.
-
-### Maintenance
-
-Tauri icon assets are generated from `apps/editor/src-tauri/app-icon.svg` and committed under `apps/editor/src-tauri/icons/`.
+Generate Tauri icons from the committed source SVG:
 
 ```sh
 corepack pnpm --dir apps/editor tauri icon src-tauri/app-icon.svg
 ```
 
-References:
+## Docs
+
+- `AGENTS.md`: agent workflow and contribution guardrails
+- `DECISIONS.md`: settled architectural choices
+- `PLAN.md`: current branch plan and deferred questions
+- `DESKTOP-TESTING.md`: residual human-only desktop testing checklist
+
+## References
 
 - Tauri v2 prerequisites: https://v2.tauri.app/start/prerequisites/
 - Rust installation: https://www.rust-lang.org/tools/install
-
-## Docs
-
-See `AGENTS.md` for contribution workflow and doc ownership. See `DECISIONS.md` for settled architectural choices.

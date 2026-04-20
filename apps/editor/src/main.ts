@@ -846,7 +846,11 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
   }
 
   if (!selectedMarker) {
-    const empty = element("p", "inspector-empty", "No marker selected.");
+    const empty = element(
+      "p",
+      "inspector-empty",
+      "No marker selected. Select a marker on the board to edit its label and image."
+    );
     empty.dataset.testid = "selected-marker-empty";
     section.append(empty);
     return section;
@@ -990,6 +994,16 @@ function createAssetLibrarySection(): HTMLElement {
         "p",
         "source-editor-hint",
         "Imported assets are copied into an assets/ folder beside the scenario file and kept as relative package refs."
+      )
+    );
+  }
+
+  if (scenario.space) {
+    section.append(
+      element(
+        "p",
+        "source-editor-hint",
+        "To assign marker artwork, select a marker on the board and use Selection > Image."
       )
     );
   }
