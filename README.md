@@ -6,16 +6,7 @@ The editor is the product. The engine, rules interpreter, and export pipeline ex
 
 ## Current Baseline
 
-Fieldcraft can already author small scenarios end to end:
-
-- square, pointy-top hex, and free-coordinate boards
-- marker placement, selection, deletion, and colocated marker handling
-- in-app scenario JSON editing with validation
-- desktop save/open flows and draft recovery
-- desktop package-local image and audio import
-- marker artwork from imported image assets
-- a read-only in-app runtime view
-- a self-contained browser runtime export with bundled assets
+Fieldcraft can already author small scenarios end to end. Square, pointy-top hex, and free-coordinate boards support permissive marker placement, selection, deletion, and colocation, with viewport pan/zoom/reset. The editor keeps in-memory undo/redo, persisted System/Light/Dark themes, and draft-recovery autosave across sessions. A small command registry drives file actions with unsaved-change guards on desktop and in the browser, and an editable source pane edits scenario JSON with targeted line/column diagnostics. Desktop package-local image and audio import write assets beside the scenario file, markers can render imported image artwork, and `Save As` carries packaged assets forward. A read-only in-app runtime view plays the authored scenario, and a self-contained browser runtime export bundles its assets. Scenario files use a human-readable v2 format with opaque piece ids, author-facing labels, and a chained migration registry that upgrades older files on load.
 
 The desktop editor is the authoritative authoring surface. The browser surface is useful for development, smoke testing, and demos, but it is not a parity promise.
 
@@ -291,6 +282,8 @@ corepack pnpm --dir apps/editor tauri icon src-tauri/app-icon.svg
 - `DECISIONS.md`: settled architectural choices
 - `PLAN.md`: current branch plan and deferred questions
 - `DESKTOP-TESTING.md`: residual human-only desktop testing checklist
+- `docs/redesign/BRIEF.md`: durable spec for the editor UX/UI redesign
+- `docs/redesign/reference/README.md`: how to read the mockup bundle that BRIEF.md references
 
 ## References
 
