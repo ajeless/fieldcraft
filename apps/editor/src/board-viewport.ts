@@ -85,6 +85,12 @@ type BoardViewportOptions = {
   state: BoardViewportState;
   onPieceSelect?: (pieceId: string | null) => void;
   onMarkerDrop?: (x: number, y: number) => void;
+  onPointerBoardCoordinateChange?: (
+    coordinate: {
+      readonly x: number;
+      readonly y: number;
+    } | null
+  ) => void;
 };
 
 type DrawOptions = {
@@ -215,6 +221,25 @@ export function createBoardViewport(options: BoardViewportOptions): HTMLElement 
   canvas.addEventListener("pointermove", pointerController.handlePointerMove);
   canvas.addEventListener("pointerup", pointerController.handlePointerUp);
   canvas.addEventListener("pointercancel", pointerController.handlePointerCancel);
+  if (options.onPointerBoardCoordinateChange) {
+    canvas.addEventListener("pointermove", (event) => {
+      ensureTransform(options.state, geometry);
+      const viewportPoint = screenPointToViewportPoint(
+        {
+          x: event.clientX,
+          y: event.clientY
+        },
+        surface
+      );
+      const worldPoint = viewportPointToWorldPoint(viewportPoint, options.state.transform);
+      options.onPointerBoardCoordinateChange?.(
+        worldPoint ? geometry.worldToPlacementPoint(worldPoint) : null
+      );
+    });
+    canvas.addEventListener("pointerleave", () => {
+      options.onPointerBoardCoordinateChange?.(null);
+    });
+  }
   surface.addEventListener("dragover", markerDropController.handleDragOver);
   surface.addEventListener("dragleave", markerDropController.handleDragLeave);
   surface.addEventListener("drop", markerDropController.handleDrop);
