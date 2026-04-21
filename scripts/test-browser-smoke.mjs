@@ -80,10 +80,14 @@ try {
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
   await expectInputValue(page, '[data-testid="grid-line-color-input"]', "#1e2a36");
   await expectInputValue(page, '[data-testid="board-background-input"]', "#0d131a");
+  await expectStatusFieldValue(page, "status-field-space", "—");
 
   await createGrid(page, "square", 6, 5);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
   await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await expectStatusFieldValue(page, "status-field-space", "square-grid");
+  await movePointerToTile(page, "board-surface", 2, 1);
+  await expectStatusFieldValue(page, "status-field-cursor", "2,1");
   await expectCommandEnabled(page, "undo-scenario");
   await expectCommandDisabled(page, "redo-scenario");
   await expectCommandEnabled(page, "export-runtime-scenario");
@@ -100,6 +104,9 @@ try {
   await placeMarkerFromPalette(page, "board-surface", 2, 1);
   await expectMarkerCount(page, "1");
   await waitForMarker(page, "board-surface", "2-1");
+  await expectStatusFieldValue(page, "status-field-counts", "1 marker · 0 assets");
+  await expectStatusFieldValue(page, "status-field-selection", "1");
+  await expectDirtyDotVisible(page);
   await page.reload();
   await page.waitForSelector('[data-view="editor"]');
   await expectStatusLine(page, "Recovered session draft");
@@ -111,6 +118,7 @@ try {
   await expectCommandDisabled(page, "redo-scenario");
   await page.click('[data-testid="save-scenario"]');
   await expectStatusLine(page, "Scenario saved");
+  await expectDirtyDotHidden(page);
   const firstRecoveredSave = await page.evaluate(() =>
     window.localStorage.getItem("fieldcraft:last-scenario")
   );
@@ -127,6 +135,7 @@ try {
   await placeMarkerFromPalette(page, "board-surface", 4, 3);
   await expectMarkerCount(page, "2");
   await waitForMarker(page, "board-surface", "4-3");
+  await expectDirtyDotVisible(page);
   await page.reload();
   await page.waitForSelector('[data-view="editor"]');
   await expectStatusLine(page, "Recovered session draft");
@@ -164,9 +173,7 @@ try {
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await waitForMarker(page, "board-surface", "1-2");
   await page.keyboard.press("Control+S");
-  await page.waitForFunction(() => {
-    return document.querySelector(".status-line")?.textContent === "Scenario saved";
-  });
+  await expectStatusLine(page, "Scenario saved");
   const shortcutSavedScenario = await page.evaluate(() =>
     window.localStorage.getItem("fieldcraft:last-scenario")
   );
@@ -440,6 +447,30 @@ try {
   await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
   const appliedSquareSource = await readSourceEditorValue(page);
   await setSourceEditorSelection(page, 0, 0);
+  await page.keyboard.type("X");
+  const prefixedSquareSource = await readSourceEditorValue(page);
+  if (!prefixedSquareSource.startsWith("X{")) {
+    throw new Error("Typing into the source editor did not update the textarea.");
+  }
+  await page.keyboard.press("Control+Z");
+  if ((await readSourceEditorValue(page)) !== appliedSquareSource) {
+    throw new Error("Ctrl+Z did not undo pending source textarea edits.");
+  }
+  await page.keyboard.press("Control+Y");
+  if ((await readSourceEditorValue(page)) !== prefixedSquareSource) {
+    throw new Error("Ctrl+Y did not redo pending source textarea edits.");
+  }
+  await page.keyboard.press("Control+Z");
+  await setSourceEditorSelection(page, 0, 0);
+  await page.keyboard.press("Delete");
+  if ((await readSourceEditorValue(page)) !== appliedSquareSource.slice(1)) {
+    throw new Error("Delete did not remove the next character in the source textarea.");
+  }
+  await page.keyboard.press("Control+Z");
+  if ((await readSourceEditorValue(page)) !== appliedSquareSource) {
+    throw new Error("Ctrl+Z did not restore the source textarea after Delete.");
+  }
+  await setSourceEditorSelection(page, 0, 0);
   await expectSourceEditorFocused(page);
   await page.keyboard.press("Tab");
   await expectSourceEditorFocused(page);
@@ -603,9 +634,7 @@ try {
   await expectScenarioDownload(page, () => clickMenuItem(page, "file", "menu-save-as-scenario"));
   await expectScenarioDownload(page, () => page.click('[data-testid="save-as-scenario"]'));
   await expectScenarioDownload(page, () => page.keyboard.press("Control+Shift+S"));
-  await page.waitForFunction(() => {
-    return document.querySelector(".status-line")?.textContent === "Scenario downloaded";
-  });
+  await expectStatusLine(page, "Scenario downloaded");
 
   await page.click('[data-testid="mode-runtime"]');
   await page.waitForSelector('[data-view="runtime"]');
@@ -1216,9 +1245,7 @@ async function expectInvalidSetupPreservesDraft(page) {
   await page.fill('[data-testid="scale-unit-input"]', "km");
   await setInputValue(page, '[data-testid="tile-size-input"]', "");
   await page.click('[data-testid="create-board"]');
-  await page.waitForFunction(() => {
-    return document.querySelector(".status-line")?.textContent === "Board setup values are out of range";
-  });
+  await expectStatusLine(page, "Board setup values are out of range");
   if (!(await page.locator('[data-testid="space-hex-grid"]').isChecked())) {
     throw new Error("Invalid setup reset the selected hex grid choice.");
   }
@@ -1237,8 +1264,28 @@ async function expectInputValue(page, selector, expectedValue) {
 
 async function expectStatusLine(page, expectedValue) {
   await page.waitForFunction((value) => {
-    return document.querySelector(".status-line")?.textContent === value;
+    return document.querySelector('[data-testid="status-line"]')?.textContent === value;
   }, expectedValue);
+}
+
+async function expectStatusFieldValue(page, fieldTestId, expectedValue) {
+  await page.waitForFunction(
+    ([testId, value]) => {
+      const field = document.querySelector(`[data-testid="${testId}"]`);
+      return field?.querySelector('[data-slot="value"]')?.textContent === value;
+    },
+    [fieldTestId, expectedValue]
+  );
+}
+
+async function expectDirtyDotVisible(page) {
+  await page.waitForSelector('[data-testid="menu-bar-dirty-dot"]');
+}
+
+async function expectDirtyDotHidden(page) {
+  await page.waitForFunction(() => {
+    return document.querySelector('[data-testid="menu-bar-dirty-dot"]') === null;
+  });
 }
 
 async function expectMetricValue(page, testId, expectedValue) {
@@ -1621,6 +1668,14 @@ async function clickTile(page, surfaceTestId, x, y, offset = { x: 0, y: 0 }) {
       y: point.y + offset.y
     }
   });
+}
+
+async function movePointerToTile(page, surfaceTestId, x, y) {
+  await waitForSurfaceReady(page, surfaceTestId);
+  const point = await getTileViewportPoint(page, surfaceTestId, x, y);
+  const box = await getSurfaceBox(page, surfaceTestId);
+
+  await page.mouse.move(box.x + point.x, box.y + point.y);
 }
 
 async function placeMarkerFromPalette(page, surfaceTestId, x, y) {

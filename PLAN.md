@@ -14,6 +14,11 @@ Automation now covers both the browser support surface and a scripted desktop-se
 
 ## Recently Completed Baseline Slices
 
+- `codex/status-bar`
+  - Status moved out of the left sidebar into a 22px bottom strip per decision `012` / `docs/redesign/BRIEF.md`, with structured fields for cursor, tool, space model, selection count, counts, the ephemeral status message, and the save hint.
+  - The old sidebar `createStatusSection` is retired; the left-sidebar metrics intentionally remain duplicated with the Scenario tab until `codex/tool-rail` finishes that rewrite.
+  - Dirty state now surfaces as an amber dot in the menu bar while the bottom status bar keeps the existing ephemeral `statusMessage` strings and smoke-test `status-line` contract intact.
+
 - `codex/inspector-tabbed-rewrite`
   - The right column is now a single docked panel with four peer tabs — Scenario, Selection, Assets, Source — replacing the previous vertical stack of sections per decision `012`.
   - The Scenario tab mirrors scenario-wide state (Title, Space, Contents, File) with Board Background surfaced as a Contents metric; the Selection tab auto-promotes when a marker is selected from the Scenario tab, while explicit navigation to Source or Assets is never yanked away.
@@ -85,44 +90,38 @@ Automation now covers both the browser support surface and a scripted desktop-se
   - Opening a v0 file migrates in memory, dirties the doc, and saves as v1 through the normal save flow; source-editor line/column diagnostics are preserved through the `ScenarioLoadError` wrapper.
   - Vitest is the new unit-test runner, co-located at `apps/editor/src/**/*.test.ts`; pre/post fixture pairs cover tile, free-coord (with negative positions), and empty scenarios.
 
-Current manual testing pressure points are captured in the branch sequence below. The near-term sequence finishes the decision `012` UI vocabulary first — status bar, asset strip, new scenario page, command palette, then the tool rail pending feedback from those four — before opening the rules-expression spike. Rationale: rules-spike has no hard dependency on the redesign (it can ship source-editor-only per decision `008` and the `AGENTS.md` bootstrap exception), but landing the spike against stable named surfaces means its eventual authoring UI (in `codex/rules-authoring-system`) plugs into finished vocabulary instead of chasing churn. The entity model and downstream feature branches follow. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
+Current manual testing pressure points are captured in the branch sequence below. The near-term sequence keeps finishing the decision `012` UI vocabulary first — asset strip, new scenario page, command palette, then the tool rail after feedback on the docked inspector plus the landed status bar — before opening the rules-expression spike. Rationale: rules-spike has no hard dependency on the redesign (it can ship source-editor-only per decision `008` and the `AGENTS.md` bootstrap exception), but landing the spike against stable named surfaces means its eventual authoring UI (in `codex/rules-authoring-system`) plugs into finished vocabulary instead of chasing churn. The entity model and downstream feature branches follow. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/status-bar`
-   - Promote the status line from a sidebar item to a thin bottom strip carrying structured fields — cursor position, active tool, space model, selection count, piece/asset counts, dirty state, save-shortcut hint.
-   - Move the dirty indicator to a dot in the menu bar and retire the old sidebar status item.
-   - Begins retiring the left-sidebar duplication introduced by `codex/inspector-tabbed-rewrite` (the Scenario tab mirrors the left-sidebar metrics today; the `TODO(codex/status-bar)` in `createEditorView` points here).
-   - Not in scope: inventing new status semantics beyond what the current status surface already exposes.
-
-2. `codex/asset-strip`
+1. `codex/asset-strip`
    - Add the bottom asset strip below the board with pinned-first thumbnail ordering and an Import drop card at the end.
    - Filter contextually — for example, auto-filter to image assets when the Marker tool is armed. If the tool-armed state does not yet exist, ship the strip's base behavior now and add the contextual filter when `codex/tool-rail` lands.
    - Remove the redundant Assets section from the inspector once the strip is primary; the Assets tab remains as the per-selection picker.
 
-3. `codex/new-scenario-page`
+2. `codex/new-scenario-page`
    - Replace the in-viewport dashed-border setup form with a full-page chooser: three space-model cards (square, pointy-top hex, free-coordinate) with miniature board previews, followed by scenario details.
    - Ship the same fields as an Edit Board Setup modal reachable post-creation from the Board menu and the Scenario tab's Space section, closing the one-way-door problem.
    - Not in scope: full modal polish beyond what it takes to make post-creation edits safe and reversible.
 
-4. `codex/command-palette`
+3. `codex/command-palette`
    - Wire `⌘K` / `Ctrl+K` to a fuzzy-searchable overlay over the existing command registry.
    - Treat the palette as a discoverability layer alongside the menu bar and command bar — not a replacement for either.
    - Subsumes the previously-planned `codex/editor-help-overlay`: shortcut and command discoverability is handled here instead of in a parallel help surface.
 
-5. `codex/tool-rail` *(placeholder — shape settled after #1–4 land)*
+4. `codex/tool-rail` *(placeholder — shape settled after #1–3 land)*
    - Introduce the left-side 44px vertical tool rail from decision `012` and BRIEF.md §3. Register today's tools (Select, Marker) as first-class entries; ghost placeholders for Ruler and Hand until those features ship.
    - Formalize the "armed tool" state that `codex/asset-strip` relies on for its contextual filter.
    - Finish retiring the legacy left sidebar by the end of this branch (whatever status-bar / asset-strip / new-scenario-page did not already absorb).
    - Intentionally deferred behind the first four redesign branches per BRIEF.md: the rail's shape benefits from feedback on the docked inspector, status bar, asset strip, and new-scenario flow before being locked in.
 
-6. `codex/rules-expression-spike`
+5. `codex/rules-expression-spike`
    - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
    - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
    - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
    - Keep the first rule authoring loop visible in the editor; source-editor-only is an acceptable MVP per the `AGENTS.md` bootstrap exception, with the authoring UI following in `codex/rules-authoring-system`.
 
-7. `codex/unit-entity-model`
+6. `codex/unit-entity-model`
    - Introduce the first authored game entity model that can grow beyond temporary markers.
    - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
    - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
@@ -131,21 +130,21 @@ Current manual testing pressure points are captured in the branch sequence below
    - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
    - Keep markers as a simple authoring primitive until the entity model earns replacement.
 
-8. `codex/token-styling`
+7. `codex/token-styling`
    - Add basic authored token appearance after imported assets have a home in the scenario model.
    - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
    - Slot new styling controls into the Selection tab introduced by `codex/inspector-tabbed-rewrite`; avoid regrowing the old right-column stack.
    - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
 
-9. `codex/rules-authoring-system`
+8. `codex/rules-authoring-system`
    - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
    - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
    - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
 
-10. `codex/standalone-runtime-export`
-    - Package a finished game as a standalone Tauri binary after the browser export path is working.
-    - Reuse the browser runtime/export shape where possible.
-    - Add platform-specific packaging incrementally instead of trying to support every target at once.
+9. `codex/standalone-runtime-export`
+   - Package a finished game as a standalone Tauri binary after the browser export path is working.
+   - Reuse the browser runtime/export shape where possible.
+   - Add platform-specific packaging incrementally instead of trying to support every target at once.
 
 ## Out of Scope
 

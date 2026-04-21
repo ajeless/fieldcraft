@@ -143,6 +143,12 @@ type SourceEditorSelection = {
   end: number;
 };
 
+type CursorPosition = {
+  readonly space: ScenarioSpaceType;
+  readonly x: number;
+  readonly y: number;
+};
+
 const documentCommandGroups = [
   ["undo", "redo"],
   ["new", "open", "save", "save-as", "export-runtime"]
@@ -183,6 +189,7 @@ let sourceDraft = recoveredSessionDraft?.sourceDraft ?? scenarioToJson(scenario)
 let sourceEditorErrorMessage: string | null = null;
 let sourceEditorErrorSelection: SourceEditorSelection | null = null;
 let selectedMarkerId: string | null = null;
+let cursorPosition: CursorPosition | null = null;
 let inspectorTab: InspectorTab = "scenario";
 let commandRegistry: EditorCommands | null = null;
 let desktopAutomationStarted = false;
@@ -251,7 +258,8 @@ function createShell(route: Route): HTMLElement {
   shell.append(
     header,
     fileInput,
-    route === "runtime" ? createRuntimeView() : createEditorView()
+    route === "runtime" ? createRuntimeView() : createEditorView(),
+    createStatusBar(route)
   );
   return shell;
 }
@@ -293,10 +301,10 @@ function themeButton(
 }
 
 function createEditorView(): HTMLElement {
-  // TODO(codex/status-bar): the Scenario tab intentionally mirrors the
-  // left-sidebar metrics (Title/Board/Markers/Assets/File) today. The left
-  // sidebar's rewrite lands with the status-bar + tool-rail branches, which
-  // resolve that duplication.
+  // TODO(codex/tool-rail): the Scenario tab intentionally mirrors the
+  // remaining left-sidebar metrics (Title/Board/Markers/Assets/File) today.
+  // The status bar absorbed the old sidebar status item; tool-rail retires
+  // the rest of this duplication.
   const view = element("section", "workspace");
   view.dataset.view = "editor";
 
@@ -308,8 +316,7 @@ function createEditorView(): HTMLElement {
     metric("Markers", String(scenario.pieces.length), "marker-count"),
     metric("Assets", String(scenario.assets.length), "asset-count"),
     metric("File", getFileLabel(), "current-file"),
-    createContextToolSection(),
-    createStatusSection()
+    createContextToolSection()
   );
 
   const boardStage = element("section", "board-stage");
@@ -601,6 +608,13 @@ function createEditorCommands(fileInput: HTMLInputElement, route: Route): Editor
 function createMenuBar(): HTMLElement {
   const menuBar = element("nav", "app-menu-bar");
   menuBar.setAttribute("aria-label", "Application menu");
+  if (hasUnsavedDocumentChanges()) {
+    const dirtyDot = element("span", "menu-bar-dirty-dot");
+    dirtyDot.dataset.testid = "menu-bar-dirty-dot";
+    dirtyDot.setAttribute("role", "img");
+    dirtyDot.setAttribute("aria-label", "Unsaved changes");
+    menuBar.append(dirtyDot);
+  }
   menuBar.append(
     createMenu("File", "file", [
       "new",
@@ -817,6 +831,100 @@ function handleSourceEditorTabKeyDown(
   return true;
 }
 
+function handleSourceEditorEditKeyDown(
+  editor: HTMLTextAreaElement,
+  event: KeyboardEvent,
+  options: {
+    syncDraft: () => void;
+    undoDraft: () => boolean;
+    redoDraft: () => boolean;
+  }
+): boolean {
+  if (
+    event.key === "Delete" &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey
+  ) {
+    if (!deleteForwardInSourceEditor(editor)) {
+      return false;
+    }
+
+    event.preventDefault();
+    options.syncDraft();
+    return true;
+  }
+
+  if (isSourceEditorUndoKeyEvent(event)) {
+    if (!options.undoDraft()) {
+      return false;
+    }
+
+    event.preventDefault();
+    return true;
+  }
+
+  if (isSourceEditorRedoKeyEvent(event)) {
+    if (!options.redoDraft()) {
+      return false;
+    }
+
+    event.preventDefault();
+    return true;
+  }
+
+  return false;
+}
+
+function deleteForwardInSourceEditor(editor: HTMLTextAreaElement): boolean {
+  const selectionStart = editor.selectionStart;
+  const selectionEnd = editor.selectionEnd;
+
+  if (selectionStart === selectionEnd) {
+    if (selectionStart >= editor.value.length) {
+      return false;
+    }
+
+    editor.setRangeText("", selectionStart, selectionStart + 1, "start");
+    return true;
+  }
+
+  editor.setRangeText("", selectionStart, selectionEnd, "start");
+  return true;
+}
+
+function isSourceEditorUndoKeyEvent(event: KeyboardEvent): boolean {
+  return (
+    event.key.toLowerCase() === "z" &&
+    !event.altKey &&
+    !event.shiftKey &&
+    isModShortcutKeyEvent(event)
+  );
+}
+
+function isSourceEditorRedoKeyEvent(event: KeyboardEvent): boolean {
+  return (
+    (!isMacPlatform() &&
+      event.key.toLowerCase() === "y" &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.ctrlKey &&
+      !event.metaKey) ||
+    (event.key.toLowerCase() === "z" &&
+      !event.altKey &&
+      event.shiftKey &&
+      isModShortcutKeyEvent(event))
+  );
+}
+
+function isModShortcutKeyEvent(event: KeyboardEvent): boolean {
+  if (isMacPlatform()) {
+    return event.metaKey && !event.ctrlKey;
+  }
+
+  return event.ctrlKey && !event.metaKey;
+}
+
 function indentSourceEditorSelection(editor: HTMLTextAreaElement): void {
   const indent = "  ";
   const selectionStart = editor.selectionStart;
@@ -991,7 +1099,8 @@ function createBoard(options: {
     selectedPieceId: options.selectedMarkerId ?? null,
     state: options.state,
     onPieceSelect: options.onPieceSelect,
-    onMarkerDrop: options.onMarkerDrop
+    onMarkerDrop: options.onMarkerDrop,
+    onPointerBoardCoordinateChange: handleCursorPositionChange
   });
 }
 
@@ -1233,11 +1342,26 @@ function createSourceEditorSection(): HTMLElement {
   const editor = document.createElement("textarea");
   const applyButton = buttonElement("Apply", applyScenarioSource, "apply-source");
   const resetButton = buttonElement("Reset", resetScenarioSource, "reset-source");
-  const syncSourceEditorDraft = () => {
-    sourceDraft = editor.value;
+  const draftHistory = {
+    past: [] as string[],
+    future: [] as string[],
+    currentValue: sourceDraft
+  };
+  const syncSourceEditorDraft = (recordHistory = true) => {
+    const nextValue = editor.value;
+    if (recordHistory && nextValue !== draftHistory.currentValue) {
+      draftHistory.past.push(draftHistory.currentValue);
+      draftHistory.future = [];
+    }
+    draftHistory.currentValue = nextValue;
+    sourceDraft = nextValue;
     clearSourceEditorError();
     syncEditorSessionDraft();
     syncControls();
+  };
+  const applySourceEditorHistoryValue = (nextValue: string) => {
+    editor.value = nextValue;
+    syncSourceEditorDraft(false);
   };
   const syncControls = () => {
     const hasPendingEdits = editor.value !== appliedSource;
@@ -1267,6 +1391,44 @@ function createSourceEditorSection(): HTMLElement {
     syncSourceEditorDraft();
   });
   editor.addEventListener("keydown", (event) => {
+    if (
+      handleSourceEditorEditKeyDown(editor, event, {
+        syncDraft: () => syncSourceEditorDraft(),
+        undoDraft: () => {
+          if (draftHistory.past.length === 0) {
+            return false;
+          }
+
+          draftHistory.future.push(draftHistory.currentValue);
+          const nextValue = draftHistory.past.pop();
+          if (nextValue === undefined) {
+            return false;
+          }
+
+          draftHistory.currentValue = nextValue;
+          applySourceEditorHistoryValue(nextValue);
+          return true;
+        },
+        redoDraft: () => {
+          if (draftHistory.future.length === 0) {
+            return false;
+          }
+
+          draftHistory.past.push(draftHistory.currentValue);
+          const nextValue = draftHistory.future.pop();
+          if (nextValue === undefined) {
+            return false;
+          }
+
+          draftHistory.currentValue = nextValue;
+          applySourceEditorHistoryValue(nextValue);
+          return true;
+        }
+      })
+    ) {
+      return;
+    }
+
     if (!handleSourceEditorTabKeyDown(editor, event)) {
       return;
     }
@@ -1337,13 +1499,149 @@ function createContextToolSection(): HTMLElement {
   return palette;
 }
 
-function createStatusSection(): HTMLElement {
-  const section = element("section", "status-section");
-  const status = element("p", "status-line", statusMessage);
-  status.dataset.testid = "status-line";
-  status.title = statusMessage;
-  section.append(element("p", "eyebrow", "Status"), status);
-  return section;
+function createStatusBar(route: Route): HTMLElement {
+  const statusBar = element("footer", "status-bar");
+  const leftGroup = element("div", "status-bar-group");
+  const rightGroup = element("div", "status-bar-group status-bar-group-right");
+
+  statusBar.setAttribute("aria-label", "Status bar");
+  leftGroup.append(
+    createStatusField({
+      label: "TOOL",
+      value: getStatusToolValue(route),
+      testId: "status-field-tool",
+      accent: route === "editor" && Boolean(scenario.space),
+      empty: route !== "editor" || !scenario.space
+    }),
+    createStatusField({
+      label: "SPACE",
+      value: getStatusSpaceValue(),
+      testId: "status-field-space",
+      empty: !scenario.space
+    }),
+    createStatusField({
+      label: "SEL",
+      value: getStatusSelectionValue(route),
+      testId: "status-field-selection",
+      empty: route !== "editor" || !selectedMarkerId
+    }),
+    createStatusField({
+      label: "CURSOR",
+      value: getStatusCursorValue(),
+      testId: "status-field-cursor",
+      empty: cursorPosition === null
+    })
+  );
+  rightGroup.append(
+    createStatusField({
+      value: getStatusCountsValue(),
+      testId: "status-field-counts"
+    }),
+    createStatusMessageField(),
+    createStatusField({
+      value: getStatusSaveHintValue(),
+      testId: "status-field-save-hint",
+      empty: true
+    })
+  );
+  statusBar.append(leftGroup, rightGroup);
+  return statusBar;
+}
+
+function createStatusField(options: {
+  label?: string;
+  value: string;
+  testId: string;
+  accent?: boolean;
+  empty?: boolean;
+}): HTMLElement {
+  const field = element("div", "status-field");
+  const value = element(
+    "span",
+    [
+      "status-field-value",
+      options.accent ? "is-accent" : "",
+      options.empty ? "is-empty" : ""
+    ]
+      .filter(Boolean)
+      .join(" "),
+    options.value
+  );
+
+  field.dataset.testid = options.testId;
+  value.dataset.slot = "value";
+  if (options.label) {
+    field.append(element("span", "status-field-label", options.label));
+  }
+  field.append(value);
+  return field;
+}
+
+function createStatusMessageField(): HTMLElement {
+  const field = element("div", "status-field status-field-message");
+  const message = element("span", "status-field-value status-line", statusMessage);
+
+  field.dataset.testid = "status-field-message";
+  message.dataset.slot = "value";
+  message.dataset.testid = "status-line";
+  message.title = statusMessage;
+  message.setAttribute("aria-live", "polite");
+  if (hasUnsavedDocumentChanges()) {
+    const dirtyDot = element("span", "status-field-dirty-dot");
+    dirtyDot.setAttribute("aria-hidden", "true");
+    field.append(dirtyDot);
+  }
+  field.append(message);
+  return field;
+}
+
+function getStatusCursorValue(): string {
+  if (!cursorPosition || !scenario.space || cursorPosition.space !== scenario.space.type) {
+    return "—";
+  }
+
+  return `${formatCoordinate(cursorPosition.x)},${formatCoordinate(cursorPosition.y)}`;
+}
+
+function getStatusToolValue(route: Route): string {
+  return route === "editor" && scenario.space ? "Marker" : "—";
+}
+
+function getStatusSpaceValue(): string {
+  return scenario.space?.type ?? "—";
+}
+
+function getStatusSelectionValue(route: Route): string {
+  return route === "editor" && selectedMarkerId ? "1" : "—";
+}
+
+function getStatusCountsValue(): string {
+  return `${formatStatusCount(scenario.pieces.length, "marker")} · ${formatStatusCount(scenario.assets.length, "asset")}`;
+}
+
+function getStatusSaveHintValue(): string {
+  return isMacPlatform() ? "⌘S SAVE" : "Ctrl+S SAVE";
+}
+
+function formatStatusCount(count: number, singular: string): string {
+  return `${count} ${count === 1 ? singular : `${singular}s`}`;
+}
+
+function hasUnsavedDocumentChanges(): boolean {
+  return dirty || hasPendingSourceEdits();
+}
+
+function syncStatusBarCursorField(): void {
+  const value = document.querySelector<HTMLElement>(
+    '[data-testid="status-field-cursor"] [data-slot="value"]'
+  );
+  if (!value) {
+    return;
+  }
+
+  const nextValue = getStatusCursorValue();
+  value.textContent = nextValue;
+  value.classList.toggle("is-empty", nextValue === "—");
 }
 
 function createBoardSetup(): HTMLElement {
@@ -1657,6 +1955,40 @@ function handleSelectedMarkerChange(pieceId: string | null): void {
     promoteSelectionTabFromScenario();
   }
   render();
+}
+
+function handleCursorPositionChange(
+  position: {
+    readonly x: number;
+    readonly y: number;
+  } | null
+): void {
+  const nextCursorPosition =
+    scenario.space && position
+      ? {
+          space: scenario.space.type,
+          x: position.x,
+          y: position.y
+        }
+      : null;
+
+  if (cursorPositionsEqual(cursorPosition, nextCursorPosition)) {
+    return;
+  }
+
+  cursorPosition = nextCursorPosition;
+  syncStatusBarCursorField();
+}
+
+function cursorPositionsEqual(
+  left: CursorPosition | null,
+  right: CursorPosition | null
+): boolean {
+  return (
+    left?.space === right?.space &&
+    left?.x === right?.x &&
+    left?.y === right?.y
+  );
 }
 
 function updateScenarioTitle(value: string): void {
@@ -2423,6 +2755,7 @@ function getRoute(): Route {
 
 function navigate(route: Route): void {
   const nextHash = route === "runtime" ? "#/play" : "#/editor";
+  cursorPosition = null;
   if (window.location.hash === nextHash) {
     render();
     return;
@@ -3040,6 +3373,7 @@ function getDocumentState(): string {
 }
 
 function resetBoardViewportStates(): void {
+  cursorPosition = null;
   resetBoardViewportState(boardViewportStates.editor);
   resetBoardViewportState(boardViewportStates.runtime);
 }
