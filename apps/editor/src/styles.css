@@ -729,10 +729,12 @@ button:disabled {
 
 .status-line {
   min-width: 0;
+  display: block;
   margin: 0;
   color: var(--fc-amber);
   font-weight: 700;
   line-height: 1.2;
+  padding: 1px 0 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
