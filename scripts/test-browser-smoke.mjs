@@ -447,6 +447,30 @@ try {
   await expectMarkerPositionOccurrences(page, "board-surface", "32-32", 3);
   const appliedSquareSource = await readSourceEditorValue(page);
   await setSourceEditorSelection(page, 0, 0);
+  await page.keyboard.type("X");
+  const prefixedSquareSource = await readSourceEditorValue(page);
+  if (!prefixedSquareSource.startsWith("X{")) {
+    throw new Error("Typing into the source editor did not update the textarea.");
+  }
+  await page.keyboard.press("Control+Z");
+  if ((await readSourceEditorValue(page)) !== appliedSquareSource) {
+    throw new Error("Ctrl+Z did not undo pending source textarea edits.");
+  }
+  await page.keyboard.press("Control+Y");
+  if ((await readSourceEditorValue(page)) !== prefixedSquareSource) {
+    throw new Error("Ctrl+Y did not redo pending source textarea edits.");
+  }
+  await page.keyboard.press("Control+Z");
+  await setSourceEditorSelection(page, 0, 0);
+  await page.keyboard.press("Delete");
+  if ((await readSourceEditorValue(page)) !== appliedSquareSource.slice(1)) {
+    throw new Error("Delete did not remove the next character in the source textarea.");
+  }
+  await page.keyboard.press("Control+Z");
+  if ((await readSourceEditorValue(page)) !== appliedSquareSource) {
+    throw new Error("Ctrl+Z did not restore the source textarea after Delete.");
+  }
+  await setSourceEditorSelection(page, 0, 0);
   await expectSourceEditorFocused(page);
   await page.keyboard.press("Tab");
   await expectSourceEditorFocused(page);

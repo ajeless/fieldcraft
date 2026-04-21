@@ -680,6 +680,13 @@ button:disabled {
   white-space: nowrap;
 }
 
+[data-testid="status-field-cursor"] [data-slot="value"] {
+  min-width: 13ch;
+  display: inline-block;
+  font-family: var(--fc-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 .status-bar-group > .status-field + .status-field::before {
   content: "·";
   color: var(--fc-ink-muted);
@@ -697,6 +704,7 @@ button:disabled {
   min-width: 0;
   color: var(--fc-ink);
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .status-field-value.is-accent {
@@ -724,7 +732,7 @@ button:disabled {
   margin: 0;
   color: var(--fc-amber);
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

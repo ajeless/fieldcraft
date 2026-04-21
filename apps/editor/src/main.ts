@@ -831,6 +831,100 @@ function handleSourceEditorTabKeyDown(
   return true;
 }
 
+function handleSourceEditorEditKeyDown(
+  editor: HTMLTextAreaElement,
+  event: KeyboardEvent,
+  options: {
+    syncDraft: () => void;
+    undoDraft: () => boolean;
+    redoDraft: () => boolean;
+  }
+): boolean {
+  if (
+    event.key === "Delete" &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey
+  ) {
+    if (!deleteForwardInSourceEditor(editor)) {
+      return false;
+    }
+
+    event.preventDefault();
+    options.syncDraft();
+    return true;
+  }
+
+  if (isSourceEditorUndoKeyEvent(event)) {
+    if (!options.undoDraft()) {
+      return false;
+    }
+
+    event.preventDefault();
+    return true;
+  }
+
+  if (isSourceEditorRedoKeyEvent(event)) {
+    if (!options.redoDraft()) {
+      return false;
+    }
+
+    event.preventDefault();
+    return true;
+  }
+
+  return false;
+}
+
+function deleteForwardInSourceEditor(editor: HTMLTextAreaElement): boolean {
+  const selectionStart = editor.selectionStart;
+  const selectionEnd = editor.selectionEnd;
+
+  if (selectionStart === selectionEnd) {
+    if (selectionStart >= editor.value.length) {
+      return false;
+    }
+
+    editor.setRangeText("", selectionStart, selectionStart + 1, "start");
+    return true;
+  }
+
+  editor.setRangeText("", selectionStart, selectionEnd, "start");
+  return true;
+}
+
+function isSourceEditorUndoKeyEvent(event: KeyboardEvent): boolean {
+  return (
+    event.key.toLowerCase() === "z" &&
+    !event.altKey &&
+    !event.shiftKey &&
+    isModShortcutKeyEvent(event)
+  );
+}
+
+function isSourceEditorRedoKeyEvent(event: KeyboardEvent): boolean {
+  return (
+    (!isMacPlatform() &&
+      event.key.toLowerCase() === "y" &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.ctrlKey &&
+      !event.metaKey) ||
+    (event.key.toLowerCase() === "z" &&
+      !event.altKey &&
+      event.shiftKey &&
+      isModShortcutKeyEvent(event))
+  );
+}
+
+function isModShortcutKeyEvent(event: KeyboardEvent): boolean {
+  if (isMacPlatform()) {
+    return event.metaKey && !event.ctrlKey;
+  }
+
+  return event.ctrlKey && !event.metaKey;
+}
+
 function indentSourceEditorSelection(editor: HTMLTextAreaElement): void {
   const indent = "  ";
   const selectionStart = editor.selectionStart;
@@ -1248,11 +1342,26 @@ function createSourceEditorSection(): HTMLElement {
   const editor = document.createElement("textarea");
   const applyButton = buttonElement("Apply", applyScenarioSource, "apply-source");
   const resetButton = buttonElement("Reset", resetScenarioSource, "reset-source");
-  const syncSourceEditorDraft = () => {
-    sourceDraft = editor.value;
+  const draftHistory = {
+    past: [] as string[],
+    future: [] as string[],
+    currentValue: sourceDraft
+  };
+  const syncSourceEditorDraft = (recordHistory = true) => {
+    const nextValue = editor.value;
+    if (recordHistory && nextValue !== draftHistory.currentValue) {
+      draftHistory.past.push(draftHistory.currentValue);
+      draftHistory.future = [];
+    }
+    draftHistory.currentValue = nextValue;
+    sourceDraft = nextValue;
     clearSourceEditorError();
     syncEditorSessionDraft();
     syncControls();
+  };
+  const applySourceEditorHistoryValue = (nextValue: string) => {
+    editor.value = nextValue;
+    syncSourceEditorDraft(false);
   };
   const syncControls = () => {
     const hasPendingEdits = editor.value !== appliedSource;
@@ -1282,6 +1391,44 @@ function createSourceEditorSection(): HTMLElement {
     syncSourceEditorDraft();
   });
   editor.addEventListener("keydown", (event) => {
+    if (
+      handleSourceEditorEditKeyDown(editor, event, {
+        syncDraft: () => syncSourceEditorDraft(),
+        undoDraft: () => {
+          if (draftHistory.past.length === 0) {
+            return false;
+          }
+
+          draftHistory.future.push(draftHistory.currentValue);
+          const nextValue = draftHistory.past.pop();
+          if (nextValue === undefined) {
+            return false;
+          }
+
+          draftHistory.currentValue = nextValue;
+          applySourceEditorHistoryValue(nextValue);
+          return true;
+        },
+        redoDraft: () => {
+          if (draftHistory.future.length === 0) {
+            return false;
+          }
+
+          draftHistory.past.push(draftHistory.currentValue);
+          const nextValue = draftHistory.future.pop();
+          if (nextValue === undefined) {
+            return false;
+          }
+
+          draftHistory.currentValue = nextValue;
+          applySourceEditorHistoryValue(nextValue);
+          return true;
+        }
+      })
+    ) {
+      return;
+    }
+
     if (!handleSourceEditorTabKeyDown(editor, event)) {
       return;
     }
@@ -1360,12 +1507,6 @@ function createStatusBar(route: Route): HTMLElement {
   statusBar.setAttribute("aria-label", "Status bar");
   leftGroup.append(
     createStatusField({
-      label: "CURSOR",
-      value: getStatusCursorValue(),
-      testId: "status-field-cursor",
-      empty: cursorPosition === null
-    }),
-    createStatusField({
       label: "TOOL",
       value: getStatusToolValue(route),
       testId: "status-field-tool",
@@ -1383,6 +1524,12 @@ function createStatusBar(route: Route): HTMLElement {
       value: getStatusSelectionValue(route),
       testId: "status-field-selection",
       empty: route !== "editor" || !selectedMarkerId
+    }),
+    createStatusField({
+      label: "CURSOR",
+      value: getStatusCursorValue(),
+      testId: "status-field-cursor",
+      empty: cursorPosition === null
     })
   );
   rightGroup.append(
