@@ -6,9 +6,11 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-Keep the editor visibly trustworthy while broader editor systems are still small. Today's baseline covers board setup across square, pointy-top hex, and free-coordinate models; permissive colocated marker placement, selection, and deletion; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a small command registry for file actions; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; a read-only in-app runtime view; browser runtime export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, `Save As` carrying assets forward); the v2 scenario format with opaque piece ids, author-facing labels, optional marker image refs, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
+V1 is committed in `docs/EDITOR-V1-SCOPE.md`: Fieldcraft is a map-and-scenario editor for tabletop wargames, and the runtime export is a viewer rather than a gameplay engine. Today's baseline covers board setup across square, pointy-top hex, and free-coordinate models; permissive colocated marker placement, selection, and deletion; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a small command registry for file actions; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; a read-only in-app runtime view; browser runtime export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, `Save As` carrying assets forward); the v2 scenario format with opaque piece ids, author-facing labels, optional marker image refs, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
 
-The first asset slice behaves well enough to treat as baseline. Audio import is intentionally storage-only for now; playback wiring waits for a concrete runtime need.
+The immediate near-term sequence finishes the decision `012` editor vocabulary first: asset strip, new scenario page, command palette, then tool rail. Those branches still follow `docs/redesign/BRIEF.md` and should not reopen the redesign.
+
+The original `codex/unit-entity-model` branch is split for v1 into `codex/sides-and-entity-base`, `codex/piece-facing`, and `codex/piece-properties`, with `codex/token-styling` between facing and properties. Rules, turn resolution, and standalone runtime packaging are deferred or out of scope under v1.
 
 Automation now covers both the browser support surface and a scripted desktop-semantic pass in the Tauri dev shell. Native desktop dialogs and packaged-build sanity remain release-significant manual checks even when both automated suites are green; the residual human-only pass lives in `DESKTOP-TESTING.md`.
 
@@ -90,68 +92,85 @@ Automation now covers both the browser support surface and a scripted desktop-se
   - Opening a v0 file migrates in memory, dirties the doc, and saves as v1 through the normal save flow; source-editor line/column diagnostics are preserved through the `ScenarioLoadError` wrapper.
   - Vitest is the new unit-test runner, co-located at `apps/editor/src/**/*.test.ts`; pre/post fixture pairs cover tile, free-coord (with negative positions), and empty scenarios.
 
-Current manual testing pressure points are captured in the branch sequence below. The near-term sequence keeps finishing the decision `012` UI vocabulary first — asset strip, new scenario page, command palette, then the tool rail after feedback on the docked inspector plus the landed status bar — before opening the rules-expression spike. Rationale: rules-spike has no hard dependency on the redesign (it can ship source-editor-only per decision `008` and the `AGENTS.md` bootstrap exception), but landing the spike against stable named surfaces means its eventual authoring UI (in `codex/rules-authoring-system`) plugs into finished vocabulary instead of chasing churn. The entity model and downstream feature branches follow. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
+Current manual testing pressure points are captured in the branch sequence below. The sequence is the v1 sequence from `docs/EDITOR-V1-SCOPE.md`: finish the redesign vocabulary, add the minimum piece model needed by a tabletop scenario editor, polish viewer export, add examples, then align documentation. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
 1. `codex/asset-strip`
+   - Make package assets visible and usable as a first-class editor surface.
    - Add the bottom asset strip below the board with pinned-first thumbnail ordering and an Import drop card at the end.
    - Filter contextually — for example, auto-filter to image assets when the Marker tool is armed. If the tool-armed state does not yet exist, ship the strip's base behavior now and add the contextual filter when `codex/tool-rail` lands.
    - Remove the redundant Assets section from the inspector once the strip is primary; the Assets tab remains as the per-selection picker.
+   - Follow `docs/redesign/BRIEF.md`; do not restate or reopen the redesign in this branch.
 
 2. `codex/new-scenario-page`
+   - Make scenario creation explicit and reversible.
    - Replace the in-viewport dashed-border setup form with a full-page chooser: three space-model cards (square, pointy-top hex, free-coordinate) with miniature board previews, followed by scenario details.
    - Ship the same fields as an Edit Board Setup modal reachable post-creation from the Board menu and the Scenario tab's Space section, closing the one-way-door problem.
    - Not in scope: full modal polish beyond what it takes to make post-creation edits safe and reversible.
 
 3. `codex/command-palette`
+   - Make existing commands discoverable without adding another permanent panel.
    - Wire `⌘K` / `Ctrl+K` to a fuzzy-searchable overlay over the existing command registry.
    - Treat the palette as a discoverability layer alongside the menu bar and command bar — not a replacement for either.
    - Subsumes the previously-planned `codex/editor-help-overlay`: shortcut and command discoverability is handled here instead of in a parallel help surface.
 
-4. `codex/tool-rail` *(placeholder — shape settled after #1–3 land)*
+4. `codex/tool-rail`
+   - Finish the editor's main tool vocabulary.
    - Introduce the left-side 44px vertical tool rail from decision `012` and BRIEF.md §3. Register today's tools (Select, Marker) as first-class entries; ghost placeholders for Ruler and Hand until those features ship.
    - Formalize the "armed tool" state that `codex/asset-strip` relies on for its contextual filter.
    - Finish retiring the legacy left sidebar by the end of this branch (whatever status-bar / asset-strip / new-scenario-page did not already absorb).
    - Intentionally deferred behind the first four redesign branches per BRIEF.md: the rail's shape benefits from feedback on the docked inspector, status bar, asset strip, and new-scenario flow before being locked in.
 
-5. `codex/rules-expression-spike`
-   - Choose the smallest expression syntax, evaluator shape, and editor UX needed by a concrete scenario.
-   - Preserve decision `006`: rules remain structured data plus inspectable expressions, not embedded scripting.
-   - Include both tile-distance and free-coordinate distance/bearing needs in the first evaluator shape instead of assuming tile adjacency is the only spatial primitive.
-   - Keep the first rule authoring loop visible in the editor; source-editor-only is an acceptable MVP per the `AGENTS.md` bootstrap exception, with the authoring UI following in `codex/rules-authoring-system`.
+5. `codex/sides-and-entity-base`
+   - Give authored pieces scenario-level ownership without trying to finish a game entity system in one branch.
+   - Add author-defined sides at the scenario level, `sideId` references on pieces, Scenario tab side management, and Selection tab side assignment.
+   - Move the scenario format to v3 with a migration from v2; future format decisions for this branch land with the implementation branch, not in this planning document.
+   - Not in scope: rules, turn structure, gameplay behavior, or a broad object inspector.
 
-6. `codex/unit-entity-model`
-   - Introduce the first authored game entity model that can grow beyond temporary markers.
-   - Capture only the minimum durable fields needed by near-term scenarios: identity, side/owner, board position, type, facing or bearing where the space model needs it, and editable properties.
-   - Represent position in a way that respects the active space model instead of treating tile coordinates as universal.
-   - Land author-defined sides at the scenario level alongside this work per BRIEF.md; the format change (`schemaVersion: 3`) and its own decision entry belong with the entity model, not with the editor-IA decision `012`.
-   - Build on the earlier occupancy-semantics slice instead of reintroducing one-entity-per-location assumptions for tile or free-coordinate scenarios.
-   - Extend the marker selection and inspector model only as needed for real entities; avoid a broad object inspector before entity fields settle.
-   - Keep markers as a simple authoring primitive until the entity model earns replacement.
+6. `codex/piece-facing`
+   - Make authored orientation visible and editable.
+   - Add an orientation/facing field on pieces, editor rendering that shows direction, and source-editor round-trip.
+   - Add a rotation gesture or equivalent direct manipulation that works across square, pointy-top hex, and free-coordinate boards.
+   - Not in scope: movement plotting, firing arcs, or rules evaluation.
 
 7. `codex/token-styling`
-   - Add basic authored token appearance after imported assets have a home in the scenario model.
-   - Start with color, shape, label, facing, and optional imported image reference before image-heavy styling.
+   - Let authors distinguish piece types visually without requiring imported art.
+   - Ship basic shape variation, color controls, and readable styling data in the scenario file.
    - Slot new styling controls into the Selection tab introduced by `codex/inspector-tabbed-rewrite`; avoid regrowing the old right-column stack.
-   - Keep styling data readable and avoid a full asset or sprite editing system in this branch.
+   - Keep editor and viewer rendering in parity for supported styling fields; do not build a sprite editor, paint tool, or full asset styling system.
 
-8. `codex/rules-authoring-system`
-   - Build the first practical rules authoring workflow after `codex/rules-expression-spike` settles syntax and evaluator shape.
-   - Add editor panels for attaching rules to entities, phases, or scenario-level hooks as justified by a concrete scenario.
-   - Include runtime evaluation and enough debugging/inspection to make authored rules testable in the editor.
+8. `codex/piece-properties`
+   - Support scenario-useful per-piece facts without building a rules engine.
+   - Add extensible per-piece key/value attributes with reasonable primitive typing.
+   - Add editor UI for viewing and editing properties, plus source-editor round-trip.
+   - Not in scope: evaluating properties as rules or deriving gameplay behavior from them.
 
-9. `codex/standalone-runtime-export`
-   - Package a finished game as a standalone Tauri binary after the browser export path is working.
-   - Reuse the browser runtime/export shape where possible.
-   - Add platform-specific packaging incrementally instead of trying to support every target at once.
+9. `codex/viewer-export-polish`
+   - Polish the existing browser runtime export into a presentation/projection viewer.
+   - Make the viewer chrome-less by default, full-screen-friendly, and easy to reset or navigate.
+   - Keep viewer rendering in parity with the editor for v1-supported board, side, facing, styling, property, and asset display.
+   - The codebase keeps "runtime" terminology for historical reasons; this branch treats the export functionally as a viewer.
+
+10. `codex/v1-example-scenarios`
+   - Author one to three reference scenarios as documentation-by-example.
+   - Demonstrate square, pointy-top hex, and free-coordinate space models across the set.
+   - Include package-local assets where useful and exercise sides, facing, styling, and properties after those branches exist.
+   - Not in scope: tutorial content, campaigns, or sample games with rules.
+
+11. `codex/v1-documentation`
+   - Align the repo's public-facing docs with v1 scope and the "personal tool, made shippable-shaped" bar.
+   - Rewrite `README.md` for v1 scope, including a one-line explanation that "runtime" remains in code and filenames for historical reasons.
+   - Add v1 release notes or changelog and any final documentation cleanup needed for the v1 bar.
+   - Not in scope: code/file renames to remove runtime terminology.
 
 ## Out of Scope
 
 These are actively-rejected directions, not deferred work. Revisit by writing a new entry in `DECISIONS.md`, not by layering them into "Deferred Design Space".
 
-- Tick-based or event-driven time models (see decision `005`).
+- Runtime time-model work, including tick-based, event-driven, and plotted-turn resolution. Decision `005` is withdrawn under v1 scope; Fieldcraft v1 does not resolve play.
 - Embedded scripting (Python, Lua, etc.) or pure structured-data rules without an expression language (see decision `006`).
+- `codex/standalone-runtime-export`: standalone binary export of finished games is dropped from v1 by `docs/EDITOR-V1-SCOPE.md` and decision `007`. Under Pitch A, exported scenarios are browser viewer bundles, not packaged gameplay binaries; revisiting requires a new decision.
 - Full browser/desktop editor parity (see decisions `009` and `010`). Browser authoring polish aimed at a hypothetical browser-authoring user is out of scope; the browser editor exists for agent testing and as the export-runtime mirror.
 - Server-hosted or multiplayer game hosting driving current editor architecture.
 - An editor plugin system before at least two real editor workflows justify it.
@@ -163,12 +182,12 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 ### Boards, space, and scale
 
 - Triangle and other tile grids only when a concrete scenario pushes beyond square and hex.
-- Authored scale semantics for tiled and free-coordinate boards once the first free-coordinate runtime slice proves the model.
+- Authored scale semantics for tiled and free-coordinate boards once v1 examples show which labels and measurements authors actually need.
 - How marker/token visual size relates to board/world scale, authored units, and token/entity configuration (foundation markers currently use viewport-friendly temporary sizing).
 - How stacked tile objects should render once temporary orbit/fan-out selection aids are no longer enough: true authored overlap plus cycling, stack inspection, list selection, or hover fan-out.
 - Whether token placement validity uses center point only or full footprint; free-coordinate edge placements can intentionally or unintentionally hang outside bounds.
 - Practical minimum dimensions and initial zoom behavior for very small free-coordinate boards if placement gets finicky.
-- A scenario-level home view, only if authoring or runtime use needs persisted view state.
+- A scenario-level home view, only if authoring or viewer use needs persisted view state.
 - Large-map viewport performance: draw cost, culling, lazy rendering, tile virtualization.
 - Terrain concepts (tile properties, terrain types, movement-cost hooks, visual terrain) only after placement and setup are credible.
 
@@ -184,8 +203,8 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 - Clearer origin/bounds semantics in the UI (what top-left `x`/`y` means relative to `width`/`height`) before relying on offset free-coordinate maps.
 - Visualizing coincident or near-coincident free-coordinate objects without treating rounded display precision as physical occupancy.
 - Object facing/bearing editing with the first real entity workflow, not with temporary markers.
-- Free-space movement, order plotting, and resolution only when the plotted-turn play-test slice needs them.
-- Continuous-space terrain, zones, obstacles, and movement-cost hooks after basic placement and entity/rules pressure justify them.
+- Free-space movement, order plotting, and resolution are deferred beyond v1 with the other runtime-bearing work.
+- Continuous-space terrain, zones, obstacles, and movement-cost hooks after basic placement and scenario-authoring pressure justify them.
 - Map imagery, georeferenced backgrounds, and huge continuous-map performance work only when trust-blocking.
 - Persisted camera/home views, exact coordinate entry, board view rotation, snap angles — later refinements.
 - Additional source-editor and export polish for free-coordinate scenarios unless needed to preserve valid round-trips.
@@ -195,8 +214,8 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 - Sprite-sheet region authoring after single-image marker art proves the asset-reference shape and a concrete scenario needs sub-image addressing.
 - Board tile imagery after a concrete scenario needs per-cell art rather than full-board backgrounds plus marker artwork.
 - A built-in sprite creator, relevant after the first package asset baseline has real scenario pressure.
-- Audio playback wiring (import is storage-only today); pair with a concrete runtime workflow.
-- Asset licensing/attribution metadata once bundled-export scenarios ship third-party media.
+- Audio playback wiring (import is storage-only today); pair with a concrete viewer or authoring workflow.
+- Asset licensing/attribution metadata once bundled viewer-export scenarios ship third-party media.
 - Surface board-background change/clear affordances next to the Scenario tab's Board Background row. Today Clear Background and Set Background live only in the Assets tab, so authors who read scenario-wide state from the Scenario tab do not see a way to modify it there. Likely lands with `codex/asset-strip` or `codex/new-scenario-page` rather than as its own branch.
 
 ### Scenario source and packaging
@@ -205,6 +224,7 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 - Revisit whether large authored object/entity data should stay inline in one human-readable scenario file or move into referenced package files, after the asset-library, entity-model, and export slices create concrete pressure.
 - If authored source outgrows the inline pane: move toward a small project/file browser plus a dedicated text editor with syntax highlighting, validation, and file-level recovery, rather than layering expectations onto a bare textarea.
 - Scenario workspace conventions (one scenario per folder, repo layout, asset bundle boundaries) as authoring patterns settle.
+- Scenario-level metadata beyond title — author, version, brief, scenario notes, designer's notes — is deferred beyond v1 per `docs/EDITOR-V1-SCOPE.md` §6. Add it when examples or real authored packages need it, not as upfront form surface.
 
 ### Command model
 
@@ -216,8 +236,13 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 ### Selection and board editing
 
 - Direct drag-to-reposition for placed markers and future tokens on both tile and free-coordinate boards. Today placement happens by dragging from the palette onto the board, but an already-placed marker cannot be moved with the mouse; only source edits or delete-and-replace work. Should respect the active space model (tile snap vs. continuous) and integrate with undo/redo.
-- Marquee or drag selection for tokens and other board objects once multi-object authoring pressure is real.
-- Pair multi-selection with bulk move operations rather than treating drag selection as an isolated gesture-only feature.
+- Multi-select and group operations are deferred beyond v1 per `docs/EDITOR-V1-SCOPE.md` §6. When they return, pair selection, bulk editing, and bulk move semantics instead of treating marquee selection as an isolated gesture.
+- Copy/paste of pieces is deferred beyond v1. It should wait until sides, facing, styling, properties, and asset references have stable duplication semantics.
+- Text annotations on the board — non-piece labels, notes, arrows, and callouts — are deferred beyond v1. The first v1 piece-property and viewer work should not grow into a general annotation layer.
+
+### Layers and ordering
+
+- Layers and explicit z-order controls are deferred beyond v1 per `docs/EDITOR-V1-SCOPE.md` §6. Revisit when real scenarios need overlapping map objects, annotations, or terrain strata that cannot be handled by insertion order and simple selection aids.
 
 ### Editor layout customization
 
@@ -233,14 +258,15 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 
 ### Turns, phases, and play-testing
 
-- Implement the plotted simultaneous turn structure from decision `005` when a concrete scenario needs orders and resolution.
-- Define phase data, order submission UI, and resolution sequencing before rules depend on them heavily.
-- Evolve the runtime from read-only display to play-test interaction (orders, movement, targeting, feedback) in small scenario-driven slices.
+- `codex/rules-expression-spike` is deferred under v1 scope. Pitch A (`docs/EDITOR-V1-SCOPE.md`) does not have the editor resolve rules; revisit only if a future runtime-bearing scope is adopted.
+- `codex/rules-authoring-system` is deferred for the same reason. A rules authoring UI depends on a runtime that evaluates rules, which v1 explicitly does not build.
+- Turn resolution, order plotting, phase data, and runtime play-test interaction are deferred beyond v1. Decision `005` is withdrawn, so no universal time model is enforced while Fieldcraft is a scenario editor plus viewer.
 
 ### Export and packaging
 
 - Packaged binary distribution of the editor itself is future work beyond repo-based development.
-- Keep future network play possible, but do not let it drive current editor architecture.
+- Printable map output — PDF, high-resolution PNG, print tiling, crop marks, or print-safe styling — is deferred beyond v1 per `docs/EDITOR-V1-SCOPE.md` §6.
+- Keep future network play possible as a later scope shift, but do not let it drive current editor architecture.
 
 ### Desktop automation
 
@@ -249,8 +275,8 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 
 ### Animation authoring
 
-- In-game animation matters for digital board game feel (weapon fire, torpedoes, movement previews, resolution effects).
-- Animation tools wait for board viewport, runtime playback, and scenario rule resolution to have more shape.
+- Presentation animation may matter for future viewer polish or a later runtime-bearing scope.
+- Animation tools wait for board viewport, viewer playback needs, and any future rule-resolution scope to have more shape.
 - Likely future need: timeline or event-effect authoring that stays data-driven and inspectable.
 
 ### Editor session and reload
@@ -261,7 +287,7 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 
 - Performance budgets (marker count, board size, rule count) tied to "manually testable" expectations.
 - Accessibility: dark-theme contrast, canvas semantics for assistive tech, keyboard-only authoring paths.
-- Bundled sample scenarios for new authors, once the entity model and rules language give samples meaningful shape.
+- Additional bundled sample scenario libraries beyond the one to three v1 examples, once real authoring use shows what examples are missing.
 
 ## Operating Notes
 

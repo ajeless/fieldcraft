@@ -1,3 +1,5 @@
+> **Status:** Historical context. This document was drafted while the project was considering a runtime-bearing scope (Candidate C in section 4.1). The project subsequently re-scoped to Pitch A — editor as product, runtime as viewer — committed in `docs/EDITOR-V1-SCOPE.md`. The candidate answers below are preserved as a record of the analysis that informed the re-scope, not as the project's current direction.
+
 # Runtime Vision Draft
 
 Status: working draft. This is not a specification, not settled architecture, and not a replacement for `PLAN.md` or `DECISIONS.md`. It structures questions that the project has not yet asked about what a shipped Fieldcraft game is, and will be iterated on before any of it becomes a decision.

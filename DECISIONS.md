@@ -28,7 +28,9 @@ Draft scenarios in the editor may temporarily have no configured space model whi
 
 Rationale: these models differ in almost every operation — position representation, movement calculation, range, adjacency. A unified interface would either be uselessly abstract or would force one model's assumptions onto the other.
 
-## 005 — Plotted simultaneous turns as universal time model
+## 005 — (Withdrawn) Plotted simultaneous turns as universal time model
+
+> **Status:** Withdrawn under v1 scope (Pitch A — see `docs/EDITOR-V1-SCOPE.md`). The runtime is a viewer, not a gameplay engine; no time model is enforced. The text below is preserved as historical context for the original vision.
 
 All scenarios use plotted simultaneous turns: sides submit orders, then orders resolve. This applies to both tile-based and free-coordinate space models.
 
@@ -44,9 +46,13 @@ Rejected alternatives: not embedded scripting (Python, Lua) and not pure structu
 
 Rationale: pure structured data fails when mechanics require branching logic or cross-entity state. Embedded scripting makes rules opaque to the editor and uninspectable. The middle ground keeps rules editable and visible in the editor while supporting the complexity of real tactical game mechanics.
 
-## 007 — Browser and standalone binary as export targets
+## 007 — Browser viewer export is the only export target
 
-Finished games export to browser-playable bundles and standalone desktop binaries (via Tauri). Both are first-class targets.
+The editor exports a browser-playable bundle that renders the authored scenario as a viewer (presentation/projection use, per `docs/EDITOR-V1-SCOPE.md`). This is the only export target for v1.
+
+The standalone Tauri binary export was previously planned as a second target. It is dropped from v1 scope and moved to "Out of Scope" in `PLAN.md`. Revisiting requires a new decision, not an amendment to this one.
+
+Rationale: under Pitch A, exported scenarios are consumed by viewers, not gameplay engines. A standalone binary adds packaging surface without serving the viewer use case any better than a browser bundle does.
 
 ## 008 — Scenario files are human-readable
 
@@ -72,6 +78,8 @@ The browser editor is maintained primarily for two purposes:
 
 1. As a compatibility surface that coding agents can drive via headless browser automation (Playwright, WebDriver) to validate editor behavior.
 2. As the authoring mirror for the browser runtime export target (decision `007`).
+
+Under v1 scope (`docs/EDITOR-V1-SCOPE.md`), the browser surface also serves as the presentation-mode renderer for the viewer export — the same renderer that authors use to project or screen-share authored scenarios. This is not a third purpose; it is the export-runtime mirror, named explicitly because the framing has shifted from "runtime" to "viewer" under Pitch A.
 
 It is not maintained as a human-facing browser authoring tool. Human authoring is desktop-first (decision `009`).
 
