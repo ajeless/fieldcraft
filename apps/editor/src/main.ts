@@ -34,6 +34,7 @@ import {
   pushHistoryEntry
 } from "./history";
 import {
+  type ScenarioAsset,
   type ScenarioAssetKind,
   type Scenario,
   type ScenarioSpaceType,
@@ -191,6 +192,7 @@ let sourceEditorErrorSelection: SourceEditorSelection | null = null;
 let selectedMarkerId: string | null = null;
 let cursorPosition: CursorPosition | null = null;
 let inspectorTab: InspectorTab = "scenario";
+let assetStripCollapsed = false;
 let commandRegistry: EditorCommands | null = null;
 let desktopAutomationStarted = false;
 const editorHistory = createHistoryState<EditorSnapshot>();
@@ -321,18 +323,23 @@ function createEditorView(): HTMLElement {
 
   const boardStage = element("section", "board-stage");
   boardStage.append(
-    element("div", "stage-header", scenario.space ? "Editor Board" : "Board Setup"),
-    scenario.space
-      ? createBoard({
-          readonly: false,
-          mode: "editor",
-          state: boardViewportStates.editor,
-          selectedMarkerId,
-          onPieceSelect: handleSelectedMarkerChange,
-          onMarkerDrop: placeDefaultMarker
-        })
-      : createBoardSetup()
+    element("div", "stage-header", scenario.space ? "Editor Board" : "Board Setup")
   );
+  if (scenario.space) {
+    boardStage.append(
+      createBoard({
+        readonly: false,
+        mode: "editor",
+        state: boardViewportStates.editor,
+        selectedMarkerId,
+        onPieceSelect: handleSelectedMarkerChange,
+        onMarkerDrop: placeDefaultMarker
+      }),
+      createAssetStrip()
+    );
+  } else {
+    boardStage.append(createBoardSetup());
+  }
 
   const inspector = element("aside", "panel right-panel inspector-panel");
   inspector.append(createInspectorTabBar());
@@ -510,7 +517,7 @@ function createSelectionTab(
 }
 
 function createAssetsTab(): HTMLElement {
-  return createAssetLibrarySection();
+  return createAssetPickerSection();
 }
 
 function createSourceTab(): HTMLElement {
@@ -1214,7 +1221,7 @@ function createMarkerImageSelect(
   return field.label;
 }
 
-function createAssetLibrarySection(): HTMLElement {
+function createAssetPickerSection(): HTMLElement {
   const section = element("section", "inspector-section");
   const header = element("div", "inspector-section-header");
   const actions = element("div", "asset-section-actions");
@@ -1222,13 +1229,13 @@ function createAssetLibrarySection(): HTMLElement {
     "Import Image",
     () => importScenarioAsset("image"),
     "import-image-asset",
-    !canImportScenarioAssets() || !getCurrentFilePath()
+    !canImportScenarioAssets()
   );
   const importAudioButton = buttonElement(
     "Import Audio",
     () => importScenarioAsset("audio"),
     "import-audio-asset",
-    !canImportScenarioAssets() || !getCurrentFilePath()
+    !canImportScenarioAssets()
   );
   const clearBackgroundButton = buttonElement(
     "Clear Background",
@@ -1267,7 +1274,7 @@ function createAssetLibrarySection(): HTMLElement {
       element(
         "p",
         "inspector-empty",
-        "Save the scenario to a desktop file before importing package assets."
+        "Importing package assets will ask where to save this scenario first."
       )
     );
   } else {
@@ -1285,48 +1292,172 @@ function createAssetLibrarySection(): HTMLElement {
       element(
         "p",
         "source-editor-hint",
-        "To assign marker artwork, select a marker on the board and use Selection > Image."
+        "Select a marker to rebind its artwork. The board asset strip is the primary package asset view."
       )
     );
   }
 
-  if (scenario.assets.length === 0) {
-    section.append(element("p", "inspector-empty", "No imported assets."));
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker) {
+    section.append(
+      element("p", "inspector-empty", "No marker selected. Select a marker to pick artwork.")
+    );
     return section;
   }
 
-  const assetList = element("ul", "asset-list");
-  assetList.dataset.testid = "asset-list";
+  section.append(createMarkerImageSelect(selectedMarker));
 
-  for (const asset of scenario.assets) {
-    const item = element("li", "asset-list-item");
-    const assetMeta = element("div", "asset-meta");
-    const assetHeader = element("div", "asset-meta-header");
-    const assetId = element("strong", "asset-id", asset.id);
-    const assetKind = element("span", `asset-kind asset-kind-${asset.kind}`, asset.kind);
-    const assetPath = element("code", "asset-path", asset.path);
+  return section;
+}
 
-    assetHeader.append(assetId, assetKind);
-    assetMeta.append(assetHeader, assetPath);
-    item.append(assetMeta);
+function createAssetStrip(): HTMLElement {
+  const strip = element("section", "asset-strip");
+  if (assetStripCollapsed) {
+    strip.classList.add("is-collapsed");
+  }
+  strip.dataset.testid = "asset-strip";
+  strip.setAttribute("aria-label", "Package assets");
 
-    if (asset.kind === "image" && scenario.space) {
-      const isCurrentBackground = scenario.space.background.imageAssetId === asset.id;
-      const backgroundButton = buttonElement(
-        isCurrentBackground ? "Background Active" : "Set Background",
-        () => setBoardBackgroundImageAsset(asset.id),
-        `set-background-image-${asset.id}`,
-        isCurrentBackground
-      );
-      backgroundButton.className = "action-button compact-action";
-      item.append(backgroundButton);
+  const header = element("div", "asset-strip-header");
+  const toggleButton = buttonElement(
+    assetStripCollapsed ? "Show" : "Hide",
+    toggleAssetStripCollapsed,
+    "asset-strip-toggle"
+  );
+  toggleButton.className = "asset-strip-toggle";
+  header.append(
+    element("span", "asset-strip-title", "Assets"),
+    element("span", "asset-strip-count", String(scenario.assets.length)),
+    toggleButton
+  );
+
+  const track = element("div", "asset-strip-track");
+  track.dataset.testid = "asset-strip-track";
+  const orderedAssets = getAssetStripAssets();
+
+  if (orderedAssets.length === 0) {
+    track.append(element("p", "asset-strip-empty", "No imported assets."));
+  } else {
+    for (const asset of orderedAssets) {
+      track.append(createAssetStripCard(asset));
     }
-
-    assetList.append(item);
   }
 
-  section.append(assetList);
-  return section;
+  track.append(createAssetImportCard());
+  strip.append(header, track);
+  return strip;
+}
+
+function toggleAssetStripCollapsed(): void {
+  assetStripCollapsed = !assetStripCollapsed;
+  render();
+}
+
+function getAssetStripAssets(): ScenarioAsset[] {
+  const pinnedAssetIds = new Set<string>();
+  const selectedMarker = getSelectedMarker();
+  if (selectedMarker?.imageAssetId) {
+    pinnedAssetIds.add(selectedMarker.imageAssetId);
+  }
+  if (scenario.space?.background.imageAssetId) {
+    pinnedAssetIds.add(scenario.space.background.imageAssetId);
+  }
+
+  return [...scenario.assets].sort((left, right) => {
+    const leftPinned = pinnedAssetIds.has(left.id);
+    const rightPinned = pinnedAssetIds.has(right.id);
+    if (leftPinned !== rightPinned) {
+      return leftPinned ? -1 : 1;
+    }
+    if (left.kind !== right.kind) {
+      return left.kind === "image" ? -1 : 1;
+    }
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function createAssetStripCard(asset: ScenarioAsset): HTMLElement {
+  const card = element("article", `asset-strip-card asset-strip-card-${asset.kind}`);
+  const isImage = asset.kind === "image";
+  const isSelectedMarkerImage = getSelectedMarker()?.imageAssetId === asset.id;
+  const isCurrentBackground = scenario.space?.background.imageAssetId === asset.id;
+  if (isSelectedMarkerImage || isCurrentBackground) {
+    card.classList.add("is-pinned");
+  }
+  card.dataset.testid = `asset-strip-card-${asset.id}`;
+
+  const preview = element("div", "asset-strip-preview");
+  if (isImage) {
+    const imageUrl = resolveScenarioAssetUrl(asset);
+    if (imageUrl) {
+      const image = document.createElement("img");
+      image.src = imageUrl;
+      image.alt = "";
+      preview.append(image);
+    } else {
+      preview.append(element("span", "asset-strip-preview-label", "Image"));
+    }
+  } else {
+    preview.append(element("span", "asset-strip-preview-label", "Audio"));
+  }
+
+  const meta = element("div", "asset-strip-meta");
+  const header = element("div", "asset-meta-header");
+  header.append(
+    element("strong", "asset-id", asset.id),
+    element("span", `asset-kind asset-kind-${asset.kind}`, asset.kind)
+  );
+  meta.append(header, element("code", "asset-path", asset.path));
+
+  const actions = element("div", "asset-strip-actions");
+  if (isImage) {
+    const selectedMarker = getSelectedMarker();
+    const useOnSelectionButton = buttonElement(
+      isSelectedMarkerImage ? "Selection Active" : "Use on Selection",
+      () => updateSelectedMarkerImageAsset(asset.id),
+      `asset-strip-use-selection-${asset.id}`,
+      !selectedMarker || isSelectedMarkerImage
+    );
+    const backgroundButton = buttonElement(
+      isCurrentBackground ? "Background Active" : "Set Background",
+      () => setBoardBackgroundImageAsset(asset.id),
+      `set-background-image-${asset.id}`,
+      !scenario.space || isCurrentBackground
+    );
+    useOnSelectionButton.className = "action-button compact-action";
+    backgroundButton.className = "action-button compact-action";
+    actions.append(useOnSelectionButton, backgroundButton);
+  }
+
+  card.append(preview, meta, actions);
+  return card;
+}
+
+function createAssetImportCard(): HTMLElement {
+  const card = element("article", "asset-import-card");
+  card.dataset.testid = "asset-strip-import-card";
+  const disabled = !canImportScenarioAssets();
+  const importImageButton = buttonElement(
+    "Import Image",
+    () => importScenarioAsset("image"),
+    "asset-strip-import-image",
+    disabled
+  );
+  const importAudioButton = buttonElement(
+    "Import Audio",
+    () => importScenarioAsset("audio"),
+    "asset-strip-import-audio",
+    disabled
+  );
+  importImageButton.className = "action-button compact-action";
+  importAudioButton.className = "action-button compact-action";
+  card.append(
+    element("strong", "asset-import-title", "Import"),
+    element("p", "asset-import-hint", "Add package assets."),
+    importImageButton,
+    importAudioButton
+  );
+  return card;
 }
 
 function createSourceEditorSection(): HTMLElement {
@@ -2343,6 +2474,14 @@ async function exportRuntime(): Promise<void> {
 }
 
 async function importScenarioAsset(kind: ScenarioAssetKind): Promise<void> {
+  if (canImportScenarioAssets() && !getCurrentFilePath()) {
+    const saveResult = await saveScenarioFileAs(scenario);
+    applyStorageResult(saveResult);
+    if (!getCurrentFilePath()) {
+      return;
+    }
+  }
+
   const result = await importScenarioAssetFile(scenario, kind);
   const importedAsset = result.asset;
   if (!importedAsset) {

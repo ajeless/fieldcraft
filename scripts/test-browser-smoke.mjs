@@ -84,6 +84,13 @@ try {
 
   await createGrid(page, "square", 6, 5);
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
+  await page.waitForSelector('[data-testid="asset-strip"]');
+  if (!(await page.locator('[data-testid="asset-strip-import-image"]').isDisabled())) {
+    throw new Error("Browser mode should not enable asset strip image imports.");
+  }
+  if (!(await page.locator('[data-testid="asset-strip-import-audio"]').isDisabled())) {
+    throw new Error("Browser mode should not enable asset strip audio imports.");
+  }
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await expectStatusFieldValue(page, "status-field-space", "square-grid");
   await movePointerToTile(page, "board-surface", 2, 1);
@@ -503,6 +510,9 @@ try {
   await applySourceEditor(page);
   await expectStatusLine(page, "Source applied");
   await expectMetricValue(page, "asset-count", "2");
+  await page.waitForSelector('[data-testid="asset-strip-card-test-board-image"]');
+  await page.waitForSelector('[data-testid="asset-strip-card-test-tone"]');
+  await expectFirstAssetStripCard(page, "asset-strip-card-test-board-image");
   await activateInspectorTab(page, "scenario");
   await expectMetricValue(page, "board-background-image-asset", "test-board-image");
 
@@ -1295,6 +1305,13 @@ async function expectMetricValue(page, testId, expectedValue) {
     },
     [testId, expectedValue]
   );
+}
+
+async function expectFirstAssetStripCard(page, expectedTestId) {
+  await page.waitForFunction((nextTestId) => {
+    const firstCard = document.querySelector('[data-testid^="asset-strip-card-"]');
+    return firstCard?.getAttribute("data-testid") === nextTestId;
+  }, expectedTestId);
 }
 
 async function expectStoredTheme(page, expectedTheme) {
