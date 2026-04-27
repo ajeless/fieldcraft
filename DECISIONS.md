@@ -8,11 +8,15 @@ Mutable plans, open design questions, and implementation sequencing belong in `P
 
 The editor is the product. The engine exists to serve the editor and the authored experiences it produces. Features that don't surface in the editor aren't ready to build.
 
+Under v1 scope (`docs/EDITOR-V1-SCOPE.md`), the runtime-bearing engine is deferred and the exported surface is a viewer. The editor-first commitment remains: authoring value comes before runtime ambition.
+
 ## 002 — Tauri + TypeScript
 
 The desktop editor uses Tauri as its shell. All application logic — engine, editor UI, rules interpreter — is TypeScript. Rust is used only where Tauri's backend requires it.
 
 Rationale: TypeScript gives a single language across editor, engine, and browser export. Maximizes iteration speed and eliminates serialization boundaries between editor and engine.
+
+Under v1 scope, this means the editor and browser viewer stay TypeScript-first. Engine and rules-interpreter work remains deferred, not moved to another stack.
 
 ## 003 — pnpm as package manager
 
@@ -22,9 +26,9 @@ Using pnpm for dependency management. Fast, strict, clean lockfile diffs, fully 
 
 Tile-based space (hex, quad, and potentially other tessellations with integer coordinates, discrete neighbor relationships) and free-coordinate space (floating-point positions, 360-degree bearing, continuous distance) are separate spatial models. They are not unified behind a single abstraction.
 
-A scenario declares which space model it uses. The editor, engine, and rules language adapt accordingly.
+A scenario declares which space model it uses. The editor, viewer, and any future engine or rules language adapt accordingly.
 
-Draft scenarios in the editor may temporarily have no configured space model while the author is setting up the board. Once a scenario is ready to play-test or export, it declares exactly one space model.
+Draft scenarios in the editor may temporarily have no configured space model while the author is setting up the board. Once a scenario is ready to present or export, it declares exactly one space model.
 
 Rationale: these models differ in almost every operation — position representation, movement calculation, range, adjacency. A unified interface would either be uselessly abstract or would force one model's assumptions onto the other.
 
@@ -39,6 +43,8 @@ Alternative time models (tick-based simulation, event-driven continuous time) ar
 Rationale: plotted simultaneous turns are the time model used by the tabletop games this tool is designed to support (SFB, Warhammer 40K, tabletop milsims). Using the same time model regardless of space model keeps the engine's core loop, phase system, and expression language consistent across scenario types.
 
 ## 006 — Rules authored as structured data plus expression language
+
+> **Status:** In force as a future architecture constraint, but deferred beyond v1. Fieldcraft v1 does not evaluate rules.
 
 Decision: game rules combine structured data for configuration (parameters, thresholds, enumerations) with a small expression language for logic (conditions, branching, effects).
 
@@ -62,7 +68,7 @@ Scenario files must be readable and editable in a plain text editor. The visual 
 
 The desktop editor is the authoritative authoring environment.
 
-The browser runtime remains a first-class export target.
+The browser runtime/viewer remains a first-class export target.
 
 The browser editor is kept as a constrained development, testing, review, and demo surface, not as a full parity promise with the desktop editor.
 
@@ -77,7 +83,7 @@ See decision `010` for the sharpened purpose of the browser editor surface.
 The browser editor is maintained primarily for two purposes:
 
 1. As a compatibility surface that coding agents can drive via headless browser automation (Playwright, WebDriver) to validate editor behavior.
-2. As the authoring mirror for the browser runtime export target (decision `007`).
+2. As the authoring mirror for the browser runtime/viewer export target (decision `007`).
 
 Under v1 scope (`docs/EDITOR-V1-SCOPE.md`), the browser surface also serves as the presentation-mode renderer for the viewer export — the same renderer that authors use to project or screen-share authored scenarios. This is not a third purpose; it is the export-runtime mirror, named explicitly because the framing has shifted from "runtime" to "viewer" under Pitch A.
 

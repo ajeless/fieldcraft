@@ -1,5 +1,7 @@
 # Scenario Format Hardening — Design
 
+> **Status:** Archived design note. This records the scenario-format-hardening slice before it shipped. The current scenario format has since advanced beyond the v1 examples below. Use `DECISIONS.md` decision `011`, current code, and current migration fixtures as the source of truth.
+
 Branch: `codex/scenario-format-hardening`
 Date: 2026-04-18
 

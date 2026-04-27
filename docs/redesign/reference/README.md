@@ -9,7 +9,7 @@ Open `FieldCraft Redesign.html` in any modern browser. It pulls React, ReactDOM,
 Screens available:
 
 - Editor (default) — the main authoring view
-- Runtime — read-only playback preview
+- Runtime — historical name for the read-only viewer preview
 - New Scenario — scenario creation flow
 - Asset Library — full-screen asset management
 
@@ -46,7 +46,7 @@ Then translate that into TypeScript that fits the existing editor's patterns.
 - **The mockup's `localStorage` usage for screen state** — the real editor has its own session draft system (`editorSessionDraftStorageKey`)
 - **Mock data** (`SAMPLE_ASSETS`, `SCENARIO`, `SAMPLE_SCENARIO`) — real data comes from the scenario model
 - **`window.prompt()` for "Add new side"** in the Selection tab — replace with a small inline form
-- **The BoardSetupModal's "Hex grid · soon" / "Free · soon" disabled treatment** — the real engine supports all three space models today; enable all three
+- **The BoardSetupModal's "Hex grid · soon" / "Free · soon" disabled treatment** — the real editor supports all three space models today; enable all three
 - **The mockup's `forceRender()` mutation of `s.sides`** — real sides flow through the scenario state + undo/redo history
 
 ## File map
@@ -62,7 +62,7 @@ Then translate that into TypeScript that fits the existing editor's patterns.
 | `components/asset-library.jsx` | Full-screen asset library subview with grid + detail panel |
 | `components/new-scenario.jsx` | New Scenario page with three space-model cards |
 | `components/scenario.jsx` | Sample scenario JSON with sides array (`schemaVersion: 3`) and JSON syntax highlighter |
-| `components/runtime.jsx` | Runtime preview screen with transport controls |
+| `components/runtime.jsx` | Viewer preview screen; `runtime` is the mockup/code name |
 | `components/palette.jsx` | ⌘K command palette overlay |
 | `components/primitives.jsx` | Shared UI primitives — buttons, inputs, segmented controls, icons |
 

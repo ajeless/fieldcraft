@@ -1,5 +1,7 @@
 # Scenario Format Hardening Implementation Plan
 
+> **Status:** Archived implementation plan. The scenario-format-hardening slice shipped after this plan was written, and the current scenario format has since advanced beyond the v1 shape described here. Preserve this file as implementation history; use `DECISIONS.md` decision `011`, current code, and current fixtures as the source of truth.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship v1 of the Fieldcraft scenario format — stable `schema`/`schemaVersion` split, opaque piece ids + author-facing labels — along with a chained migration registry whose first entry (v0→v1) upgrades existing scenarios on load.

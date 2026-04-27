@@ -11,7 +11,7 @@ Fieldcraft's editor grew feature-first. `main.ts` reached 3,338 lines and 152 fu
 This redesign introduces that vocabulary. It also answers several UX questions that had gone unanswered because no one was looking at the editor as a designed object:
 
 - Where do scenario-wide metrics live vs. per-selection details vs. power-user source views?
-- How do we anticipate tools and entity concepts that are on the roadmap but not yet shipped (Ruler, Hand, entity model with sides, rules authoring)?
+- How do we anticipate tools and entity concepts that are on the roadmap but not yet shipped (Ruler, Hand, sides, facing, styling, properties)?
 - How do we stop Board Setup from being a one-way door?
 - How do we make Decision 004 (two distinct space models) visible to the author?
 - How do we keep the browser editor thin (Decision 010) while the desktop editor gets richer?
@@ -105,7 +105,7 @@ Key constraints:
 - The mockup's localStorage usage for screen state (the real editor has its own session draft system)
 - The mockup's mock data (`SAMPLE_ASSETS`, `SCENARIO`) — real data comes from the scenario model
 - The mockup's `window.prompt()` for adding new sides — replace with a small inline form
-- The mockup's BoardSetupModal "Hex grid · soon" / "Free · soon" disabled treatment — the real engine supports all three space models today
+- The mockup's BoardSetupModal "Hex grid · soon" / "Free · soon" disabled treatment — the real editor supports all three space models today
 
 ## Implementation sequence
 
@@ -123,15 +123,15 @@ Do not implement this as a single branch. Decompose into six branches, threaded 
 
 6. **`codex/command-palette`** — wire ⌘K to the existing command registry.
 
-Tool rail, floating/collapsible inspector, coordinate-label rulers, and author-defined sides are later branches, pending feedback from the first six landing. Author-defined sides specifically should wait until `codex/unit-entity-model` (currently planned in `PLAN.md`) because it's a scenario-format change and should land alongside the first real entity work.
+Tool rail, floating/collapsible inspector, coordinate-label rulers, and author-defined sides are later branches, pending feedback from the first six landing. Author-defined sides specifically wait until `codex/sides-and-entity-base` because it is a scenario-format change and should land alongside the first v1 piece ownership work.
 
 Each branch must leave the editor visibly better and manually testable per AGENTS.md. Update `PLAN.md`'s "Recently Completed Baseline Slices" as branches land.
 
-## Open questions to settle before branch 2
+## Settled questions from the first redesign branches
 
-- Do we commit to the four-tab inspector as a new decision in `DECISIONS.md`? (Recommended: yes, as decision 011 — "Editor information architecture.")
-- Do we keep the current inline source editor's targeted diagnostics (line/column error reporting) when moving to a tab? (Yes, required — Decision 008's human-readable files depend on source being first-class.)
-- What's the `Route` enum shape when Source mode expands — still `editor | runtime`, or does source-expanded become its own state? (Recommended: keep the `Route` enum; Source-expanded is a local inspector state, not a route.)
+- The four-tab inspector, tool rail, bottom asset strip, status bar, command palette, and full-page New Scenario flow are captured in decision `012`.
+- The Source tab keeps targeted diagnostics and the existing source-editor contract; decision `008` still makes source readability load-bearing.
+- Source-expanded state is local inspector state, not a route; `runtime` remains a route name in code for historical reasons, while v1 treats that surface as a viewer.
 
 ## Files in this folder
 

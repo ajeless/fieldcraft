@@ -1,24 +1,28 @@
 # Fieldcraft
 
-Fieldcraft is a visual authoring tool for turn-based tactical board game experiences.
+Fieldcraft is a visual map-and-scenario editor for tabletop wargames and turn-based tactical board games.
 
-The editor is the product. The engine, rules interpreter, and export pipeline exist to support authoring inside that editor. The intended loop is: design a scenario, play-test it, revise it, and export it without leaving the same environment.
+The editor is the product. A scenario author designs a map, places pieces, attaches package-local media, and saves a human-readable scenario file that people can use at a physical table, over screen share, or through a browser viewer export.
+
+V1 is scoped as a personal tool made shippable-shaped. It is not a public release, a gameplay engine, or a finished-game packaging system.
 
 ## Current Baseline
 
-Fieldcraft can already author small scenarios end to end. Square, pointy-top hex, and free-coordinate boards support permissive marker placement, selection, deletion, and colocation, with viewport pan/zoom/reset. The editor keeps in-memory undo/redo, persisted System/Light/Dark themes, and draft-recovery autosave across sessions. A small command registry drives file actions with unsaved-change guards on desktop and in the browser, and an editable source pane edits scenario JSON with targeted line/column diagnostics. Desktop package-local image and audio import write assets beside the scenario file, markers can render imported image artwork, and `Save As` carries packaged assets forward. A read-only in-app runtime view plays the authored scenario, and a self-contained browser runtime export bundles its assets. Scenario files use a human-readable v2 format with opaque piece ids, author-facing labels, and a chained migration registry that upgrades older files on load.
+Fieldcraft can already author small scenarios end to end. Square, pointy-top hex, and free-coordinate boards support permissive marker placement, selection, deletion, and colocation, with viewport pan/zoom/reset. The editor keeps in-memory undo/redo, persisted System/Light/Dark themes, and draft-recovery autosave across sessions. A small command registry drives file actions with unsaved-change guards on desktop and in the browser, and an editable source pane edits scenario JSON with targeted line/column diagnostics. Desktop package-local image and audio import write assets beside the scenario file; the bottom asset strip exposes package assets near the board; markers can render imported image artwork; and `Save As` carries packaged assets forward. A read-only in-app viewer and a self-contained browser viewer export render authored scenarios with bundled assets. Scenario files use a human-readable v2 format with opaque piece ids, author-facing labels, and a chained migration registry that upgrades older files on load.
 
 The desktop editor is the authoritative authoring surface. The browser surface is useful for development, smoke testing, and demos, but it is not a parity promise.
+
+The codebase still uses `runtime` in commands, filenames, and some UI labels for historical reasons. Under v1 scope, that surface is a scenario viewer.
 
 See `PLAN.md` for the current branch plan and near-term slices.
 
 ## Stack
 
 - Editor shell: Tauri
-- Editor and engine logic: TypeScript
+- Editor and viewer logic: TypeScript
 - Package manager: pnpm
 - Desktop toolchain: Rust
-- Export targets: browser runtime and Tauri desktop binary
+- V1 export target: browser viewer bundle
 
 ## Before You Start
 
@@ -236,7 +240,7 @@ This is the right path for:
 
 - quick UI checks
 - browser-only file behavior
-- smoke-testing the exported runtime support surface
+- smoke-testing the exported viewer support surface
 
 Browser-specific expectations:
 
@@ -282,6 +286,9 @@ corepack pnpm --dir apps/editor tauri icon src-tauri/app-icon.svg
 - `DECISIONS.md`: settled architectural choices
 - `PLAN.md`: current branch plan and deferred questions
 - `DESKTOP-TESTING.md`: residual human-only desktop testing checklist
+- `docs/EDITOR-V1-SCOPE.md`: authoritative v1 product scope
+- `docs/RUNTIME-VISION.md`: historical runtime-bearing analysis preserved for context
+- `docs/doc-audit-2026-04.md`: historical documentation audit and resolved follow-up record
 - `docs/redesign/BRIEF.md`: durable spec for the editor UX/UI redesign
 - `docs/redesign/reference/README.md`: how to read the mockup bundle that BRIEF.md references
 

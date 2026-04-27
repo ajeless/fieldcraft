@@ -1,16 +1,16 @@
 > **Status:** Historical context. This document was drafted while the project was considering a runtime-bearing scope (Candidate C in section 4.1). The project subsequently re-scoped to Pitch A — editor as product, runtime as viewer — committed in `docs/EDITOR-V1-SCOPE.md`. The candidate answers below are preserved as a record of the analysis that informed the re-scope, not as the project's current direction.
 
-# Runtime Vision Draft
+# Historical Runtime Vision Draft
 
-Status: working draft. This is not a specification, not settled architecture, and not a replacement for `PLAN.md` or `DECISIONS.md`. It structures questions that the project has not yet asked about what a shipped Fieldcraft game is, and will be iterated on before any of it becomes a decision.
+Status: historical draft. This is not a specification, not settled architecture, and not a replacement for `docs/EDITOR-V1-SCOPE.md`, `PLAN.md`, or `DECISIONS.md`. It preserves questions the project asked before committing to v1 as an editor plus viewer.
 
 ## 1. Purpose
 
 The editor is roughly 85% of the codebase. The runtime that ships to players — `apps/editor/src/runtime-export/browser-runtime.js` — is 1,098 lines that render a board and let the reader pan and zoom. There is no gameplay.
 
-`AGENTS.md` describes the target experience as "design a map, place units, write rules, play-test, and export a finished game from within one environment." Three of those five verbs are not possible today. "Export a finished game" is technically possible, but the artifact produced is a viewer, not a game.
+At the time this was drafted, `AGENTS.md` described the target experience as "design a map, place units, write rules, play-test, and export a finished game from within one environment." Three of those five verbs were not possible. "Export a finished game" was technically possible, but the artifact produced was a viewer, not a game.
 
-This document exists to name the gap. Several editor branches in `PLAN.md`'s Near-Term sequence (`codex/asset-strip`, `codex/new-scenario-page`, `codex/command-palette`, `codex/tool-rail`) can proceed regardless of what is in this document. Later branches (`codex/rules-expression-spike`, `codex/unit-entity-model`, `codex/rules-authoring-system`, `codex/standalone-runtime-export`) are increasingly hard to design without a target for what the runtime delivers. This draft is the source material for that target.
+This document existed to name the gap. Several editor branches in `PLAN.md`'s Near-Term sequence (`codex/asset-strip`, `codex/new-scenario-page`, `codex/command-palette`, `codex/tool-rail`) could proceed regardless of what was in this document. Later branches (`codex/rules-expression-spike`, `codex/unit-entity-model`, `codex/rules-authoring-system`, `codex/standalone-runtime-export`) were increasingly hard to design without a target for what the runtime delivered. This draft is the historical source material for the re-scope.
 
 ## 2. What currently exists (baseline)
 

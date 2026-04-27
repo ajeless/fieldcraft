@@ -1,5 +1,7 @@
 # Documentation Audit — April 2026
 
+> **Status:** Historical audit. Many findings in this document were addressed by later branches, including decisions `011` and `012`, the v1 scope commitment in `docs/EDITOR-V1-SCOPE.md`, and follow-up documentation cleanup. Preserve this file as a record of the audit that prompted those changes; use the current docs, not this file, as the source of truth.
+
 ## Summary
 
 Twenty-one findings across the project's top-level docs and the redesign bundle. The dominant theme is redesign drift: `docs/redesign/BRIEF.md` (PR #13) and `codex/design-tokens-foundation` (PR #14) have landed since `PLAN.md` was last touched, and `PLAN.md`'s Current Focus and Near-Term Branch Sequence have not been reconciled with either. The second theme is feature-summary drift in `README.md`: the Current Baseline paragraph reads like a snapshot from several slices ago and omits shipped capabilities that `PLAN.md` and the code confirm. The third theme is missing commitments: BRIEF.md treats nine architectural items as settled, and scenario format v2 introduced load-bearing contracts (opaque piece ids, migration registry, forward-version rejection), but none of these are in `DECISIONS.md`.

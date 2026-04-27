@@ -19,8 +19,8 @@ The automated desktop smoke now covers:
 - save/open semantics in the Tauri dev shell
 - package-local image/audio import and copied `assets/` contents
 - `Save As` carrying package assets forward
-- runtime launch and read-only board rendering
-- browser-runtime export written from the desktop shell
+- viewer launch and read-only board rendering
+- browser viewer export written from the desktop shell
 - draft-recovery semantics after a crash-like process kill
 
 If any of those fail, fix the automation failure before doing a manual pass.
@@ -60,6 +60,8 @@ Recommended quick pass:
 5. Trigger **Save As** and confirm the native OS save dialog appears. Cancel once, then save to a new scratch path.
 6. On an untitled document, trigger **Save Scenario** and confirm it falls through to the native save dialog rather than silently writing somewhere unexpected.
 7. If the slice changes desktop packaging or startup behavior, launch the debug binary and confirm the window opens and the native dialogs still work there.
+
+The codebase and command names still use `runtime` for historical reasons. Under v1 scope, that surface is a presentation viewer.
 
 ## Checklist
 
