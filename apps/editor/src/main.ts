@@ -92,6 +92,7 @@ type InspectorTab = "scenario" | "selection" | "assets" | "source";
 type EditorCommandId =
   | "undo"
   | "redo"
+  | "open-command-palette"
   | "new"
   | "open"
   | "save"
@@ -105,6 +106,11 @@ type EditorCommands = CommandRegistry<EditorCommandId>;
 type MenuEntry = EditorCommandId | "separator";
 type ThemePreference = Theme | null;
 type BoardSetupMode = "create" | "edit";
+type CommandPaletteItem = {
+  command: EditorCommand;
+  shortcuts: string[];
+  score: number;
+};
 
 type BoardSetupDraft = {
   type: ScenarioSpaceType;
@@ -196,6 +202,9 @@ let cursorPosition: CursorPosition | null = null;
 let inspectorTab: InspectorTab = "scenario";
 let assetStripCollapsed = false;
 let boardSetupModalOpen = false;
+let commandPaletteOpen = false;
+let commandPaletteQuery = "";
+let commandPaletteActiveIndex = 0;
 let commandRegistry: EditorCommands | null = null;
 let desktopAutomationStarted = false;
 const editorHistory = createHistoryState<EditorSnapshot>();
@@ -220,6 +229,9 @@ function render(): void {
   syncEditorSessionDraft();
   app.innerHTML = "";
   app.append(createShell(getRoute()));
+  if (commandPaletteOpen) {
+    queueMicrotask(focusCommandPaletteInput);
+  }
 }
 
 function promoteSelectionTabFromScenario(): void {
@@ -268,6 +280,9 @@ function createShell(route: Route): HTMLElement {
   );
   if (route === "editor" && boardSetupModalOpen && scenario.space) {
     shell.append(createBoardSetupModal());
+  }
+  if (commandPaletteOpen) {
+    shell.append(createCommandPalette());
   }
   return shell;
 }
@@ -577,6 +592,13 @@ function createEditorCommands(fileInput: HTMLInputElement, route: Route): Editor
       run: redoEditorMutation
     },
     {
+      id: "open-command-palette",
+      label: "Command Palette",
+      enabled: true,
+      shortcut: "Mod+K",
+      run: openCommandPalette
+    },
+    {
       id: "new",
       label: "New",
       enabled: true,
@@ -750,6 +772,17 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
     return;
   }
 
+  if (commandPaletteOpen) {
+    handleCommandPaletteKeyDown(event);
+    return;
+  }
+
+  if (isCommandPaletteShortcutEvent(event)) {
+    event.preventDefault();
+    openCommandPalette();
+    return;
+  }
+
   const allowEditorHistoryFromSourceEditor =
     isSourceEditorEventTarget(event.target) && !hasPendingSourceEdits();
 
@@ -787,6 +820,49 @@ function handleCommandShortcutKeyDown(event: KeyboardEvent): void {
   executeCommand(command);
 }
 
+function isCommandPaletteShortcutEvent(event: KeyboardEvent): boolean {
+  return (
+    event.key.toLowerCase() === "k" &&
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.shiftKey
+  );
+}
+
+function handleCommandPaletteKeyDown(event: KeyboardEvent): void {
+  if (isCommandPaletteShortcutEvent(event)) {
+    event.preventDefault();
+    closeCommandPalette();
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeCommandPalette();
+    return;
+  }
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    moveCommandPaletteSelection(1);
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    moveCommandPaletteSelection(-1);
+    return;
+  }
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const item = getActiveCommandPaletteItem();
+    if (item?.command.enabled) {
+      executeCommandFromPalette(item.command);
+    }
+  }
+}
+
 function isDeleteSelectionKeyEvent(event: KeyboardEvent): boolean {
   if (isEditableEventTarget(event.target)) {
     return false;
@@ -812,6 +888,133 @@ function isRedoAliasKeyEvent(
     !event.altKey &&
     !event.shiftKey
   );
+}
+
+function openCommandPalette(): void {
+  commandPaletteOpen = true;
+  commandPaletteQuery = "";
+  commandPaletteActiveIndex = 0;
+  render();
+}
+
+function closeCommandPalette(): void {
+  commandPaletteOpen = false;
+  commandPaletteQuery = "";
+  commandPaletteActiveIndex = 0;
+  render();
+}
+
+function moveCommandPaletteSelection(delta: number): void {
+  const itemCount = getCommandPaletteItems().length;
+  if (itemCount === 0) {
+    return;
+  }
+
+  commandPaletteActiveIndex =
+    (commandPaletteActiveIndex + delta + itemCount) % itemCount;
+  render();
+}
+
+function executeCommandFromPalette(command: EditorCommand): void {
+  commandPaletteOpen = false;
+  commandPaletteQuery = "";
+  commandPaletteActiveIndex = 0;
+  executeCommand(command);
+}
+
+function getActiveCommandPaletteItem(): CommandPaletteItem | null {
+  const items = getCommandPaletteItems();
+  if (items.length === 0) {
+    return null;
+  }
+
+  return items[Math.min(commandPaletteActiveIndex, items.length - 1)] ?? null;
+}
+
+function getCommandPaletteItems(): CommandPaletteItem[] {
+  if (!commandRegistry) {
+    return [];
+  }
+
+  const query = normalizeCommandPaletteText(commandPaletteQuery);
+  const items = Object.values(commandRegistry)
+    .filter((command) => command.id !== "open-command-palette")
+    .map((command) => {
+      const shortcuts = getCommandShortcuts(command.id);
+      return {
+        command,
+        shortcuts,
+        score: scoreCommandPaletteMatch(command, shortcuts, query)
+      };
+    })
+    .filter((item) => item.score >= 0)
+    .sort((left, right) => {
+      if (left.command.enabled !== right.command.enabled) {
+        return left.command.enabled ? -1 : 1;
+      }
+
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+
+      return left.command.label.localeCompare(right.command.label);
+    });
+
+  if (commandPaletteActiveIndex >= items.length) {
+    commandPaletteActiveIndex = Math.max(0, items.length - 1);
+  }
+
+  return items;
+}
+
+function scoreCommandPaletteMatch(
+  command: EditorCommand,
+  shortcuts: ReadonlyArray<string>,
+  query: string
+): number {
+  if (!query) {
+    return 1;
+  }
+
+  const label = normalizeCommandPaletteText(command.label);
+  const id = normalizeCommandPaletteText(command.id);
+  const shortcutText = normalizeCommandPaletteText(shortcuts.join(" "));
+
+  if (label.startsWith(query)) {
+    return 100;
+  }
+
+  if (label.includes(query)) {
+    return 80;
+  }
+
+  if (id.includes(query)) {
+    return 60;
+  }
+
+  if (shortcutText.includes(query)) {
+    return 50;
+  }
+
+  return fuzzyCommandPaletteMatch(`${label} ${id} ${shortcutText}`, query) ? 20 : -1;
+}
+
+function fuzzyCommandPaletteMatch(value: string, query: string): boolean {
+  let valueIndex = 0;
+
+  for (const queryCharacter of query) {
+    valueIndex = value.indexOf(queryCharacter, valueIndex);
+    if (valueIndex === -1) {
+      return false;
+    }
+    valueIndex += 1;
+  }
+
+  return true;
+}
+
+function normalizeCommandPaletteText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function isEditableEventTarget(target: EventTarget | null): boolean {
@@ -1089,6 +1292,101 @@ function createDocumentCommandButton(commandId: EditorCommandId): HTMLButtonElem
     button.setAttribute("aria-keyshortcuts", formatShortcutAriaSet(shortcuts));
   }
   return button;
+}
+
+function createCommandPalette(): HTMLElement {
+  const backdrop = element("div", "command-palette-backdrop");
+  const panel = element("section", "command-palette-panel");
+  const search = document.createElement("input");
+  const items = getCommandPaletteItems();
+
+  backdrop.dataset.testid = "command-palette";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "true");
+  panel.setAttribute("aria-label", "Command palette");
+  search.type = "search";
+  search.value = commandPaletteQuery;
+  search.placeholder = "Search commands";
+  search.className = "command-palette-input";
+  search.dataset.testid = "command-palette-input";
+  search.addEventListener("input", () => {
+    commandPaletteQuery = search.value;
+    commandPaletteActiveIndex = 0;
+    render();
+  });
+
+  const list = element("div", "command-palette-list");
+  list.dataset.testid = "command-palette-list";
+
+  if (items.length === 0) {
+    list.append(element("p", "command-palette-empty", "No matching commands"));
+  } else {
+    items.forEach((item, index) => {
+      list.append(createCommandPaletteRow(item, index));
+    });
+  }
+
+  panel.append(search, list);
+  backdrop.append(panel);
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) {
+      closeCommandPalette();
+    }
+  });
+  return backdrop;
+}
+
+function createCommandPaletteRow(
+  item: CommandPaletteItem,
+  index: number
+): HTMLButtonElement {
+  const command = item.command;
+  const row = document.createElement("button");
+  const label = element("span", "command-palette-label", command.label);
+  const meta = element("span", "command-palette-meta");
+  const shortcut = item.shortcuts.length > 0
+    ? element("span", "command-palette-shortcut", formatShortcutHints(item.shortcuts))
+    : null;
+  const status = command.enabled
+    ? null
+    : element("span", "command-palette-status", "Unavailable");
+
+  row.type = "button";
+  row.className =
+    index === commandPaletteActiveIndex
+      ? "command-palette-row is-active"
+      : "command-palette-row";
+  row.disabled = !command.enabled;
+  row.dataset.testid = `command-palette-command-${command.id}`;
+  row.setAttribute("role", "option");
+  row.setAttribute("aria-selected", index === commandPaletteActiveIndex ? "true" : "false");
+  if (item.shortcuts.length > 0) {
+    row.setAttribute("aria-keyshortcuts", formatShortcutAriaSet(item.shortcuts));
+  }
+  if (shortcut) {
+    meta.append(shortcut);
+  }
+  if (status) {
+    meta.append(status);
+  }
+  row.append(label, meta);
+  row.addEventListener("mouseenter", () => {
+    commandPaletteActiveIndex = index;
+  });
+  row.addEventListener("click", () => executeCommandFromPalette(command));
+  return row;
+}
+
+function focusCommandPaletteInput(): void {
+  const input = document.querySelector<HTMLInputElement>(
+    '[data-testid="command-palette-input"]'
+  );
+  if (!input) {
+    return;
+  }
+
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
 }
 
 function createBoard(options: {

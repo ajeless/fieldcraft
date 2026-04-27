@@ -6,15 +6,20 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-V1 is committed in `docs/EDITOR-V1-SCOPE.md`: Fieldcraft is a map-and-scenario editor for tabletop wargames, and the runtime export is a viewer rather than a gameplay engine. Today's baseline covers explicit scenario creation and post-creation board setup edits across square, pointy-top hex, and free-coordinate models; permissive marker placement, selection, deletion, and colocation; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a small command registry for file and board actions; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; a read-only in-app runtime/viewer surface; browser runtime/viewer export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, asset strip visibility, `Save As` carrying assets forward); the v2 scenario format with opaque piece ids, author-facing labels, optional marker image refs, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
+V1 is committed in `docs/EDITOR-V1-SCOPE.md`: Fieldcraft is a map-and-scenario editor for tabletop wargames, and the runtime export is a viewer rather than a gameplay engine. Today's baseline covers explicit scenario creation and post-creation board setup edits across square, pointy-top hex, and free-coordinate models; permissive marker placement, selection, deletion, and colocation; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a command registry for file, board, and editor actions with a searchable command palette; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; a read-only in-app runtime/viewer surface; browser runtime/viewer export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, asset strip visibility, `Save As` carrying assets forward); the v2 scenario format with opaque piece ids, author-facing labels, optional marker image refs, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
 
-The immediate near-term sequence continues the decision `012` editor vocabulary first: command palette, then tool rail. Those branches still follow `docs/redesign/BRIEF.md` and should not reopen the redesign.
+The immediate near-term sequence continues the decision `012` editor vocabulary with the tool rail. That branch still follows `docs/redesign/BRIEF.md` and should not reopen the redesign.
 
 The original `codex/unit-entity-model` branch is split for v1 into `codex/sides-and-entity-base`, `codex/piece-facing`, and `codex/piece-properties`, with `codex/token-styling` between facing and properties. Rules, turn resolution, and standalone runtime packaging are deferred or out of scope under v1.
 
 Automation now covers both the browser support surface and a scripted desktop-semantic pass in the Tauri dev shell. Native desktop dialogs and packaged-build sanity remain release-significant manual checks even when both automated suites are green; the residual human-only pass lives in `DESKTOP-TESTING.md`.
 
 ## Recently Completed Baseline Slices
+
+- `codex/command-palette`
+  - `Ctrl+K` / `Cmd+K` now opens a searchable command palette backed by the existing command registry.
+  - The palette shows current shortcuts, keeps disabled commands visible as unavailable, supports keyboard navigation, and executes enabled commands without replacing the menu bar or command bar.
+  - Browser smoke covers palette discovery and command execution; desktop smoke remains green.
 
 - `codex/new-scenario-page`
   - Scenario creation now uses a full-page chooser with square, pointy-top hex, and free-coordinate cards, miniature board previews, and scenario details instead of the old dashed setup form.
@@ -106,56 +111,50 @@ Current manual testing pressure points are captured in the branch sequence below
 
 ## Near-Term Branch Sequence
 
-1. `codex/command-palette`
-   - Make existing commands discoverable without adding another permanent panel.
-   - Wire `⌘K` / `Ctrl+K` to a fuzzy-searchable overlay over the existing command registry.
-   - Treat the palette as a discoverability layer alongside the menu bar and command bar — not a replacement for either.
-   - Subsumes the previously-planned `codex/editor-help-overlay`: shortcut and command discoverability is handled here instead of in a parallel help surface.
-
-2. `codex/tool-rail`
+1. `codex/tool-rail`
    - Finish the editor's main tool vocabulary.
    - Introduce the left-side 44px vertical tool rail from decision `012` and BRIEF.md §3. Register today's tools (Select, Marker) as first-class entries; ghost placeholders for Ruler and Hand until those features ship.
    - Formalize the "armed tool" state and connect it to the asset strip's contextual image filtering.
    - Finish retiring the legacy left sidebar by the end of this branch (whatever status-bar / asset-strip / new-scenario-page did not already absorb).
    - Intentionally deferred behind the first redesign branches per BRIEF.md: the rail's shape benefits from feedback on the docked inspector, status bar, asset strip, and new-scenario flow before being locked in.
 
-3. `codex/sides-and-entity-base`
+2. `codex/sides-and-entity-base`
    - Give authored pieces scenario-level ownership without trying to finish a game entity system in one branch.
    - Add author-defined sides at the scenario level, `sideId` references on pieces, Scenario tab side management, and Selection tab side assignment.
    - Move the scenario format to v3 with a migration from v2; future format decisions for this branch land with the implementation branch, not in this planning document.
    - Not in scope: rules, turn structure, gameplay behavior, or a broad object inspector.
 
-4. `codex/piece-facing`
+3. `codex/piece-facing`
    - Make authored orientation visible and editable.
    - Add an orientation/facing field on pieces, editor rendering that shows direction, and source-editor round-trip.
    - Add a rotation gesture or equivalent direct manipulation that works across square, pointy-top hex, and free-coordinate boards.
    - Not in scope: movement plotting, firing arcs, or rules evaluation.
 
-5. `codex/token-styling`
+4. `codex/token-styling`
    - Let authors distinguish piece types visually without requiring imported art.
    - Ship basic shape variation, color controls, and readable styling data in the scenario file.
    - Slot new styling controls into the Selection tab introduced by `codex/inspector-tabbed-rewrite`; avoid regrowing the old right-column stack.
    - Keep editor and viewer rendering in parity for supported styling fields; do not build a sprite editor, paint tool, or full asset styling system.
 
-6. `codex/piece-properties`
+5. `codex/piece-properties`
    - Support scenario-useful per-piece facts without building a rules engine.
    - Add extensible per-piece key/value attributes with reasonable primitive typing.
    - Add editor UI for viewing and editing properties, plus source-editor round-trip.
    - Not in scope: evaluating properties as rules or deriving gameplay behavior from them.
 
-7. `codex/viewer-export-polish`
+6. `codex/viewer-export-polish`
    - Polish the existing browser runtime export into a presentation/projection viewer.
    - Make the viewer chrome-less by default, full-screen-friendly, and easy to reset or navigate.
    - Keep viewer rendering in parity with the editor for v1-supported board, side, facing, styling, property, and asset display.
    - The codebase keeps "runtime" terminology for historical reasons; this branch treats the export functionally as a viewer.
 
-8. `codex/v1-example-scenarios`
+7. `codex/v1-example-scenarios`
    - Author one to three reference scenarios as documentation-by-example.
    - Demonstrate square, pointy-top hex, and free-coordinate space models across the set.
    - Include package-local assets where useful and exercise sides, facing, styling, and properties after those branches exist.
    - Not in scope: tutorial content, campaigns, or sample games with rules.
 
-9. `codex/v1-documentation`
+8. `codex/v1-documentation`
    - Align the repo's public-facing docs with v1 scope and the "personal tool, made shippable-shaped" bar.
    - Finish the README pass for v1 scope, including any final terminology cleanup around "runtime" in code and filenames.
    - Add v1 release notes or changelog and any final documentation cleanup needed for the v1 bar.

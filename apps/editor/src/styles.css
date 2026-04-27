@@ -251,6 +251,114 @@ button:disabled {
   color: var(--fc-ink-muted);
 }
 
+.command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  padding: 12vh 24px 24px;
+  background: rgba(13, 24, 32, 0.48);
+}
+
+.command-palette-panel {
+  width: min(640px, 100%);
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r2);
+  padding: 8px;
+  background: var(--fc-panel-bg);
+  box-shadow: var(--fc-shadow2);
+}
+
+.command-palette-input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r2);
+  padding: 0 12px;
+  background: var(--fc-bg0);
+  color: var(--fc-ink);
+  font: inherit;
+  font-weight: 750;
+}
+
+.command-palette-list {
+  max-height: min(420px, 56vh);
+  display: grid;
+  gap: 3px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.command-palette-row {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 0;
+  border-radius: var(--fc-r2);
+  padding: 0 12px;
+  background: transparent;
+  color: var(--fc-ink);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+}
+
+.command-palette-row:hover,
+.command-palette-row:focus-visible,
+.command-palette-row.is-active {
+  background: var(--fc-bg0);
+  color: var(--fc-accent-dim);
+}
+
+.command-palette-row:disabled,
+.command-palette-row:disabled:hover,
+.command-palette-row:disabled.is-active {
+  background: transparent;
+  color: var(--fc-ink-muted);
+}
+
+.command-palette-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.command-palette-meta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fc-ink-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.command-palette-row:hover .command-palette-meta,
+.command-palette-row:focus-visible .command-palette-meta,
+.command-palette-row.is-active .command-palette-meta {
+  color: currentColor;
+}
+
+.command-palette-status {
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r1);
+  padding: 2px 6px;
+}
+
+.command-palette-empty {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--fc-ink-muted);
+  font-weight: 750;
+}
+
 .route-switch {
   flex: 0 0 auto;
   display: inline-flex;
@@ -787,6 +895,8 @@ button:disabled {
 
 .action-button:focus-visible,
 .document-command-button:focus-visible,
+.command-palette-input:focus-visible,
+.command-palette-row:focus-visible,
 .mode-button:focus-visible,
 .theme-button:focus-visible,
 .app-menu-trigger:focus-visible,

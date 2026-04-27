@@ -59,6 +59,14 @@ try {
   await page.waitForFunction(() => {
     return document.querySelector('[data-testid="marker-count"]')?.textContent === "0";
   });
+  await openCommandPalette(page);
+  await page.fill('[data-testid="command-palette-input"]', "export");
+  await page.waitForSelector('[data-testid="command-palette-command-export-runtime"]');
+  if (!(await page.locator('[data-testid="command-palette-command-export-runtime"]').isDisabled())) {
+    throw new Error("Command palette should show Export Runtime as unavailable before board setup.");
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForSelector('[data-testid="command-palette"]', { state: "detached" });
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
   await expectCommandDisabled(page, "palette-marker");
   await expectCommandDisabled(page, "export-runtime-scenario");
@@ -113,6 +121,12 @@ try {
   await page.click('[data-testid="redo-scenario"]');
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
   await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await openCommandPalette(page);
+  await page.fill('[data-testid="command-palette-input"]', "edit board");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector('[data-testid="board-setup-modal"]');
+  await page.click('[data-testid="close-board-setup"]');
+  await page.waitForSelector('[data-testid="board-setup-modal"]', { state: "detached" });
   await clickMenuItem(page, "board", "menu-edit-board-setup-scenario");
   await page.waitForSelector('[data-testid="board-setup-modal"]');
   await page.click('[data-testid="close-board-setup"]');
@@ -1304,6 +1318,12 @@ async function expectStatusFieldValue(page, fieldTestId, expectedValue) {
     },
     [fieldTestId, expectedValue]
   );
+}
+
+async function openCommandPalette(page) {
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
+  await page.waitForSelector('[data-testid="command-palette"]');
+  await page.waitForSelector('[data-testid="command-palette-input"]');
 }
 
 async function expectDirtyDotVisible(page) {
