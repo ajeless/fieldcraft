@@ -78,6 +78,12 @@ try {
   await page.waitForSelector('[data-view="editor"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
   await page.waitForSelector('[data-testid="mode-runtime"]:disabled');
+  await page.waitForSelector('[data-testid="new-scenario-page"]');
+  await expectInputValue(
+    page,
+    '[data-testid="new-scenario-title-input"]',
+    "Untitled Fieldcraft Scenario"
+  );
   await expectInputValue(page, '[data-testid="grid-line-color-input"]', "#1e2a36");
   await expectInputValue(page, '[data-testid="board-background-input"]', "#0d131a");
   await expectStatusFieldValue(page, "status-field-space", "—");
@@ -106,6 +112,18 @@ try {
   await expectCommandEnabled(page, "redo-scenario");
   await page.click('[data-testid="redo-scenario"]');
   await page.waitForSelector('[data-testid="board-surface"][data-view-ready="true"]');
+  await expectSurfaceSpace(page, "board-surface", "square-grid");
+  await clickMenuItem(page, "board", "menu-edit-board-setup-scenario");
+  await page.waitForSelector('[data-testid="board-setup-modal"]');
+  await page.click('[data-testid="close-board-setup"]');
+  await page.waitForSelector('[data-testid="board-setup-modal"]', { state: "detached" });
+  await activateInspectorTab(page, "scenario");
+  await page.click('[data-testid="edit-board-setup"]');
+  await page.waitForSelector('[data-testid="board-setup-modal"]');
+  await page.fill('[data-testid="grid-width-input"]', "7");
+  await page.click('[data-testid="apply-board-setup"]');
+  await page.waitForSelector('[data-testid="board-setup-modal"]', { state: "detached" });
+  await expectStatusLine(page, "Square grid setup updated: 7 x 5");
   await expectSurfaceSpace(page, "board-surface", "square-grid");
   await expectCommandEnabled(page, "palette-marker");
   await placeMarkerFromPalette(page, "board-surface", 2, 1);

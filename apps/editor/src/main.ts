@@ -97,12 +97,14 @@ type EditorCommandId =
   | "save"
   | "save-as"
   | "export-runtime"
+  | "edit-board-setup"
   | "delete-selected-marker";
 
 type EditorCommand = CommandDefinition<EditorCommandId>;
 type EditorCommands = CommandRegistry<EditorCommandId>;
 type MenuEntry = EditorCommandId | "separator";
 type ThemePreference = Theme | null;
+type BoardSetupMode = "create" | "edit";
 
 type BoardSetupDraft = {
   type: ScenarioSpaceType;
@@ -193,6 +195,7 @@ let selectedMarkerId: string | null = null;
 let cursorPosition: CursorPosition | null = null;
 let inspectorTab: InspectorTab = "scenario";
 let assetStripCollapsed = false;
+let boardSetupModalOpen = false;
 let commandRegistry: EditorCommands | null = null;
 let desktopAutomationStarted = false;
 const editorHistory = createHistoryState<EditorSnapshot>();
@@ -263,6 +266,9 @@ function createShell(route: Route): HTMLElement {
     route === "runtime" ? createRuntimeView() : createEditorView(),
     createStatusBar(route)
   );
+  if (route === "editor" && boardSetupModalOpen && scenario.space) {
+    shell.append(createBoardSetupModal());
+  }
   return shell;
 }
 
@@ -323,7 +329,7 @@ function createEditorView(): HTMLElement {
 
   const boardStage = element("section", "board-stage");
   boardStage.append(
-    element("div", "stage-header", scenario.space ? "Editor Board" : "Board Setup")
+    element("div", "stage-header", scenario.space ? "Editor Board" : "New Scenario")
   );
   if (scenario.space) {
     boardStage.append(
@@ -338,7 +344,7 @@ function createEditorView(): HTMLElement {
       createAssetStrip()
     );
   } else {
-    boardStage.append(createBoardSetup());
+    boardStage.append(createNewScenarioPage());
   }
 
   const inspector = element("aside", "panel right-panel inspector-panel");
@@ -405,9 +411,11 @@ function createScenarioTab(): HTMLElement {
   for (const row of getScenarioSpaceMetrics()) {
     spaceSection.append(metric(row.label, row.value, row.testId));
   }
-  // TODO(codex/new-scenario-page): Scenario tab's Space section should expose
-  // an "Edit…" button that opens the Edit Board Setup modal. Until that
-  // branch lands, board setup is reachable only by creating a new scenario.
+  if (scenario.space) {
+    const editButton = buttonElement("Edit...", openBoardSetupModal, "edit-board-setup");
+    editButton.className = "action-button compact-action";
+    spaceSection.append(editButton);
+  }
   tab.append(spaceSection);
 
   const contentsSection = element("section", "inspector-section");
@@ -603,6 +611,12 @@ function createEditorCommands(fileInput: HTMLInputElement, route: Route): Editor
       run: exportRuntime
     },
     {
+      id: "edit-board-setup",
+      label: "Edit Board Setup",
+      enabled: route === "editor" && Boolean(scenario.space),
+      run: openBoardSetupModal
+    },
+    {
       id: "delete-selected-marker",
       label: "Delete Marker",
       enabled: route === "editor" && Boolean(selectedMarker),
@@ -631,6 +645,7 @@ function createMenuBar(): HTMLElement {
       "save-as",
       "export-runtime"
     ]),
+    createMenu("Board", "board", ["edit-board-setup"]),
     createMenu("Edit", "edit", ["undo", "redo", "separator", "delete-selected-marker"])
   );
   return menuBar;
@@ -1775,8 +1790,57 @@ function syncStatusBarCursorField(): void {
   value.classList.toggle("is-empty", nextValue === "—");
 }
 
-function createBoardSetup(): HTMLElement {
-  const setup = element("section", "board-setup");
+function createNewScenarioPage(): HTMLElement {
+  const page = element("section", "new-scenario-page");
+  page.dataset.testid = "new-scenario-page";
+  const intro = element("div", "new-scenario-intro");
+  intro.append(
+    element("p", "eyebrow", "New Scenario"),
+    element("h2", "", "Choose a board model")
+  );
+
+  const details = element("section", "new-scenario-details");
+  details.append(
+    element("p", "eyebrow", "Scenario Details"),
+    labeledInput("Title", scenario.title, updateScenarioTitle, "new-scenario-title-input")
+  );
+
+  page.append(intro, createBoardSetupForm("create"), details);
+  return page;
+}
+
+function createBoardSetupModal(): HTMLElement {
+  const backdrop = element("div", "modal-backdrop");
+  const dialog = element("section", "modal-panel board-setup-modal");
+  const header = element("div", "modal-header");
+  const closeButton = buttonElement("Close", closeBoardSetupModal, "close-board-setup");
+  closeButton.className = "action-button compact-action";
+
+  backdrop.dataset.testid = "board-setup-modal";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-label", "Edit board setup");
+  const title = element("div", "modal-title");
+  title.append(
+    element("p", "eyebrow", "Board"),
+    element("h2", "", "Edit Board Setup")
+  );
+  header.append(title, closeButton);
+  dialog.append(header, createBoardSetupForm("edit"));
+  backdrop.append(dialog);
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) {
+      closeBoardSetupModal();
+    }
+  });
+  return backdrop;
+}
+
+function createBoardSetupForm(mode: BoardSetupMode): HTMLElement {
+  const setup = element(
+    "section",
+    mode === "create" ? "board-setup board-setup-page" : "board-setup board-setup-edit"
+  );
   const selectedType = boardSetupDraft.type;
   const squareOption = spaceOption(
     "Square grid",
@@ -1820,7 +1884,10 @@ function createBoardSetup(): HTMLElement {
     hexOption.label,
     freeOption.label
   );
-  setup.append(element("p", "eyebrow", "New Board"), spaceChoice);
+  setup.append(
+    element("p", "eyebrow", mode === "create" ? "Board Setup" : "Space Model"),
+    spaceChoice
+  );
 
   if (!isTileSetupType(selectedType)) {
     const xInput = numberInput("Left X", boardSetupDraft.freeXValue, "free-x-input", {
@@ -1910,9 +1977,9 @@ function createBoardSetup(): HTMLElement {
       scaleUnitInput.label,
       backgroundColorInput.label,
       buttonElement(
-        "Create Board",
+        mode === "create" ? "Create Board" : "Apply Board Setup",
         () =>
-          createFreeCoordinateBoard({
+          applyFreeCoordinateBoardSetup(mode, {
             xValue: xInput.input.value,
             yValue: yInput.input.value,
             widthValue: widthInput.input.value,
@@ -1921,7 +1988,7 @@ function createBoardSetup(): HTMLElement {
             scaleUnitValue: scaleUnitInput.input.value,
             backgroundColorValue: backgroundColorInput.input.value
           }),
-        "create-board"
+        mode === "create" ? "create-board" : "apply-board-setup"
       )
     );
 
@@ -2025,9 +2092,9 @@ function createBoardSetup(): HTMLElement {
     gridLineOpacityInput.label,
     backgroundColorInput.label,
     buttonElement(
-      "Create Board",
+      mode === "create" ? "Create Board" : "Apply Board Setup",
       () =>
-        createTileGrid({
+        applyTileGridBoardSetup(mode, {
           type: selectedType,
           widthValue: widthInput.input.value,
           heightValue: heightInput.input.value,
@@ -2038,7 +2105,7 @@ function createBoardSetup(): HTMLElement {
           gridLineOpacityValue: gridLineOpacityInput.input.value,
           backgroundColorValue: backgroundColorInput.input.value
         }),
-      "create-board"
+      mode === "create" ? "create-board" : "apply-board-setup"
     )
   );
 
@@ -2258,6 +2325,7 @@ async function createNewScenario(): Promise<void> {
   sourceDraft = getAppliedSourceText();
   clearSourceEditorError();
   selectedMarkerId = null;
+  boardSetupModalOpen = false;
   clearCurrentFilePath();
   resetBoardViewportStates();
   boardSetupDraft = createDefaultBoardSetupDraft();
@@ -2279,6 +2347,21 @@ function launchRuntime(): void {
   navigate("runtime");
 }
 
+function openBoardSetupModal(): void {
+  if (!scenario.space) {
+    return;
+  }
+
+  boardSetupDraft = createBoardSetupDraftFromSpace(scenario.space);
+  boardSetupModalOpen = true;
+  render();
+}
+
+function closeBoardSetupModal(): void {
+  boardSetupModalOpen = false;
+  render();
+}
+
 function createTileGrid(options: {
   type: ScenarioTileSpaceType;
   widthValue: string;
@@ -2290,6 +2373,23 @@ function createTileGrid(options: {
   gridLineOpacityValue: string;
   backgroundColorValue: string;
 }): void {
+  applyTileGridBoardSetup("create", options);
+}
+
+function applyTileGridBoardSetup(
+  mode: BoardSetupMode,
+  options: {
+    type: ScenarioTileSpaceType;
+    widthValue: string;
+    heightValue: string;
+    tileSizeValue: string;
+    distancePerTileValue: string;
+    scaleUnitValue: string;
+    gridLineColorValue: string;
+    gridLineOpacityValue: string;
+    backgroundColorValue: string;
+  }
+): void {
   boardSetupDraft = {
     ...boardSetupDraft,
     type: options.type,
@@ -2332,29 +2432,44 @@ function createTileGrid(options: {
     return;
   }
 
-  commitUndoableChange(
-    "board creation",
-    `${getTileSpaceLabel(options.type)} created: ${width} x ${height}`,
+  const backgroundImageAssetId =
+    mode === "edit" ? scenario.space?.background.imageAssetId : undefined;
+  const nextSpace = createTileScenarioSpace({
+    type: options.type,
+    width,
+    height,
+    tileSize,
+    distancePerTile,
+    scaleUnit,
+    gridLineColor,
+    gridLineOpacity,
+    backgroundColor
+  });
+  if (backgroundImageAssetId) {
+    nextSpace.background.imageAssetId = backgroundImageAssetId;
+  }
+
+  boardSetupModalOpen = false;
+  const changed = commitUndoableChange(
+    mode === "create" ? "board creation" : "board setup edit",
+    mode === "create"
+      ? `${getTileSpaceLabel(options.type)} created: ${width} x ${height}`
+      : `${getTileSpaceLabel(options.type)} setup updated: ${width} x ${height}`,
     () => {
       scenario = {
         ...scenario,
-        space: createTileScenarioSpace({
-          type: options.type,
-          width,
-          height,
-          tileSize,
-          distancePerTile,
-          scaleUnit,
-          gridLineColor,
-          gridLineOpacity,
-          backgroundColor
-        }),
-        pieces: []
+        space: nextSpace,
+        pieces: mode === "create" ? [] : scenario.pieces
       };
-      selectedMarkerId = null;
+      if (mode === "create") {
+        selectedMarkerId = null;
+      }
       resetBoardViewportStates();
     }
   );
+  if (!changed) {
+    render();
+  }
 }
 
 function createFreeCoordinateBoard(options: {
@@ -2366,6 +2481,21 @@ function createFreeCoordinateBoard(options: {
   scaleUnitValue: string;
   backgroundColorValue: string;
 }): void {
+  applyFreeCoordinateBoardSetup("create", options);
+}
+
+function applyFreeCoordinateBoardSetup(
+  mode: BoardSetupMode,
+  options: {
+    xValue: string;
+    yValue: string;
+    widthValue: string;
+    heightValue: string;
+    distancePerWorldUnitValue: string;
+    scaleUnitValue: string;
+    backgroundColorValue: string;
+  }
+): void {
   boardSetupDraft = {
     ...boardSetupDraft,
     type: "free-coordinate",
@@ -2404,27 +2534,42 @@ function createFreeCoordinateBoard(options: {
     return;
   }
 
-  commitUndoableChange(
-    "board creation",
-    `Free-coordinate board created: ${width} x ${height}`,
+  const backgroundImageAssetId =
+    mode === "edit" ? scenario.space?.background.imageAssetId : undefined;
+  const nextSpace = createFreeCoordinateScenarioSpace({
+    x,
+    y,
+    width,
+    height,
+    distancePerWorldUnit,
+    scaleUnit,
+    backgroundColor
+  });
+  if (backgroundImageAssetId) {
+    nextSpace.background.imageAssetId = backgroundImageAssetId;
+  }
+
+  boardSetupModalOpen = false;
+  const changed = commitUndoableChange(
+    mode === "create" ? "board creation" : "board setup edit",
+    mode === "create"
+      ? `Free-coordinate board created: ${width} x ${height}`
+      : `Free-coordinate setup updated: ${width} x ${height}`,
     () => {
       scenario = {
         ...scenario,
-        space: createFreeCoordinateScenarioSpace({
-          x,
-          y,
-          width,
-          height,
-          distancePerWorldUnit,
-          scaleUnit,
-          backgroundColor
-        }),
-        pieces: []
+        space: nextSpace,
+        pieces: mode === "create" ? [] : scenario.pieces
       };
-      selectedMarkerId = null;
+      if (mode === "create") {
+        selectedMarkerId = null;
+      }
       resetBoardViewportStates();
     }
   );
+  if (!changed) {
+    render();
+  }
 }
 
 async function openScenario(fileInput: HTMLInputElement): Promise<void> {
@@ -2606,7 +2751,7 @@ function commitUndoableChange(
   label: string,
   successMessage: string,
   mutate: () => void
-): void {
+): boolean {
   const before = captureEditorSnapshot();
   const previousBoardKey = getScenarioBoardKey(before.scenario);
   mutate();
@@ -2615,7 +2760,7 @@ function commitUndoableChange(
   const after = captureEditorSnapshot();
 
   if (editorSnapshotsEqual(before, after)) {
-    return;
+    return false;
   }
 
   pushHistoryEntry(editorHistory, {
@@ -2628,6 +2773,7 @@ function commitUndoableChange(
   syncDirtyState();
   statusMessage = successMessage;
   render();
+  return true;
 }
 
 function captureEditorSnapshot(): EditorSnapshot {
@@ -2677,6 +2823,7 @@ function applyStorageResult(result: ScenarioStorageResult | null): void {
   if (result.scenario) {
     scenario = result.scenario;
     selectedMarkerId = null;
+    boardSetupModalOpen = false;
     if (!scenario.space) {
       boardSetupDraft = createDefaultBoardSetupDraft(getActiveTheme());
     }
@@ -2895,6 +3042,9 @@ function getRoute(): Route {
 function navigate(route: Route): void {
   const nextHash = route === "runtime" ? "#/play" : "#/editor";
   cursorPosition = null;
+  if (route === "runtime") {
+    boardSetupModalOpen = false;
+  }
   if (window.location.hash === nextHash) {
     render();
     return;
@@ -3350,8 +3500,19 @@ function spaceOption(
   input.value = type;
   input.checked = checked;
   input.dataset.testid = `space-${type}`;
-  label.append(input, text);
+  label.append(input, createSpacePreview(type), text);
   return { label, input, type };
+}
+
+function createSpacePreview(type: ScenarioSpaceType): HTMLElement {
+  const preview = element("span", `space-preview space-preview-${type}`);
+  preview.setAttribute("aria-hidden", "true");
+
+  for (let index = 0; index < 6; index += 1) {
+    preview.append(element("span"));
+  }
+
+  return preview;
 }
 
 function metric(label: string, value: string, testId?: string): HTMLElement {
@@ -3958,6 +4119,38 @@ function createDefaultBoardSetupDraft(theme: Theme = getActiveTheme()): BoardSet
     freeScaleUnitValue: defaultFreeCoordinateScaleUnit,
     freeBackgroundColorValue: tokens.boardBg,
     tileSizeEdited: false
+  };
+}
+
+function createBoardSetupDraftFromSpace(space: NonNullable<Scenario["space"]>): BoardSetupDraft {
+  const draft = createDefaultBoardSetupDraft(getActiveTheme());
+
+  if (isTileScenarioSpace(space)) {
+    return {
+      ...draft,
+      type: space.type,
+      widthValue: String(space.width),
+      heightValue: String(space.height),
+      tileSizeValue: String(space.tileSize),
+      distancePerTileValue: String(space.scale.distancePerTile),
+      scaleUnitValue: space.scale.unit,
+      gridLineColorValue: space.grid.lineColor,
+      gridLineOpacityValue: String(space.grid.lineOpacity),
+      backgroundColorValue: space.background.color,
+      tileSizeEdited: true
+    };
+  }
+
+  return {
+    ...draft,
+    type: "free-coordinate",
+    freeXValue: String(space.bounds.x),
+    freeYValue: String(space.bounds.y),
+    freeWidthValue: String(space.bounds.width),
+    freeHeightValue: String(space.bounds.height),
+    freeDistancePerWorldUnitValue: String(space.scale.distancePerWorldUnit),
+    freeScaleUnitValue: space.scale.unit,
+    freeBackgroundColorValue: space.background.color
   };
 }
 

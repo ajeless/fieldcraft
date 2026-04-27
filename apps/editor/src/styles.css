@@ -1067,22 +1067,63 @@ button:disabled {
   cursor: default;
 }
 
+.new-scenario-page {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "intro"
+    "setup"
+    "details";
+  gap: 16px;
+  align-content: start;
+  overflow: auto;
+  padding: 2px;
+}
+
+.new-scenario-intro,
+.new-scenario-details,
 .board-setup,
 .blank-board {
-  width: min(100%, 560px);
-  min-height: 320px;
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r2);
+  background: var(--fc-panel-bg);
+  box-shadow: var(--fc-shadow1);
+}
+
+.new-scenario-intro {
+  grid-area: intro;
+  padding: 20px;
+}
+
+.new-scenario-intro h2,
+.modal-title h2 {
+  margin: 0;
+  color: var(--fc-ink);
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.new-scenario-details {
+  grid-area: details;
   display: grid;
   align-content: start;
   gap: 16px;
-  place-self: start center;
-  border: 2px dashed var(--fc-board-grid);
-  border-radius: var(--fc-r3);
-  padding: 24px;
-  background: var(--fc-panel-bg);
+  padding: 20px;
 }
 
 .board-setup {
+  min-width: 0;
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 16px;
+  padding: 20px;
+}
+
+.board-setup-page {
+  grid-area: setup;
 }
 
 .board-setup .eyebrow,
@@ -1095,7 +1136,7 @@ button:disabled {
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
   margin: 0;
   border: 0;
   padding: 0;
@@ -1111,25 +1152,103 @@ button:disabled {
 
 .space-option {
   min-width: 0;
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  min-height: 136px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
   border: 1px solid var(--fc-line);
   border-radius: var(--fc-r2);
-  padding: 0 12px;
+  padding: 12px;
   background: var(--fc-bg3);
   color: var(--fc-ink);
   font-weight: 800;
+  cursor: pointer;
 }
 
 .space-option input {
   flex: 0 0 auto;
 }
 
+.space-option:has(input:checked) {
+  border-color: var(--fc-accent);
+  box-shadow: inset 0 0 0 1px var(--fc-accent);
+}
+
 .space-option span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.space-preview {
+  width: 100%;
+  min-height: 68px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r2);
+  padding: 6px;
+  background: var(--fc-bg0);
+}
+
+.space-preview span {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--fc-board-grid);
+  background: var(--fc-board-bg);
+}
+
+.space-preview-square-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.space-preview-hex-grid {
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+}
+
+.space-preview-hex-grid span {
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+.space-preview-free-coordinate {
+  position: relative;
+  display: block;
+}
+
+.space-preview-free-coordinate span {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.space-preview-free-coordinate span:nth-child(1) {
+  left: 18%;
+  top: 22%;
+}
+
+.space-preview-free-coordinate span:nth-child(2) {
+  right: 20%;
+  top: 18%;
+}
+
+.space-preview-free-coordinate span:nth-child(3) {
+  left: 42%;
+  top: 48%;
+}
+
+.space-preview-free-coordinate span:nth-child(4) {
+  left: 25%;
+  bottom: 18%;
+}
+
+.space-preview-free-coordinate span:nth-child(5) {
+  right: 18%;
+  bottom: 24%;
+}
+
+.space-preview-free-coordinate span:nth-child(6) {
+  display: none;
 }
 
 .color-field input {
@@ -1141,6 +1260,12 @@ button:disabled {
 }
 
 .blank-board {
+  width: min(100%, 560px);
+  min-height: 320px;
+  display: grid;
+  gap: 16px;
+  place-self: start center;
+  padding: 24px;
   align-content: center;
   justify-items: center;
   text-align: center;
@@ -1150,6 +1275,42 @@ button:disabled {
   margin: 0;
   color: var(--fc-ink);
   font-size: 1.4rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(13, 24, 32, 0.54);
+}
+
+.modal-panel {
+  width: min(920px, 100%);
+  max-height: min(760px, 92vh);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  overflow: auto;
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r2);
+  padding: 20px;
+  background: var(--fc-panel-bg);
+  box-shadow: var(--fc-shadow2);
+}
+
+.modal-header {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+}
+
+.modal-title {
+  min-width: 0;
 }
 
 .runtime-title {
