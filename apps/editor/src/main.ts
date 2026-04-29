@@ -88,6 +88,7 @@ import {
 type Route = "editor" | "runtime";
 
 type InspectorTab = "scenario" | "selection" | "assets" | "source";
+type EditorToolId = "select" | "marker" | "ruler" | "hand";
 
 type EditorCommandId =
   | "undo"
@@ -200,6 +201,7 @@ let sourceEditorErrorSelection: SourceEditorSelection | null = null;
 let selectedMarkerId: string | null = null;
 let cursorPosition: CursorPosition | null = null;
 let inspectorTab: InspectorTab = "scenario";
+let armedTool: EditorToolId = "select";
 let assetStripCollapsed = false;
 let boardSetupModalOpen = false;
 let commandPaletteOpen = false;
@@ -226,6 +228,7 @@ void runDesktopAutomationIfRequested();
 
 function render(): void {
   syncSelectedMarkerWithScenario();
+  syncArmedToolWithScenario();
   syncEditorSessionDraft();
   app.innerHTML = "";
   app.append(createShell(getRoute()));
@@ -324,23 +327,8 @@ function themeButton(
 }
 
 function createEditorView(): HTMLElement {
-  // TODO(codex/tool-rail): the Scenario tab intentionally mirrors the
-  // remaining left-sidebar metrics (Title/Board/Markers/Assets/File) today.
-  // The status bar absorbed the old sidebar status item; tool-rail retires
-  // the rest of this duplication.
   const view = element("section", "workspace");
   view.dataset.view = "editor";
-
-  const sidebar = element("aside", "panel left-panel");
-  sidebar.append(
-    element("p", "eyebrow", "Scenario"),
-    labeledInput("Title", scenario.title, updateScenarioTitle, "scenario-title-input"),
-    metric("Board", getBoardLabel()),
-    metric("Markers", String(scenario.pieces.length), "marker-count"),
-    metric("Assets", String(scenario.assets.length), "asset-count"),
-    metric("File", getFileLabel(), "current-file"),
-    createContextToolSection()
-  );
 
   const boardStage = element("section", "board-stage");
   boardStage.append(
@@ -368,8 +356,157 @@ function createEditorView(): HTMLElement {
   body.append(renderActiveInspectorTab());
   inspector.append(body);
 
-  view.append(sidebar, boardStage, inspector);
+  view.append(createToolRail(), boardStage, inspector, createAutomationState());
   return view;
+}
+
+function createToolRail(): HTMLElement {
+  const rail = element("nav", "tool-rail");
+  rail.dataset.testid = "tool-rail";
+  rail.setAttribute("aria-label", "Editor tools");
+
+  for (const tool of getEditorTools()) {
+    rail.append(createToolRailButton(tool));
+  }
+
+  return rail;
+}
+
+function getEditorTools(): ReadonlyArray<{
+  id: EditorToolId;
+  label: string;
+  glyph: string;
+  enabled: boolean;
+  draggable?: boolean;
+}> {
+  const hasBoard = Boolean(scenario.space);
+  return [
+    {
+      id: "select",
+      label: "Select",
+      glyph: "↖",
+      enabled: hasBoard
+    },
+    {
+      id: "marker",
+      label: "Marker",
+      glyph: "●",
+      enabled: hasBoard,
+      draggable: hasBoard
+    },
+    {
+      id: "ruler",
+      label: "Ruler",
+      glyph: "—",
+      enabled: false
+    },
+    {
+      id: "hand",
+      label: "Hand",
+      glyph: "↔",
+      enabled: false
+    }
+  ];
+}
+
+function createToolRailButton(tool: {
+  id: EditorToolId;
+  label: string;
+  glyph: string;
+  enabled: boolean;
+  draggable?: boolean;
+}): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className =
+    armedTool === tool.id ? "tool-rail-button is-active" : "tool-rail-button";
+  button.textContent = tool.glyph;
+  button.disabled = !tool.enabled;
+  button.draggable = Boolean(tool.draggable);
+  button.dataset.tool = tool.id;
+  button.dataset.testid = tool.id === "marker" ? "palette-marker" : `tool-${tool.id}`;
+  button.setAttribute("aria-label", tool.enabled ? tool.label : `${tool.label} unavailable`);
+  button.setAttribute("aria-pressed", armedTool === tool.id ? "true" : "false");
+  button.title = tool.enabled
+    ? getToolDescription(tool.id)
+    : `${tool.label} is not available yet`;
+  button.addEventListener("click", () => armEditorTool(tool.id));
+  if (tool.id === "marker" && tool.enabled) {
+    button.addEventListener("dragstart", (event) => {
+      armEditorTool("marker", { render: false });
+      if (!event.dataTransfer) {
+        return;
+      }
+
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData(markerDragDataType, "default-marker");
+      event.dataTransfer.setData("text/plain", "Fieldcraft marker");
+      event.dataTransfer.setDragImage(
+        button,
+        button.offsetWidth / 2,
+        button.offsetHeight / 2
+      );
+    });
+  }
+
+  return button;
+}
+
+function getToolDescription(tool: EditorToolId): string {
+  switch (tool) {
+    case "select":
+      return "Select markers on the board";
+    case "marker":
+      return "Drag to place a marker";
+    case "ruler":
+      return "Ruler tool placeholder";
+    case "hand":
+      return "Hand tool placeholder";
+  }
+}
+
+function armEditorTool(tool: EditorToolId, options: { render?: boolean } = {}): void {
+  if ((tool === "marker" || tool === "select") && !scenario.space) {
+    return;
+  }
+  if (tool === "ruler" || tool === "hand") {
+    return;
+  }
+  if (armedTool === tool) {
+    return;
+  }
+
+  armedTool = tool;
+  if (options.render !== false) {
+    render();
+  }
+}
+
+function syncArmedToolWithScenario(): void {
+  if (!scenario.space && armedTool !== "select") {
+    armedTool = "select";
+  }
+}
+
+function createAutomationState(): HTMLElement {
+  const state = element("div", "automation-state");
+  state.setAttribute("aria-hidden", "true");
+
+  const title = document.createElement("input");
+  title.value = scenario.title;
+  title.readOnly = true;
+  title.tabIndex = -1;
+  title.dataset.testid = "scenario-title-input";
+
+  const markerCount = element("span", "", String(scenario.pieces.length));
+  const assetCount = element("span", "", String(scenario.assets.length));
+  const currentFile = element("span", "", getFileLabel());
+  markerCount.dataset.testid = "marker-count";
+  assetCount.dataset.testid = "asset-count";
+  currentFile.dataset.testid = "current-file";
+
+  state.append(title, markerCount, assetCount, currentFile);
+  return state;
 }
 
 function createInspectorTabBar(): HTMLElement {
@@ -1637,19 +1774,19 @@ function createAssetStrip(): HTMLElement {
     toggleAssetStripCollapsed,
     "asset-strip-toggle"
   );
+  const orderedAssets = getAssetStripAssets();
   toggleButton.className = "asset-strip-toggle";
   header.append(
-    element("span", "asset-strip-title", "Assets"),
-    element("span", "asset-strip-count", String(scenario.assets.length)),
+    element("span", "asset-strip-title", getAssetStripTitle()),
+    element("span", "asset-strip-count", getAssetStripCountLabel(orderedAssets.length)),
     toggleButton
   );
 
   const track = element("div", "asset-strip-track");
   track.dataset.testid = "asset-strip-track";
-  const orderedAssets = getAssetStripAssets();
 
   if (orderedAssets.length === 0) {
-    track.append(element("p", "asset-strip-empty", "No imported assets."));
+    track.append(element("p", "asset-strip-empty", getAssetStripEmptyMessage()));
   } else {
     for (const asset of orderedAssets) {
       track.append(createAssetStripCard(asset));
@@ -1676,7 +1813,12 @@ function getAssetStripAssets(): ScenarioAsset[] {
     pinnedAssetIds.add(scenario.space.background.imageAssetId);
   }
 
-  return [...scenario.assets].sort((left, right) => {
+  const assets =
+    armedTool === "marker"
+      ? scenario.assets.filter((asset) => asset.kind === "image")
+      : scenario.assets;
+
+  return [...assets].sort((left, right) => {
     const leftPinned = pinnedAssetIds.has(left.id);
     const rightPinned = pinnedAssetIds.has(right.id);
     if (leftPinned !== rightPinned) {
@@ -1687,6 +1829,26 @@ function getAssetStripAssets(): ScenarioAsset[] {
     }
     return left.id.localeCompare(right.id);
   });
+}
+
+function getAssetStripTitle(): string {
+  return armedTool === "marker" ? "Images" : "Assets";
+}
+
+function getAssetStripCountLabel(filteredCount: number): string {
+  return armedTool === "marker"
+    ? `${filteredCount}/${scenario.assets.length}`
+    : String(scenario.assets.length);
+}
+
+function getAssetStripEmptyMessage(): string {
+  if (scenario.assets.length === 0) {
+    return "No imported assets.";
+  }
+
+  return armedTool === "marker"
+    ? "No image assets for the Marker tool."
+    : "No imported assets.";
 }
 
 function createAssetStripCard(asset: ScenarioAsset): HTMLElement {
@@ -1898,51 +2060,6 @@ function createSourceEditorSection(): HTMLElement {
   return section;
 }
 
-function createContextToolSection(): HTMLElement {
-  const palette = element("section", "marker-palette");
-  const markerEnabled = Boolean(scenario.space);
-  const marker = document.createElement("button");
-  const swatch = element("span", "palette-marker-swatch");
-  const label = element("span", "palette-marker-label", "Marker");
-  const helper = element(
-    "p",
-    "tool-hint",
-    markerEnabled
-      ? "Drag the marker onto the board to place it."
-      : "Create a board to unlock marker placement."
-  );
-
-  marker.type = "button";
-  marker.className = "palette-marker";
-  marker.draggable = markerEnabled;
-  marker.disabled = !markerEnabled;
-  marker.dataset.testid = "palette-marker";
-  marker.setAttribute(
-    "aria-label",
-    markerEnabled ? "Default marker" : "Create a board to enable marker placement"
-  );
-  marker.title = markerEnabled ? "Default marker" : "Create a board to enable marker placement";
-  if (markerEnabled) {
-    marker.addEventListener("dragstart", (event) => {
-      if (!event.dataTransfer) {
-        return;
-      }
-
-      event.dataTransfer.effectAllowed = "copy";
-      event.dataTransfer.setData(markerDragDataType, "default-marker");
-      event.dataTransfer.setData("text/plain", "Fieldcraft marker");
-      event.dataTransfer.setDragImage(
-        swatch,
-        swatch.offsetWidth / 2,
-        swatch.offsetHeight / 2
-      );
-    });
-  }
-  marker.append(swatch, label);
-  palette.append(element("p", "eyebrow", "Tools"), helper, marker);
-  return palette;
-}
-
 function createStatusBar(route: Route): HTMLElement {
   const statusBar = element("footer", "status-bar");
   const leftGroup = element("div", "status-bar-group");
@@ -2048,7 +2165,20 @@ function getStatusCursorValue(): string {
 }
 
 function getStatusToolValue(route: Route): string {
-  return route === "editor" && scenario.space ? "Marker" : "—";
+  return route === "editor" && scenario.space ? getToolLabel(armedTool) : "—";
+}
+
+function getToolLabel(tool: EditorToolId): string {
+  switch (tool) {
+    case "select":
+      return "Select";
+    case "marker":
+      return "Marker";
+    case "ruler":
+      return "Ruler";
+    case "hand":
+      return "Hand";
+  }
 }
 
 function getStatusSpaceValue(): string {
@@ -2610,6 +2740,7 @@ function placeDefaultMarker(x: number, y: number): void {
       ]
     };
     selectedMarkerId = markerId;
+    armedTool = "select";
     promoteSelectionTabFromScenario();
   });
 }
