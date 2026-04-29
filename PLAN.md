@@ -6,15 +6,20 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-V1 is committed in `docs/EDITOR-V1-SCOPE.md`: Fieldcraft is a map-and-scenario editor for tabletop wargames, and the runtime export is a viewer rather than a gameplay engine. Today's baseline covers explicit scenario creation and post-creation board setup edits across square, pointy-top hex, and free-coordinate models; permissive marker placement, selection, deletion, and colocation; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a command registry for file, board, and editor actions with a searchable command palette; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; the decision `012` editor vocabulary with a four-tab inspector, bottom status bar, bottom asset strip, full-page New Scenario flow, command palette, and left tool rail with Select/Marker tools plus Ruler/Hand placeholders; scenario-level author-defined sides managed in the Scenario tab and assigned from the Selection tab; authored marker facing, visual style, and typed descriptive properties edited from the Selection tab and rendered or round-tripped in the editor/viewer; a read-only in-app runtime/viewer surface; a chrome-light browser runtime/viewer export with bundled assets, fullscreen, reset/zoom/pan controls, a collapsed scenario info panel, and parity for authored v1 display data; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, asset strip visibility and contextual image filtering when Marker is armed, `Save As` carrying assets forward); the v6 scenario format with opaque piece ids, author-facing labels, optional marker image refs, scenario-level sides, optional piece `sideId` refs, per-piece `facingDegrees`, per-piece `style`, per-piece typed `properties`, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
+V1 is committed in `docs/EDITOR-V1-SCOPE.md`: Fieldcraft is a map-and-scenario editor for tabletop wargames, and the runtime export is a viewer rather than a gameplay engine. Today's baseline covers explicit scenario creation and post-creation board setup edits across square, pointy-top hex, and free-coordinate models; permissive marker placement, selection, deletion, and colocation; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a command registry for file, board, and editor actions with a searchable command palette; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; the decision `012` editor vocabulary with a four-tab inspector, bottom status bar, bottom asset strip, full-page New Scenario flow, command palette, and left tool rail with Select/Marker tools plus Ruler/Hand placeholders; scenario-level author-defined sides managed in the Scenario tab and assigned from the Selection tab; authored marker facing, visual style, and typed descriptive properties edited from the Selection tab and rendered or round-tripped in the editor/viewer; a read-only in-app runtime/viewer surface; a chrome-light browser runtime/viewer export with bundled assets, fullscreen, reset/zoom/pan controls, a collapsed scenario info panel, and parity for authored v1 display data; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, asset strip visibility and contextual image filtering when Marker is armed, `Save As` carrying assets forward); three self-contained v1 example scenario packages covering square, pointy-top hex, and free-coordinate models; the v6 scenario format with opaque piece ids, author-facing labels, optional marker image refs, scenario-level sides, optional piece `sideId` refs, per-piece `facingDegrees`, per-piece `style`, per-piece typed `properties`, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
 
-The immediate near-term sequence shifts from viewer-export polish to reference scenarios. The next branch should create small scenario files that exercise the current authoring surface instead of adding new mechanics.
+The immediate near-term sequence shifts from example scenarios to final v1 documentation alignment. The next branch should align public-facing docs and release notes without broadening v1 scope.
 
 The original `codex/unit-entity-model` branch is split for v1 and its v1 portions have shipped: sides, facing, token styling, and piece properties. Rules, turn resolution, and standalone runtime packaging are deferred or out of scope under v1.
 
 Automation now covers both the browser support surface and a scripted desktop-semantic pass in the Tauri dev shell. Native desktop dialogs and packaged-build sanity remain release-significant manual checks even when both automated suites are green; the residual human-only pass lives in `DESKTOP-TESTING.md`.
 
 ## Recently Completed Baseline Slices
+
+- `codex/v1-example-scenarios`
+  - `examples/v1/` now contains three self-contained scenario packages: square-grid bridgehead, pointy-top hex ridgeline, and free-coordinate convoy layouts.
+  - The examples exercise package-local image and audio assets, board backgrounds where useful, sides, facing, marker styling, marker image artwork, descriptive properties, and stacked/continuous placement shapes.
+  - A unit test loads every committed v1 example through the migration-aware scenario loader and verifies referenced package-local assets exist.
 
 - `codex/viewer-export-polish`
   - The browser export now opens as a presentation viewer: the board fills the viewport, scenario metadata is collapsed behind an info control, and fullscreen, reset, zoom, and pan remain available as compact viewer affordances.
@@ -143,17 +148,11 @@ Automation now covers both the browser support surface and a scripted desktop-se
   - Opening a v0 file migrates in memory, dirties the doc, and saves as v1 through the normal save flow; source-editor line/column diagnostics are preserved through the `ScenarioLoadError` wrapper.
   - Vitest is the new unit-test runner, co-located at `apps/editor/src/**/*.test.ts`; pre/post fixture pairs cover tile, free-coord (with negative positions), and empty scenarios.
 
-Current manual testing pressure points are captured in the branch sequence below. The remaining sequence adds examples and aligns documentation. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
+Current manual testing pressure points are captured in the branch sequence below. The remaining sequence aligns documentation. If testing finds a trust-blocking editor issue, move that branch up instead of adding a parallel planning document.
 
 ## Near-Term Branch Sequence
 
-1. `codex/v1-example-scenarios`
-   - Author one to three reference scenarios as documentation-by-example.
-   - Demonstrate square, pointy-top hex, and free-coordinate space models across the set.
-   - Include package-local assets where useful and exercise sides, facing, styling, and properties after those branches exist.
-   - Not in scope: tutorial content, campaigns, or sample games with rules.
-
-2. `codex/v1-documentation`
+1. `codex/v1-documentation`
    - Align the repo's public-facing docs with v1 scope and the "personal tool, made shippable-shaped" bar.
    - Finish the README pass for v1 scope, including any final terminology cleanup around "runtime" in code and filenames.
    - Add v1 release notes or changelog and any final documentation cleanup needed for the v1 bar.

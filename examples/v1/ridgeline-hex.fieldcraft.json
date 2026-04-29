@@ -1,0 +1,189 @@
+{
+  "schema": "fieldcraft.scenario",
+  "schemaVersion": 6,
+  "title": "Ridgeline Screen",
+  "space": {
+    "type": "hex-grid",
+    "width": 9,
+    "height": 7,
+    "tileSize": 34,
+    "scale": {
+      "distancePerTile": 100,
+      "unit": "m"
+    },
+    "grid": {
+      "lineColor": "#75808a",
+      "lineOpacity": 0.7
+    },
+    "background": {
+      "color": "#e6e1d1"
+    }
+  },
+  "sides": [
+    {
+      "id": "side_advance",
+      "label": "Advance Guard",
+      "color": "#2f80ed"
+    },
+    {
+      "id": "side_screen",
+      "label": "Screen Force",
+      "color": "#8f4eb8"
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_marker_alpha",
+      "kind": "image",
+      "path": "assets/marker-alpha.png"
+    },
+    {
+      "id": "asset_marker_bravo",
+      "kind": "image",
+      "path": "assets/marker-bravo.png"
+    },
+    {
+      "id": "asset_marker_objective",
+      "kind": "image",
+      "path": "assets/marker-objective.png"
+    }
+  ],
+  "pieces": [
+    {
+      "id": "piece_advance_scouts",
+      "label": "Scouts",
+      "kind": "marker",
+      "x": 1,
+      "y": 3,
+      "facingDegrees": 60,
+      "style": {
+        "shape": "triangle",
+        "fillColor": "#2f80ed",
+        "strokeColor": "#174a8b"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Recon"
+        },
+        {
+          "key": "stealth",
+          "type": "boolean",
+          "value": true
+        }
+      ],
+      "sideId": "side_advance",
+      "imageAssetId": "asset_marker_alpha"
+    },
+    {
+      "id": "piece_advance_support",
+      "label": "Support Team",
+      "kind": "marker",
+      "x": 2,
+      "y": 4,
+      "facingDegrees": 45,
+      "style": {
+        "shape": "square",
+        "fillColor": "#5ab4f0",
+        "strokeColor": "#174a8b"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Support"
+        },
+        {
+          "key": "strength",
+          "type": "number",
+          "value": 3
+        }
+      ],
+      "sideId": "side_advance"
+    },
+    {
+      "id": "piece_screen_watch",
+      "label": "Watch Post",
+      "kind": "marker",
+      "x": 5,
+      "y": 2,
+      "facingDegrees": 240,
+      "style": {
+        "shape": "diamond",
+        "fillColor": "#9b59c8",
+        "strokeColor": "#59326f"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Observation"
+        },
+        {
+          "key": "concealed",
+          "type": "boolean",
+          "value": true
+        }
+      ],
+      "sideId": "side_screen",
+      "imageAssetId": "asset_marker_bravo"
+    },
+    {
+      "id": "piece_screen_reserve",
+      "label": "Screen Reserve",
+      "kind": "marker",
+      "x": 6,
+      "y": 4,
+      "facingDegrees": 300,
+      "style": {
+        "shape": "circle",
+        "fillColor": "#8f4eb8",
+        "strokeColor": "#59326f"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Reserve"
+        },
+        {
+          "key": "strength",
+          "type": "number",
+          "value": 4
+        }
+      ],
+      "sideId": "side_screen"
+    },
+    {
+      "id": "piece_ridge_objective",
+      "label": "Ridge Marker",
+      "kind": "marker",
+      "x": 4,
+      "y": 3,
+      "facingDegrees": 0,
+      "style": {
+        "shape": "diamond",
+        "fillColor": "#f0c94a",
+        "strokeColor": "#8a6d14"
+      },
+      "properties": [
+        {
+          "key": "objective",
+          "type": "text",
+          "value": "Observe valley route"
+        },
+        {
+          "key": "scored",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "imageAssetId": "asset_marker_objective"
+    }
+  ],
+  "metadata": {
+    "editorVersion": "0.1.0-example",
+    "savedAt": null
+  }
+}

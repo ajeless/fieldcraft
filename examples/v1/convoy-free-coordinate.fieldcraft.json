@@ -1,0 +1,226 @@
+{
+  "schema": "fieldcraft.scenario",
+  "schemaVersion": 6,
+  "title": "Convoy Halt at Milepost 12",
+  "space": {
+    "type": "free-coordinate",
+    "bounds": {
+      "x": -120,
+      "y": -80,
+      "width": 640,
+      "height": 420
+    },
+    "scale": {
+      "distancePerWorldUnit": 1,
+      "unit": "m"
+    },
+    "background": {
+      "color": "#eef1e7"
+    }
+  },
+  "sides": [
+    {
+      "id": "side_convoy",
+      "label": "Convoy",
+      "color": "#2f80ed"
+    },
+    {
+      "id": "side_contact",
+      "label": "Contact",
+      "color": "#c85448"
+    },
+    {
+      "id": "side_civil",
+      "label": "Civilians",
+      "color": "#6f7f8f"
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_marker_alpha",
+      "kind": "image",
+      "path": "assets/marker-alpha.png"
+    },
+    {
+      "id": "asset_marker_bravo",
+      "kind": "image",
+      "path": "assets/marker-bravo.png"
+    },
+    {
+      "id": "asset_marker_command",
+      "kind": "image",
+      "path": "assets/marker-command.png"
+    },
+    {
+      "id": "asset_marker_objective",
+      "kind": "image",
+      "path": "assets/marker-objective.png"
+    }
+  ],
+  "pieces": [
+    {
+      "id": "piece_convoy_lead",
+      "label": "Lead Vehicle",
+      "kind": "marker",
+      "x": 42.5,
+      "y": 52.25,
+      "facingDegrees": 72,
+      "style": {
+        "shape": "square",
+        "fillColor": "#2f80ed",
+        "strokeColor": "#174a8b"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Lead"
+        },
+        {
+          "key": "mobility",
+          "type": "number",
+          "value": 6
+        }
+      ],
+      "sideId": "side_convoy",
+      "imageAssetId": "asset_marker_alpha"
+    },
+    {
+      "id": "piece_convoy_command",
+      "label": "Command Truck",
+      "kind": "marker",
+      "x": 14,
+      "y": 74.5,
+      "facingDegrees": 72,
+      "style": {
+        "shape": "diamond",
+        "fillColor": "#4aa3ff",
+        "strokeColor": "#174a8b"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Command"
+        },
+        {
+          "key": "radio",
+          "type": "boolean",
+          "value": true
+        }
+      ],
+      "sideId": "side_convoy",
+      "imageAssetId": "asset_marker_command"
+    },
+    {
+      "id": "piece_convoy_tail",
+      "label": "Tail Security",
+      "kind": "marker",
+      "x": -16.75,
+      "y": 96,
+      "facingDegrees": 252,
+      "style": {
+        "shape": "triangle",
+        "fillColor": "#78b7f3",
+        "strokeColor": "#174a8b"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Security"
+        },
+        {
+          "key": "overwatch",
+          "type": "boolean",
+          "value": true
+        }
+      ],
+      "sideId": "side_convoy"
+    },
+    {
+      "id": "piece_contact_ridge",
+      "label": "Ridge Contact",
+      "kind": "marker",
+      "x": 248.25,
+      "y": -24.5,
+      "facingDegrees": 205,
+      "style": {
+        "shape": "triangle",
+        "fillColor": "#c85448",
+        "strokeColor": "#7a2a22"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Unknown"
+        },
+        {
+          "key": "confirmed",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "sideId": "side_contact",
+      "imageAssetId": "asset_marker_bravo"
+    },
+    {
+      "id": "piece_contact_crossroad",
+      "label": "Crossroad Contact",
+      "kind": "marker",
+      "x": 312,
+      "y": 182.75,
+      "facingDegrees": 285,
+      "style": {
+        "shape": "circle",
+        "fillColor": "#d95b4d",
+        "strokeColor": "#7a2a22"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Spotter"
+        },
+        {
+          "key": "distance",
+          "type": "number",
+          "value": 315
+        }
+      ],
+      "sideId": "side_contact"
+    },
+    {
+      "id": "piece_civil_halt",
+      "label": "Blocked Cart",
+      "kind": "marker",
+      "x": 118.5,
+      "y": 132,
+      "facingDegrees": 0,
+      "style": {
+        "shape": "diamond",
+        "fillColor": "#f0c94a",
+        "strokeColor": "#8a6d14"
+      },
+      "properties": [
+        {
+          "key": "hazard",
+          "type": "text",
+          "value": "Roadblock"
+        },
+        {
+          "key": "clearable",
+          "type": "boolean",
+          "value": true
+        }
+      ],
+      "sideId": "side_civil",
+      "imageAssetId": "asset_marker_objective"
+    }
+  ],
+  "metadata": {
+    "editorVersion": "0.1.0-example",
+    "savedAt": null
+  }
+}

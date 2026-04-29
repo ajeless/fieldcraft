@@ -1,0 +1,243 @@
+{
+  "schema": "fieldcraft.scenario",
+  "schemaVersion": 6,
+  "title": "Bridgehead at Graymill",
+  "space": {
+    "type": "square-grid",
+    "width": 10,
+    "height": 8,
+    "tileSize": 48,
+    "scale": {
+      "distancePerTile": 50,
+      "unit": "m"
+    },
+    "grid": {
+      "lineColor": "#6f7f8f",
+      "lineOpacity": 0.55
+    },
+    "background": {
+      "color": "#dfe8df",
+      "imageAssetId": "asset_checkerboard"
+    }
+  },
+  "sides": [
+    {
+      "id": "side_blue",
+      "label": "Blue Patrol",
+      "color": "#2f80ed"
+    },
+    {
+      "id": "side_red",
+      "label": "Red Screen",
+      "color": "#c85448"
+    },
+    {
+      "id": "side_neutral",
+      "label": "Scenario Objects",
+      "color": "#8f9aa3"
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_checkerboard",
+      "kind": "image",
+      "path": "assets/checkerboard-32.png"
+    },
+    {
+      "id": "asset_marker_alpha",
+      "kind": "image",
+      "path": "assets/marker-alpha.png"
+    },
+    {
+      "id": "asset_marker_bravo",
+      "kind": "image",
+      "path": "assets/marker-bravo.png"
+    },
+    {
+      "id": "asset_marker_command",
+      "kind": "image",
+      "path": "assets/marker-command.png"
+    },
+    {
+      "id": "asset_marker_objective",
+      "kind": "image",
+      "path": "assets/marker-objective.png"
+    },
+    {
+      "id": "asset_signal_tone",
+      "kind": "audio",
+      "path": "assets/test-tone-440hz.wav"
+    }
+  ],
+  "pieces": [
+    {
+      "id": "piece_blue_command",
+      "label": "Blue Command",
+      "kind": "marker",
+      "x": 1,
+      "y": 5,
+      "facingDegrees": 45,
+      "style": {
+        "shape": "diamond",
+        "fillColor": "#2f80ed",
+        "strokeColor": "#174a8b"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Command"
+        },
+        {
+          "key": "strength",
+          "type": "number",
+          "value": 4
+        },
+        {
+          "key": "radio",
+          "type": "boolean",
+          "value": true
+        }
+      ],
+      "sideId": "side_blue",
+      "imageAssetId": "asset_marker_command"
+    },
+    {
+      "id": "piece_blue_alpha",
+      "label": "Alpha Team",
+      "kind": "marker",
+      "x": 2,
+      "y": 4,
+      "facingDegrees": 90,
+      "style": {
+        "shape": "circle",
+        "fillColor": "#4aa3ff",
+        "strokeColor": "#174a8b"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Rifle team"
+        },
+        {
+          "key": "strength",
+          "type": "number",
+          "value": 6
+        }
+      ],
+      "sideId": "side_blue",
+      "imageAssetId": "asset_marker_alpha"
+    },
+    {
+      "id": "piece_blue_breacher",
+      "label": "Breacher",
+      "kind": "marker",
+      "x": 2,
+      "y": 4,
+      "facingDegrees": 90,
+      "style": {
+        "shape": "square",
+        "fillColor": "#7cc7ff",
+        "strokeColor": "#174a8b"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Engineer"
+        },
+        {
+          "key": "charges",
+          "type": "number",
+          "value": 2
+        }
+      ],
+      "sideId": "side_blue"
+    },
+    {
+      "id": "piece_red_sentry",
+      "label": "Red Sentry",
+      "kind": "marker",
+      "x": 7,
+      "y": 2,
+      "facingDegrees": 225,
+      "style": {
+        "shape": "triangle",
+        "fillColor": "#d95b4d",
+        "strokeColor": "#7a2a22"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Sentry"
+        },
+        {
+          "key": "alert",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "sideId": "side_red",
+      "imageAssetId": "asset_marker_bravo"
+    },
+    {
+      "id": "piece_red_reserve",
+      "label": "Red Reserve",
+      "kind": "marker",
+      "x": 8,
+      "y": 5,
+      "facingDegrees": 270,
+      "style": {
+        "shape": "circle",
+        "fillColor": "#c85448",
+        "strokeColor": "#7a2a22"
+      },
+      "properties": [
+        {
+          "key": "role",
+          "type": "text",
+          "value": "Reserve"
+        },
+        {
+          "key": "strength",
+          "type": "number",
+          "value": 5
+        }
+      ],
+      "sideId": "side_red"
+    },
+    {
+      "id": "piece_bridge_objective",
+      "label": "Bridge Control",
+      "kind": "marker",
+      "x": 5,
+      "y": 4,
+      "facingDegrees": 0,
+      "style": {
+        "shape": "diamond",
+        "fillColor": "#f0c94a",
+        "strokeColor": "#8a6d14"
+      },
+      "properties": [
+        {
+          "key": "objective",
+          "type": "text",
+          "value": "Hold for two turns"
+        },
+        {
+          "key": "secured",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "sideId": "side_neutral",
+      "imageAssetId": "asset_marker_objective"
+    }
+  ],
+  "metadata": {
+    "editorVersion": "0.1.0-example",
+    "savedAt": null
+  }
+}
