@@ -123,7 +123,7 @@ Do not implement this as a single branch. Decompose into six branches, threaded 
 
 6. **`codex/command-palette`** — wire ⌘K to the existing command registry.
 
-Tool rail, floating/collapsible inspector, coordinate-label rulers, and author-defined sides are later branches, pending feedback from the first six landing. Author-defined sides specifically wait until `codex/sides-and-entity-base` because it is a scenario-format change and should land alongside the first v1 piece ownership work.
+Floating/collapsible inspector, coordinate-label rulers, and author-defined sides are later branches, pending feedback from the first redesign vocabulary slices. The tool rail has shipped as the fixed left rail; author-defined sides specifically wait until `codex/sides-and-entity-base` because it is a scenario-format change and should land alongside the first v1 piece ownership work.
 
 Each branch must leave the editor visibly better and manually testable per AGENTS.md. Update `PLAN.md`'s "Recently Completed Baseline Slices" as branches land.
 
