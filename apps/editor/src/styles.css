@@ -610,6 +610,18 @@ button:disabled {
   text-align: right;
 }
 
+.marker-style-controls {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 72px;
+  align-items: end;
+  gap: 10px;
+}
+
+.marker-style-controls .color-field input {
+  padding: 2px;
+}
+
 .metric {
   min-width: 0;
   display: grid;

@@ -25,7 +25,7 @@ const duplicateMarkerIdFixturePath = path.join(
   "duplicate-marker-id-scenario.fieldcraft.json"
 );
 const legacyV0FixturePath = path.join(smokeDir, "legacy-v0-scenario.fieldcraft.json");
-const currentSchemaVersion = 4;
+const currentSchemaVersion = 5;
 
 fs.mkdirSync(smokeDir, { recursive: true });
 fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
@@ -163,6 +163,17 @@ try {
   await page.locator('[data-testid="selected-marker-facing-input"]').dispatchEvent("change");
   await expectStatusLine(page, "Marker facing updated");
   await expectMarkerFacing(page, "board-surface", "90");
+  await page.selectOption('[data-testid="selected-marker-shape-select"]', "diamond");
+  await expectStatusLine(page, "Marker style updated");
+  await page.locator('[data-testid="selected-marker-fill-color-input"]').fill("#2f80ed");
+  await page.locator('[data-testid="selected-marker-fill-color-input"]').dispatchEvent("change");
+  await page.locator('[data-testid="selected-marker-stroke-color-input"]').fill("#174a8b");
+  await page.locator('[data-testid="selected-marker-stroke-color-input"]').dispatchEvent("change");
+  await expectMarkerStyle(page, "board-surface", {
+    shape: "diamond",
+    fillColor: "#2f80ed",
+    strokeColor: "#174a8b"
+  });
   await activateInspectorTab(page, "source");
   const sidedSource = JSON.parse(await readSourceEditorValue(page));
   if (
@@ -173,11 +184,14 @@ try {
         piece.x === 2 &&
         piece.y === 1 &&
         piece.sideId === sideId &&
-        piece.facingDegrees === 90
+        piece.facingDegrees === 90 &&
+        piece.style?.shape === "diamond" &&
+        piece.style?.fillColor === "#2f80ed" &&
+        piece.style?.strokeColor === "#174a8b"
     )
   ) {
     throw new Error(
-      "Side creation, marker side assignment, or facing did not round-trip through source."
+      "Side creation, marker side assignment, facing, or styling did not round-trip through source."
     );
   }
   await page.reload();
@@ -493,7 +507,8 @@ try {
       kind: "marker",
       x: 32,
       y: 32,
-      facingDegrees: 180
+      facingDegrees: 180,
+      style: defaultMarkerStyle()
     });
     return scenario;
   });
@@ -975,7 +990,8 @@ try {
       kind: "marker",
       x: 73.25,
       y: 18.5,
-      facingDegrees: 225
+      facingDegrees: 225,
+      style: defaultMarkerStyle()
     });
     return scenario;
   });
@@ -1084,6 +1100,14 @@ try {
   }
 }
 
+function defaultMarkerStyle() {
+  return {
+    shape: "circle",
+    fillColor: "#c85448",
+    strokeColor: "#7a2a22"
+  };
+}
+
 async function startFrontendServer() {
   const smokeUrl = new URL(baseUrl);
   const port = Number.parseInt(smokeUrl.port, 10);
@@ -1153,7 +1177,8 @@ function createMenuOpenFixture() {
           kind: "marker",
           x: 1,
           y: 2,
-          facingDegrees: 0
+          facingDegrees: 0,
+          style: defaultMarkerStyle()
         }
       ],
       metadata: {
@@ -1232,7 +1257,8 @@ function createDuplicateMarkerIdFixture() {
           kind: "marker",
           x: 1,
           y: 2,
-          facingDegrees: 0
+          facingDegrees: 0,
+          style: defaultMarkerStyle()
         },
         {
           id: "piece_FIXT01",
@@ -1240,7 +1266,8 @@ function createDuplicateMarkerIdFixture() {
           kind: "marker",
           x: 2,
           y: 2,
-          facingDegrees: 0
+          facingDegrees: 0,
+          style: defaultMarkerStyle()
         }
       ],
       metadata: {
@@ -2379,6 +2406,25 @@ async function expectMarkerFacing(page, surfaceTestId, facing) {
     {
       testId: surfaceTestId,
       expectedFacing: facing
+    }
+  );
+}
+
+async function expectMarkerStyle(page, surfaceTestId, style) {
+  await page.waitForFunction(
+    ({ testId, expectedStyle }) => {
+      const surface = document.querySelector(`[data-testid="${testId}"]`);
+      const styles = surface?.getAttribute("data-marker-styles") ?? "";
+      const expected = `:${expectedStyle.shape}:${expectedStyle.fillColor}:${expectedStyle.strokeColor}`;
+
+      return styles
+        .split(" ")
+        .filter(Boolean)
+        .some((entry) => entry.endsWith(expected));
+    },
+    {
+      testId: surfaceTestId,
+      expectedStyle: style
     }
   );
 }

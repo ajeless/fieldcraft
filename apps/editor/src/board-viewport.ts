@@ -2,6 +2,7 @@ import {
   isTileScenarioSpace,
   type ScenarioFreeCoordinateSpace,
   type ScenarioPiece,
+  type ScenarioPieceShape,
   type ScenarioSpace,
   type ScenarioTileSpace
 } from "./scenario";
@@ -1175,14 +1176,12 @@ function drawMarkers(
 
     const imageResource = options.pieceImageResources.get(piece.id);
     if (imageResource?.status === "ready") {
-      drawMarkerImage(context, center, radius, imageResource.image);
-      context.beginPath();
-      context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      drawMarkerImage(context, center, radius, imageResource.image, piece.style.shape);
+      traceMarkerShape(context, center, radius, piece.style.shape);
       context.lineWidth = Math.max(2 / options.scale, 1.5);
-      context.strokeStyle = options.markerRing;
+      context.strokeStyle = piece.style.strokeColor;
       context.stroke();
-      context.beginPath();
-      context.arc(center.x, center.y, radius * 0.84, 0, Math.PI * 2);
+      traceMarkerShape(context, center, radius * 0.84, piece.style.shape);
       context.strokeStyle = "rgba(255, 255, 255, 0.34)";
       context.stroke();
     } else {
@@ -1191,8 +1190,9 @@ function drawMarkers(
         center,
         radius,
         options.scale,
-        options.markerFill,
-        options.markerRing
+        piece.style.fillColor || options.markerFill,
+        piece.style.strokeColor || options.markerRing,
+        piece.style.shape
       );
     }
 
@@ -1206,17 +1206,16 @@ function drawDefaultMarker(
   radius: number,
   scale: number,
   markerFill: string,
-  markerRing: string
+  markerRing: string,
+  shape: ScenarioPieceShape
 ): void {
-  context.beginPath();
-  context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  traceMarkerShape(context, center, radius, shape);
   context.fillStyle = markerFill;
   context.fill();
   context.lineWidth = Math.max(2 / scale, 1.5);
   context.strokeStyle = markerRing;
   context.stroke();
-  context.beginPath();
-  context.arc(center.x, center.y, radius * 0.58, 0, Math.PI * 2);
+  traceMarkerShape(context, center, radius * 0.58, shape);
   context.strokeStyle = "rgba(255, 255, 255, 0.58)";
   context.stroke();
 }
@@ -1225,14 +1224,53 @@ function drawMarkerImage(
   context: CanvasRenderingContext2D,
   center: Point,
   radius: number,
-  image: HTMLImageElement
+  image: HTMLImageElement,
+  shape: ScenarioPieceShape
 ): void {
   context.save();
-  context.beginPath();
-  context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  traceMarkerShape(context, center, radius, shape);
   context.clip();
   context.drawImage(image, center.x - radius, center.y - radius, radius * 2, radius * 2);
   context.restore();
+}
+
+function traceMarkerShape(
+  context: CanvasRenderingContext2D,
+  center: Point,
+  radius: number,
+  shape: ScenarioPieceShape
+): void {
+  context.beginPath();
+  switch (shape) {
+    case "square":
+      context.rect(center.x - radius * 0.82, center.y - radius * 0.82, radius * 1.64, radius * 1.64);
+      break;
+    case "diamond":
+      context.moveTo(center.x, center.y - radius);
+      context.lineTo(center.x + radius, center.y);
+      context.lineTo(center.x, center.y + radius);
+      context.lineTo(center.x - radius, center.y);
+      context.closePath();
+      break;
+    case "triangle":
+      for (let index = 0; index < 3; index += 1) {
+        const angle = -Math.PI / 2 + index * ((Math.PI * 2) / 3);
+        const point = {
+          x: center.x + Math.cos(angle) * radius,
+          y: center.y + Math.sin(angle) * radius
+        };
+        if (index === 0) {
+          context.moveTo(point.x, point.y);
+        } else {
+          context.lineTo(point.x, point.y);
+        }
+      }
+      context.closePath();
+      break;
+    case "circle":
+      context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      break;
+  }
 }
 
 function drawMarkerFacing(
@@ -1332,6 +1370,7 @@ function updateSurfaceData(
   }
   surface.dataset.markerPositions = getMarkerPositions(pieces, geometry.spaceType);
   surface.dataset.markerFacings = getMarkerFacings(pieces);
+  surface.dataset.markerStyles = getMarkerStyles(pieces);
   const markerImageStates = getMarkerImageStates(pieces, pieceImageResources);
   if (markerImageStates) {
     surface.dataset.markerImageStates = markerImageStates;
@@ -1348,6 +1387,16 @@ function updateSurfaceData(
 function getMarkerFacings(pieces: ScenarioPiece[]): string {
   return pieces
     .map((piece) => `${piece.id}:${piece.facingDegrees}`)
+    .sort((left, right) => left.localeCompare(right))
+    .join(" ");
+}
+
+function getMarkerStyles(pieces: ScenarioPiece[]): string {
+  return pieces
+    .map(
+      (piece) =>
+        `${piece.id}:${piece.style.shape}:${piece.style.fillColor}:${piece.style.strokeColor}`
+    )
     .sort((left, right) => left.localeCompare(right))
     .join(" ");
 }

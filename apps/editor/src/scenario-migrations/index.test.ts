@@ -25,7 +25,12 @@ function readCurrentFixture(name: string): string {
         void _sideId;
         return {
           ...piece,
-          facingDegrees: 0
+          facingDegrees: 0,
+          style: {
+            shape: "circle",
+            fillColor: "#c85448",
+            strokeColor: "#7a2a22"
+          }
         };
       })
     : payload.pieces;

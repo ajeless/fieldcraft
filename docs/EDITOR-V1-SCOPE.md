@@ -137,6 +137,8 @@ Adds:
 - color controls
 - readable styling data in the scenario file
 - editor and viewer rendering parity for the supported styling fields
+- scenario format v5
+- migration from v4
 
 This branch uses the Selection tab introduced by the redesign work. It does not become a sprite editor, paint tool, or full design system for game art.
 

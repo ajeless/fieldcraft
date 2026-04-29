@@ -45,6 +45,11 @@ function createScenario(): Scenario {
         x: 1,
         y: 2,
         facingDegrees: 90,
+        style: {
+          shape: "diamond",
+          fillColor: "#2f80ed",
+          strokeColor: "#174a8b"
+        },
         sideId: "side_TEST01",
         imageAssetId: "marker-art"
       }
@@ -63,6 +68,8 @@ describe("parseScenario", () => {
     expect(scenario.schemaVersion).toBe(currentSchemaVersion);
     expect(scenario.sides[0]?.label).toBe("Blue");
     expect(scenario.pieces[0]?.facingDegrees).toBe(90);
+    expect(scenario.pieces[0]?.style.shape).toBe("diamond");
+    expect(scenario.pieces[0]?.style.fillColor).toBe("#2f80ed");
     expect(scenario.pieces[0]?.sideId).toBe("side_TEST01");
     expect(scenario.pieces[0]?.imageAssetId).toBe("marker-art");
   });
