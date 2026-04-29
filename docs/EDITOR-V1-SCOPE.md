@@ -183,19 +183,19 @@ Added:
 - one to three reference scenarios committed to the repo
 - coverage of square, pointy-top hex, and free-coordinate space models across the set
 - package-local asset examples where useful
-- examples that exercise sides, facing, styling, and properties once those branches exist
+- examples that exercise sides, facing, styling, and properties
 
 These are not tutorials, campaigns, or sample games with rules. They are working scenario files that show the authoring shape.
 
-### 11. `codex/v1-documentation`
+### 11. `codex/v1-documentation` — shipped
 
 Purpose: align the repo's public-facing docs with v1 scope.
 
-Adds:
+Added:
 
-- README rewrite for v1 scope
+- README alignment for v1 scope
 - a one-line README note explaining that "runtime" remains in code and filenames for historical reasons
-- v1 release notes or changelog
+- v1 release notes
 - any final documentation cleanup needed for the shippable-shaped bar
 
 This branch does not rename code, files, or commands just to remove the word "runtime."
@@ -261,6 +261,16 @@ Deferred items may move into a future v1.x scope, but not by accident. The path 
 
 `DECISIONS.md` 012 remains in force.
 
+`DECISIONS.md` 013 remains in force.
+
+`DECISIONS.md` 014 remains in force.
+
+`DECISIONS.md` 015 remains in force.
+
+`DECISIONS.md` 016 remains in force.
+
+`DECISIONS.md` 017 remains in force.
+
 `DECISIONS.md` 005 is withdrawn by the v1 scope branch. Fieldcraft v1 does not enforce a time model because it does not resolve play.
 
 `DECISIONS.md` 007 is amended by the v1 scope branch. Browser viewer export is the only v1 export target.
@@ -271,4 +281,6 @@ Deferred items may move into a future v1.x scope, but not by accident. The path 
 
 `docs/RUNTIME-VISION.md` is preserved as historical context. It records the analysis that led to this re-scope; it is not current direction.
 
-`PLAN.md` Near-Term sequence is rewritten by the v1 scope branch to match this document.
+`docs/V1-RELEASE-NOTES.md` summarizes the current v1 baseline and verification bar.
+
+`PLAN.md` keeps deferred design space and future branch candidates after this v1 sequence.
