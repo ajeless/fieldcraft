@@ -30,7 +30,8 @@ function readCurrentFixture(name: string): string {
             shape: "circle",
             fillColor: "#c85448",
             strokeColor: "#7a2a22"
-          }
+          },
+          properties: []
         };
       })
     : payload.pieces;

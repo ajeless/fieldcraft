@@ -37,6 +37,8 @@ import {
   type ScenarioAsset,
   type ScenarioAssetKind,
   type Scenario,
+  type ScenarioPieceProperty,
+  type ScenarioPiecePropertyType,
   type ScenarioPieceShape,
   type ScenarioPieceStyle,
   type ScenarioSide,
@@ -243,6 +245,15 @@ const pieceShapeOptions: ReadonlyArray<{
   { label: "Square", value: "square" },
   { label: "Diamond", value: "diamond" },
   { label: "Triangle", value: "triangle" }
+];
+
+const piecePropertyTypeOptions: ReadonlyArray<{
+  label: string;
+  value: ScenarioPiecePropertyType;
+}> = [
+  { label: "Text", value: "text" },
+  { label: "Number", value: "number" },
+  { label: "Boolean", value: "boolean" }
 ];
 
 window.addEventListener("hashchange", render);
@@ -1688,6 +1699,7 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
     createMarkerSideSelect(selectedMarker),
     createMarkerFacingControl(selectedMarker),
     createMarkerStyleControls(selectedMarker),
+    createMarkerPropertiesSection(selectedMarker),
     createMarkerImageSelect(selectedMarker),
     createMarkerIdDisclosure(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
@@ -1792,6 +1804,122 @@ function createMarkerStyleControls(
 
   group.append(shapeField.label, fillField.label, strokeField.label);
   return group;
+}
+
+function createMarkerPropertiesSection(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const section = element("section", "marker-properties-section");
+  const header = element("div", "inspector-section-header");
+  const title = element("h3", "subsection-title", "Properties");
+  const addButton = buttonElement(
+    "Add",
+    addSelectedMarkerProperty,
+    "add-marker-property",
+    false
+  );
+  addButton.className = "action-button compact-action";
+  header.append(title, addButton);
+  section.append(header);
+
+  if (selectedMarker.properties.length === 0) {
+    section.append(element("p", "inspector-empty compact-empty", "No properties yet."));
+    return section;
+  }
+
+  const list = element("div", "marker-property-list");
+  selectedMarker.properties.forEach((property, index) => {
+    list.append(createMarkerPropertyRow(property, index));
+  });
+  section.append(list);
+  return section;
+}
+
+function createMarkerPropertyRow(
+  property: ScenarioPieceProperty,
+  index: number
+): HTMLElement {
+  const row = element("div", "marker-property-row");
+  row.dataset.testid = `selected-marker-property-row-${index}`;
+  const keyField = textInput("Key", property.key, `selected-marker-property-key-${index}`);
+  const typeField = selectInput(
+    "Type",
+    piecePropertyTypeOptions,
+    property.type,
+    `selected-marker-property-type-${index}`
+  );
+  const valueField = createMarkerPropertyValueInput(property, index);
+  const removeButton = buttonElement(
+    "Remove",
+    () => removeSelectedMarkerProperty(index),
+    `remove-marker-property-${index}`
+  );
+  removeButton.className = "action-button compact-action destructive-action";
+
+  keyField.input.addEventListener("change", () =>
+    updateSelectedMarkerProperty(index, {
+      key: keyField.input.value.trim()
+    })
+  );
+  typeField.input.addEventListener("change", () => {
+    if (isScenarioPiecePropertyType(typeField.input.value)) {
+      updateSelectedMarkerProperty(index, {
+        type: typeField.input.value,
+        value: convertPropertyValue(property.value, typeField.input.value)
+      });
+    }
+  });
+
+  row.append(keyField.label, typeField.label, valueField, removeButton);
+  return row;
+}
+
+function createMarkerPropertyValueInput(
+  property: ScenarioPieceProperty,
+  index: number
+): HTMLElement {
+  if (property.type === "boolean") {
+    const label = element("label", "field-label boolean-field");
+    const text = element("span", "", "Value");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(property.value);
+    input.dataset.testid = `selected-marker-property-value-${index}`;
+    input.addEventListener("change", () =>
+      updateSelectedMarkerProperty(index, { value: input.checked })
+    );
+    label.append(text, input);
+    return label;
+  }
+
+  if (property.type === "number") {
+    const field = numberInput(
+      "Value",
+      String(property.value),
+      `selected-marker-property-value-${index}`,
+      {
+        min: "",
+        step: "any"
+      }
+    );
+    field.input.addEventListener("change", () => {
+      const nextValue = Number(field.input.value);
+      if (Number.isFinite(nextValue)) {
+        updateSelectedMarkerProperty(index, { value: nextValue });
+      }
+    });
+    return field.label;
+  }
+
+  const field = textInput(
+    "Value",
+    String(property.value),
+    `selected-marker-property-value-${index}`
+  );
+  field.input.addEventListener("change", () =>
+    updateSelectedMarkerProperty(index, { value: field.input.value })
+  );
+  return field.label;
 }
 
 function createMarkerSideSelect(
@@ -2963,6 +3091,100 @@ function updateSelectedMarkerStyle(stylePatch: Partial<ScenarioPieceStyle>): voi
   });
 }
 
+function addSelectedMarkerProperty(): void {
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker) {
+    return;
+  }
+
+  const key = createNextPropertyKey(selectedMarker.properties);
+  const property: ScenarioPieceProperty = {
+    key,
+    type: "text",
+    value: ""
+  };
+
+  commitUndoableChange("marker property add", "Marker property added", () => {
+    scenario = {
+      ...scenario,
+      pieces: scenario.pieces.map((piece) =>
+        piece.id === selectedMarker.id
+          ? { ...piece, properties: [...piece.properties, property] }
+          : piece
+      )
+    };
+  });
+}
+
+function updateSelectedMarkerProperty(
+  index: number,
+  patch: Partial<ScenarioPieceProperty>
+): void {
+  const selectedMarker = getSelectedMarker();
+  const property = selectedMarker?.properties[index];
+  if (!selectedMarker || !property) {
+    return;
+  }
+
+  const nextProperty = {
+    ...property,
+    ...patch
+  };
+  if (
+    !isValidPropertyKeyForMarker(selectedMarker, nextProperty.key, index) ||
+    !propertyValueMatchesType(nextProperty)
+  ) {
+    statusMessage = "Property update ignored";
+    render();
+    return;
+  }
+
+  if (
+    property.key === nextProperty.key &&
+    property.type === nextProperty.type &&
+    property.value === nextProperty.value
+  ) {
+    return;
+  }
+
+  commitUndoableChange("marker property edit", "Marker property updated", () => {
+    scenario = {
+      ...scenario,
+      pieces: scenario.pieces.map((piece) =>
+        piece.id === selectedMarker.id
+          ? {
+              ...piece,
+              properties: piece.properties.map((entry, entryIndex) =>
+                entryIndex === index ? nextProperty : entry
+              )
+            }
+          : piece
+      )
+    };
+  });
+}
+
+function removeSelectedMarkerProperty(index: number): void {
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker?.properties[index]) {
+    return;
+  }
+
+  commitUndoableChange("marker property removal", "Marker property removed", () => {
+    scenario = {
+      ...scenario,
+      pieces: scenario.pieces.map((piece) =>
+        piece.id === selectedMarker.id
+          ? {
+              ...piece,
+              properties: piece.properties.filter((_, entryIndex) => entryIndex !== index)
+            }
+          : piece
+      )
+    };
+  });
+}
+
 function updateMarkerSide(
   piece: Scenario["pieces"][number],
   sideId: string | undefined
@@ -3132,7 +3354,8 @@ function placeDefaultMarker(x: number, y: number): void {
           x,
           y,
           facingDegrees: 0,
-          style: { ...defaultPieceStyle }
+          style: { ...defaultPieceStyle },
+          properties: []
         }
       ]
     };
@@ -4494,8 +4717,65 @@ function normalizeFacingDegrees(value: number): number | null {
   return ((Math.round(value) % 360) + 360) % 360;
 }
 
+function createNextPropertyKey(properties: ScenarioPieceProperty[]): string {
+  const existingKeys = new Set(properties.map((property) => property.key));
+  let index = properties.length + 1;
+  let key = "property";
+  while (existingKeys.has(key)) {
+    key = `property ${index}`;
+    index += 1;
+  }
+
+  return key;
+}
+
+function isValidPropertyKeyForMarker(
+  marker: Scenario["pieces"][number],
+  key: string,
+  index: number
+): boolean {
+  return (
+    key.length > 0 &&
+    key.length <= 64 &&
+    marker.properties.every((property, propertyIndex) =>
+      propertyIndex === index ? true : property.key !== key
+    )
+  );
+}
+
+function propertyValueMatchesType(property: ScenarioPieceProperty): boolean {
+  switch (property.type) {
+    case "text":
+      return typeof property.value === "string";
+    case "number":
+      return typeof property.value === "number" && Number.isFinite(property.value);
+    case "boolean":
+      return typeof property.value === "boolean";
+  }
+}
+
+function convertPropertyValue(
+  value: ScenarioPieceProperty["value"],
+  type: ScenarioPiecePropertyType
+): ScenarioPieceProperty["value"] {
+  switch (type) {
+    case "text":
+      return String(value);
+    case "number": {
+      const nextValue = Number(value);
+      return Number.isFinite(nextValue) ? nextValue : 0;
+    }
+    case "boolean":
+      return typeof value === "boolean" ? value : false;
+  }
+}
+
 function isScenarioPieceShape(value: string): value is ScenarioPieceShape {
   return pieceShapeOptions.some((option) => option.value === value);
+}
+
+function isScenarioPiecePropertyType(value: string): value is ScenarioPiecePropertyType {
+  return piecePropertyTypeOptions.some((option) => option.value === value);
 }
 
 function getDocumentState(): string {
@@ -4890,7 +5170,11 @@ function cloneScenarioValue(value: Scenario): Scenario {
     space: cloneScenarioSpaceValue(value.space),
     sides: value.sides.map((side) => ({ ...side })),
     assets: value.assets.map((asset) => ({ ...asset })),
-    pieces: value.pieces.map((piece) => ({ ...piece, style: { ...piece.style } })),
+    pieces: value.pieces.map((piece) => ({
+      ...piece,
+      style: { ...piece.style },
+      properties: piece.properties.map((property) => ({ ...property }))
+    })),
     metadata: {
       ...value.metadata
     }

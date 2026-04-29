@@ -5,8 +5,9 @@ import { migrateV1ToV2 } from "./v1-to-v2";
 import { migrateV2ToV3 } from "./v2-to-v3";
 import { migrateV3ToV4 } from "./v3-to-v4";
 import { migrateV4ToV5 } from "./v4-to-v5";
+import { migrateV5ToV6 } from "./v5-to-v6";
 
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 type MigrationStep = {
   from: number;
@@ -48,6 +49,11 @@ const migrations: readonly MigrationStep[] = [
     from: 4,
     to: 5,
     migrate: migrateV4ToV5
+  },
+  {
+    from: 5,
+    to: 6,
+    migrate: migrateV5ToV6
   }
 ];
 

@@ -152,6 +152,8 @@ Adds:
 - reasonable primitive typing
 - editor UI for viewing and editing properties
 - source-editor round-trip
+- scenario format v6
+- migration from v5
 
 Properties are descriptive data for humans and future systems. V1 does not evaluate them as rules.
 

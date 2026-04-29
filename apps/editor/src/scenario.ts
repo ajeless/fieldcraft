@@ -4,7 +4,7 @@ import {
 } from "./spatial";
 
 export const schemaIdentifier = "fieldcraft.scenario";
-export const currentSchemaVersion = 5;
+export const currentSchemaVersion = 6;
 
 export const maxTileGridSize = 64;
 export const maxFreeCoordinateBoardSize = 100000;
@@ -42,6 +42,14 @@ export type ScenarioPieceStyle = {
   strokeColor: string;
 };
 
+export type ScenarioPiecePropertyType = "text" | "number" | "boolean";
+
+export type ScenarioPieceProperty = {
+  key: string;
+  type: ScenarioPiecePropertyType;
+  value: string | number | boolean;
+};
+
 export type ScenarioPiece = {
   id: string;
   label: string;
@@ -50,6 +58,7 @@ export type ScenarioPiece = {
   y: number;
   facingDegrees: number;
   style: ScenarioPieceStyle;
+  properties: ScenarioPieceProperty[];
   sideId?: string;
   imageAssetId?: string;
 };
@@ -277,6 +286,7 @@ export function parseScenario(input: string): Scenario {
   validateUniqueAssetIds(scenario);
   validateUniqueSideIds(scenario);
   validateUniquePieceIds(scenario);
+  validateUniquePiecePropertyKeys(scenario);
   validateScenarioSideReferences(scenario);
   validateScenarioAssetReferences(scenario);
 
@@ -378,6 +388,19 @@ function validateUniquePieceIds(scenario: Scenario): void {
     }
 
     seenIds.add(piece.id);
+  }
+}
+
+function validateUniquePiecePropertyKeys(scenario: Scenario): void {
+  for (const piece of scenario.pieces) {
+    const seenKeys = new Set<string>();
+    for (const property of piece.properties) {
+      if (seenKeys.has(property.key)) {
+        throw new Error(`Marker ${piece.id} contains duplicate property key: ${property.key}`);
+      }
+
+      seenKeys.add(property.key);
+    }
   }
 }
 
@@ -521,12 +544,13 @@ function parseScenarioPieces(
     const y = piece.y;
     const facingDegrees = parseFacingDegrees(piece.facingDegrees);
     const style = parseScenarioPieceStyle(piece.style);
+    const properties = parseScenarioPieceProperties(piece.properties);
     const sideId =
       piece.sideId === undefined ? undefined : parseScenarioSideId(piece.sideId);
     const imageAssetId =
       piece.imageAssetId === undefined ? undefined : parseScenarioAssetId(piece.imageAssetId);
 
-    if (facingDegrees === null || !style) {
+    if (facingDegrees === null || !style || !properties) {
       return null;
     }
 
@@ -569,6 +593,7 @@ function parseScenarioPieces(
       y,
       facingDegrees,
       style,
+      properties,
       ...(sideId ? { sideId } : {}),
       ...(imageAssetId ? { imageAssetId } : {})
     });
@@ -755,6 +780,52 @@ function parseScenarioPieceStyle(value: unknown): ScenarioPieceStyle | null {
   };
 }
 
+function parseScenarioPieceProperties(value: unknown): ScenarioPieceProperty[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const properties: ScenarioPieceProperty[] = [];
+
+  for (const property of value) {
+    if (!isRecord(property) || !isScenarioPiecePropertyType(property.type)) {
+      return null;
+    }
+
+    const key = parseScenarioPiecePropertyKey(property.key);
+    if (!key) {
+      return null;
+    }
+
+    const parsedValue = parseScenarioPiecePropertyValue(property.type, property.value);
+    if (parsedValue === null) {
+      return null;
+    }
+
+    properties.push({
+      key,
+      type: property.type,
+      value: parsedValue
+    });
+  }
+
+  return properties;
+}
+
+function parseScenarioPiecePropertyValue(
+  type: ScenarioPiecePropertyType,
+  value: unknown
+): string | number | boolean | null {
+  switch (type) {
+    case "text":
+      return typeof value === "string" ? value : null;
+    case "number":
+      return isFiniteNumber(value) ? value : null;
+    case "boolean":
+      return typeof value === "boolean" ? value : null;
+  }
+}
+
 function parseFreeCoordinateBounds(value: unknown): ScenarioFreeCoordinateBounds | null {
   if (!isRecord(value)) {
     return null;
@@ -888,6 +959,18 @@ function isScenarioPieceShape(value: unknown): value is ScenarioPieceShape {
     value === "diamond" ||
     value === "triangle"
   );
+}
+
+function isScenarioPiecePropertyType(value: unknown): value is ScenarioPiecePropertyType {
+  return value === "text" || value === "number" || value === "boolean";
+}
+
+function parseScenarioPiecePropertyKey(value: unknown): string | null {
+  if (typeof value !== "string" || value.trim() !== value) {
+    return null;
+  }
+
+  return value.length > 0 && value.length <= 64 ? value : null;
 }
 
 function normalizeScaleUnit(value: string): string {
