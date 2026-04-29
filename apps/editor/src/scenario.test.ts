@@ -18,6 +18,13 @@ function createScenario(): Scenario {
       width: 4,
       height: 4
     }),
+    sides: [
+      {
+        id: "side_TEST01",
+        label: "Blue",
+        color: "#2f80ed"
+      }
+    ],
     assets: [
       {
         id: "marker-art",
@@ -35,9 +42,9 @@ function createScenario(): Scenario {
         id: "piece_ART001",
         label: "Scout",
         kind: "marker",
-        side: "neutral",
         x: 1,
         y: 2,
+        sideId: "side_TEST01",
         imageAssetId: "marker-art"
       }
     ],
@@ -53,7 +60,21 @@ describe("parseScenario", () => {
     const scenario = parseScenario(scenarioToJson(createScenario()));
     expect(scenario.schema).toBe(schemaIdentifier);
     expect(scenario.schemaVersion).toBe(currentSchemaVersion);
+    expect(scenario.sides[0]?.label).toBe("Blue");
+    expect(scenario.pieces[0]?.sideId).toBe("side_TEST01");
     expect(scenario.pieces[0]?.imageAssetId).toBe("marker-art");
+  });
+
+  it("rejects a missing marker side ref", () => {
+    const scenario = createScenario();
+    scenario.pieces[0] = {
+      ...scenario.pieces[0],
+      sideId: "missing-side"
+    };
+
+    expect(() => parseScenario(scenarioToJson(scenario))).toThrowError(
+      "Marker piece_ART001 references missing side ID: missing-side"
+    );
   });
 
   it("rejects a missing marker image asset ref", () => {

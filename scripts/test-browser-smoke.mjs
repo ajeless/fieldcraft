@@ -25,7 +25,7 @@ const duplicateMarkerIdFixturePath = path.join(
   "duplicate-marker-id-scenario.fieldcraft.json"
 );
 const legacyV0FixturePath = path.join(smokeDir, "legacy-v0-scenario.fieldcraft.json");
-const currentSchemaVersion = 2;
+const currentSchemaVersion = 3;
 
 fs.mkdirSync(smokeDir, { recursive: true });
 fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
@@ -146,6 +146,28 @@ try {
   await expectStatusFieldValue(page, "status-field-counts", "1 marker · 0 assets");
   await expectStatusFieldValue(page, "status-field-selection", "1");
   await expectDirtyDotVisible(page);
+  await activateInspectorTab(page, "scenario");
+  await page.click('[data-testid="add-side"]');
+  await expectStatusLine(page, "Side added");
+  const sideId = await page
+    .locator('[data-testid^="side-row-"]')
+    .first()
+    .evaluate((element) => element.getAttribute("data-testid")?.replace("side-row-", ""));
+  if (!sideId) {
+    throw new Error("Could not read newly created side id.");
+  }
+  await activateInspectorTab(page, "selection");
+  await page.selectOption('[data-testid="selected-marker-side-select"]', sideId);
+  await expectStatusLine(page, "Marker side updated");
+  await activateInspectorTab(page, "source");
+  const sidedSource = JSON.parse(await readSourceEditorValue(page));
+  if (
+    sidedSource.sides.length !== 1 ||
+    sidedSource.sides[0].id !== sideId ||
+    !sidedSource.pieces.some((piece) => piece.x === 2 && piece.y === 1 && piece.sideId === sideId)
+  ) {
+    throw new Error("Side creation or marker side assignment did not round-trip through source.");
+  }
   await page.reload();
   await page.waitForSelector('[data-view="editor"]');
   await expectStatusLine(page, "Recovered session draft");
@@ -457,7 +479,6 @@ try {
       id: "source-stack-marker",
       label: "source-stack-marker",
       kind: "marker",
-      side: "neutral",
       x: 32,
       y: 32
     });
@@ -939,7 +960,6 @@ try {
       id: "source-free-marker",
       label: "source-free-marker",
       kind: "marker",
-      side: "neutral",
       x: 73.25,
       y: 18.5
     });
@@ -1111,12 +1131,12 @@ function createMenuOpenFixture() {
           color: "#f9fbfb"
         }
       },
+      sides: [],
       pieces: [
         {
           id: "piece_FIXT01",
           label: "marker-1-2",
           kind: "marker",
-          side: "neutral",
           x: 1,
           y: 2
         }
@@ -1154,6 +1174,7 @@ function createOversizedGridFixture() {
           color: "#f9fbfb"
         }
       },
+      sides: [],
       pieces: [],
       metadata: {
         editorVersion: "0.1.0-experiment",
@@ -1188,12 +1209,12 @@ function createDuplicateMarkerIdFixture() {
           color: "#f9fbfb"
         }
       },
+      sides: [],
       pieces: [
         {
           id: "piece_FIXT01",
           label: "marker-1-2",
           kind: "marker",
-          side: "neutral",
           x: 1,
           y: 2
         },
@@ -1201,7 +1222,6 @@ function createDuplicateMarkerIdFixture() {
           id: "piece_FIXT01",
           label: "marker-2-2",
           kind: "marker",
-          side: "neutral",
           x: 2,
           y: 2
         }

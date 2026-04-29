@@ -17,6 +17,15 @@ function readFixture(name: string): string {
 function readCurrentFixture(name: string): string {
   const payload = JSON.parse(readFixture(name));
   payload.schemaVersion = CURRENT_SCHEMA_VERSION;
+  payload.sides = [];
+  payload.pieces = Array.isArray(payload.pieces)
+    ? payload.pieces.map((entry: Record<string, unknown>) => {
+        const { side: _side, sideId: _sideId, ...piece } = entry;
+        void _side;
+        void _sideId;
+        return piece;
+      })
+    : payload.pieces;
   return JSON.stringify(payload);
 }
 

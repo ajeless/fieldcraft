@@ -638,6 +638,60 @@ button:disabled {
   gap: 12px;
 }
 
+.side-list {
+  display: grid;
+  gap: 8px;
+}
+
+.side-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r2);
+  padding: 8px;
+  background: var(--fc-bg0);
+}
+
+.side-color-input {
+  width: 34px;
+  height: 34px;
+  min-width: 0;
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r2);
+  padding: 2px;
+  background: var(--fc-bg3);
+}
+
+.side-label-input {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--fc-line);
+  border-radius: var(--fc-r2);
+  padding: 0 10px;
+  color: var(--fc-ink);
+  background: var(--fc-bg3);
+  font-weight: 700;
+}
+
+.side-piece-count {
+  color: var(--fc-ink-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.side-remove-button {
+  opacity: 0.72;
+}
+
+.side-row:hover .side-remove-button,
+.side-remove-button:focus-visible {
+  opacity: 1;
+}
+
 .source-editor-header {
   align-items: flex-start;
 }
@@ -964,6 +1018,8 @@ button:disabled {
 .board-canvas:focus-visible,
 .field-label input:focus-visible,
 .field-label select:focus-visible,
+.side-color-input:focus-visible,
+.side-label-input:focus-visible,
 .source-editor-input:focus-visible,
 .space-option input:focus-visible {
   outline: 3px solid var(--fc-accent-wash);

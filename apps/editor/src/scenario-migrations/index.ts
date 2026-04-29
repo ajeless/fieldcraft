@@ -2,8 +2,9 @@ import { parseScenario, schemaIdentifier, type Scenario } from "../scenario";
 import { generatePieceId } from "./identity";
 import { migrateV0ToV1 } from "./v0-to-v1";
 import { migrateV1ToV2 } from "./v1-to-v2";
+import { migrateV2ToV3 } from "./v2-to-v3";
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 type MigrationStep = {
   from: number;
@@ -30,6 +31,11 @@ const migrations: readonly MigrationStep[] = [
     from: 1,
     to: 2,
     migrate: migrateV1ToV2
+  },
+  {
+    from: 2,
+    to: 3,
+    migrate: migrateV2ToV3
   }
 ];
 

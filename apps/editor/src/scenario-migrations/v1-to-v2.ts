@@ -1,4 +1,6 @@
-import { schemaIdentifier, currentSchemaVersion } from "../scenario";
+import { schemaIdentifier } from "../scenario";
+
+const v2SchemaVersion = 2;
 
 export function migrateV1ToV2(input: unknown): unknown {
   if (!isRecord(input)) {
@@ -8,7 +10,7 @@ export function migrateV1ToV2(input: unknown): unknown {
   return {
     ...input,
     schema: schemaIdentifier,
-    schemaVersion: currentSchemaVersion
+    schemaVersion: v2SchemaVersion
   };
 }
 
