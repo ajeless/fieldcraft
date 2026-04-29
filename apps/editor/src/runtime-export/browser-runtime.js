@@ -30,41 +30,151 @@ function renderRuntime() {
 
   const shell = element("main", "runtime-export-shell");
   shell.dataset.view = "runtime-export";
+  shell.dataset.viewerChrome = "hidden";
 
-  const sidebar = element("aside", "runtime-export-sidebar");
+  const stage = element("section", "runtime-export-stage");
+  const infoPanel = createViewerInfoPanel();
+  const controls = createViewerControls(shell, infoPanel);
+  stage.append(createBoardViewport(), controls, infoPanel);
+
+  shell.append(stage);
+  app.append(shell);
+}
+
+function createViewerControls(shell, infoPanel) {
+  const controls = element("div", "runtime-export-viewer-controls");
+  const title = element("div", "runtime-export-viewer-title");
+  const infoButton = createButton("Info", "Show scenario information", "runtime-viewer-info-toggle");
+  const fullscreenButton = createButton("Full", "Toggle fullscreen", "runtime-viewer-fullscreen");
+
+  controls.dataset.testid = "runtime-viewer-controls";
+  title.append(
+    element("span", "runtime-export-viewer-name", scenario.title),
+    element("span", "runtime-export-viewer-board", getBoardSizeLabel(scenario.space))
+  );
+  infoPanel.hidden = true;
+  infoButton.setAttribute("aria-expanded", "false");
+  infoButton.setAttribute("aria-controls", "runtime-viewer-panel");
+  infoButton.addEventListener("click", () => {
+    const isOpen = infoPanel.hidden;
+    infoPanel.hidden = !isOpen;
+    shell.dataset.viewerChrome = isOpen ? "visible" : "hidden";
+    infoButton.setAttribute("aria-expanded", String(isOpen));
+    infoButton.textContent = isOpen ? "Hide" : "Info";
+  });
+  fullscreenButton.addEventListener("click", () => {
+    toggleFullscreen(fullscreenButton);
+  });
+  document.addEventListener("fullscreenchange", () => {
+    fullscreenButton.textContent = document.fullscreenElement ? "Exit" : "Full";
+  });
+
+  controls.append(title, infoButton, fullscreenButton);
+  return controls;
+}
+
+function createViewerInfoPanel() {
+  const panel = element("aside", "runtime-export-info-panel");
   const metrics = element("div", "runtime-export-metrics");
+
+  panel.id = "runtime-viewer-panel";
+  panel.dataset.testid = "runtime-viewer-panel";
   metrics.append(
     createMetric("Board", getBoardLabel(scenario.space)),
     createMetric("Markers", String(scenario.pieces.length)),
     createMetric("Assets", String(scenario.assets.length)),
     createMetric("Generated", formatGeneratedAt(bundle.generatedAt))
   );
-  sidebar.append(
-    element("p", "runtime-export-eyebrow", "Fieldcraft Browser Runtime"),
+  panel.append(
+    element("p", "runtime-export-eyebrow", "Fieldcraft Viewer"),
     element("h1", "runtime-export-title", scenario.title),
-    element(
-      "p",
-      "runtime-export-copy",
-      "Self-contained export with inline scenario data and bundled asset payloads."
-    ),
     metrics,
-    element(
-      "p",
-      "runtime-export-meta",
-      getBackgroundSummary(scenario, bundledAssets)
-    )
+    element("p", "runtime-export-meta", getBackgroundSummary(scenario, bundledAssets)),
+    createSideSummary(),
+    createPieceManifest()
   );
 
-  const stage = element("section", "runtime-export-stage");
-  const stageHeader = element("div", "runtime-export-stage-header");
-  stageHeader.append(
-    element("h2", "runtime-export-stage-title", "Runtime View"),
-    element("p", "runtime-export-meta", "Read-only board preview")
-  );
-  stage.append(stageHeader, createBoardViewport());
+  return panel;
+}
 
-  shell.append(sidebar, stage);
-  app.append(shell);
+function createSideSummary() {
+  const section = element("section", "runtime-export-info-section");
+  const sides = Array.isArray(scenario.sides) ? scenario.sides : [];
+  const list = element("div", "runtime-export-side-list");
+
+  section.append(element("h2", "runtime-export-info-heading", "Sides"));
+  if (sides.length === 0) {
+    section.append(element("p", "runtime-export-meta", "No authored sides."));
+    return section;
+  }
+
+  for (const side of sides) {
+    const item = element("div", "runtime-export-side");
+    const swatch = element("span", "runtime-export-side-swatch");
+    const count = scenario.pieces.filter((piece) => piece.sideId === side.id).length;
+    swatch.style.backgroundColor = side.color;
+    item.append(
+      swatch,
+      element("span", "runtime-export-side-label", side.label),
+      element("span", "runtime-export-side-count", String(count))
+    );
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
+function createPieceManifest() {
+  const section = element("section", "runtime-export-info-section");
+  const list = element("div", "runtime-export-piece-list");
+
+  section.append(element("h2", "runtime-export-info-heading", "Pieces"));
+  if (scenario.pieces.length === 0) {
+    section.append(element("p", "runtime-export-meta", "No pieces."));
+    return section;
+  }
+
+  for (const piece of scenario.pieces) {
+    const item = element("article", "runtime-export-piece");
+    const heading = element("div", "runtime-export-piece-heading");
+    const side = getPieceSide(piece);
+    const properties = formatPieceProperties(piece);
+    const style = getPieceStyle(piece, {
+      markerFill: "#d24b3f",
+      markerRing: "#61221e"
+    });
+
+    heading.append(
+      element("strong", "runtime-export-piece-label", piece.label || piece.id),
+      element("span", "runtime-export-piece-side", side ? side.label : "No side")
+    );
+    item.append(
+      heading,
+      element(
+        "p",
+        "runtime-export-piece-meta",
+        `${style.shape}, ${getPieceFacing(piece)} deg${piece.imageAssetId ? ", image" : ""}`
+      )
+    );
+    if (properties.length > 0) {
+      item.append(element("p", "runtime-export-piece-properties", properties.join(" | ")));
+    }
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
+async function toggleFullscreen(button) {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen?.();
+    } else {
+      await document.documentElement.requestFullscreen?.();
+    }
+  } catch {
+    button.dataset.fullscreenError = "true";
+  }
 }
 
 function renderError(message) {
@@ -116,6 +226,8 @@ function createBoardViewport() {
   canvas.setAttribute("aria-label", getCanvasLabel(space));
   surface.dataset.testid = "runtime-board-surface";
   surface.dataset.markerPositions = getMarkerPositions(scenario.pieces, space.type);
+  surface.dataset.markerFacings = getMarkerFacings(scenario.pieces);
+  surface.dataset.markerStyles = getMarkerStyles(scenario.pieces);
   surface.dataset.backgroundImageStatus = backgroundImageResource ? "loading" : "none";
   surface.dataset.backgroundImagePath = getBackgroundImagePath();
   surface.dataset.boardSpaceType = space.type;
@@ -680,46 +792,136 @@ function drawMarkers(context, geometry, pieces, options) {
     const layout = layouts.get(piece.id);
     const center = layout?.center ?? geometry.pieceToWorldPoint(piece);
     const radius = layout?.radius ?? baseRadius;
+    const pieceStyle = getPieceStyle(piece, options);
 
     const imageResource = options.pieceImageResources.get(piece.id);
     if (imageResource?.status === "ready") {
-      drawMarkerImage(context, center, radius, imageResource.image);
-      context.beginPath();
-      context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      drawMarkerImage(context, center, radius, imageResource.image, pieceStyle.shape);
+      traceMarkerShape(context, center, radius, pieceStyle.shape);
       context.lineWidth = Math.max(2 / options.scale, 1.5);
-      context.strokeStyle = options.markerRing;
+      context.strokeStyle = pieceStyle.strokeColor;
       context.stroke();
-      context.beginPath();
-      context.arc(center.x, center.y, radius * 0.84, 0, Math.PI * 2);
+      traceMarkerShape(context, center, radius * 0.84, pieceStyle.shape);
       context.strokeStyle = "rgba(255, 255, 255, 0.34)";
       context.stroke();
-      continue;
+    } else {
+      drawDefaultMarker(
+        context,
+        center,
+        radius,
+        options.scale,
+        pieceStyle.fillColor,
+        pieceStyle.strokeColor,
+        pieceStyle.shape
+      );
     }
 
-    drawDefaultMarker(context, center, radius, options.scale, options.markerFill, options.markerRing);
+    drawMarkerFacing(context, center, radius, getPieceFacing(piece), options.scale);
   }
 }
 
-function drawDefaultMarker(context, center, radius, scale, markerFill, markerRing) {
-  context.beginPath();
-  context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+function drawDefaultMarker(context, center, radius, scale, markerFill, markerRing, shape) {
+  traceMarkerShape(context, center, radius, shape);
   context.fillStyle = markerFill;
   context.fill();
   context.lineWidth = Math.max(2 / scale, 1.5);
   context.strokeStyle = markerRing;
   context.stroke();
-  context.beginPath();
-  context.arc(center.x, center.y, radius * 0.58, 0, Math.PI * 2);
+  traceMarkerShape(context, center, radius * 0.58, shape);
   context.strokeStyle = "rgba(255, 255, 255, 0.58)";
   context.stroke();
 }
 
-function drawMarkerImage(context, center, radius, image) {
+function drawMarkerImage(context, center, radius, image, shape) {
   context.save();
-  context.beginPath();
-  context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  traceMarkerShape(context, center, radius, shape);
   context.clip();
   context.drawImage(image, center.x - radius, center.y - radius, radius * 2, radius * 2);
+  context.restore();
+}
+
+function traceMarkerShape(context, center, radius, shape) {
+  context.beginPath();
+  switch (shape) {
+    case "square":
+      context.rect(
+        center.x - radius * 0.82,
+        center.y - radius * 0.82,
+        radius * 1.64,
+        radius * 1.64
+      );
+      break;
+    case "diamond":
+      context.moveTo(center.x, center.y - radius);
+      context.lineTo(center.x + radius, center.y);
+      context.lineTo(center.x, center.y + radius);
+      context.lineTo(center.x - radius, center.y);
+      context.closePath();
+      break;
+    case "triangle":
+      for (let index = 0; index < 3; index += 1) {
+        const angle = -Math.PI / 2 + index * ((Math.PI * 2) / 3);
+        const point = {
+          x: center.x + Math.cos(angle) * radius,
+          y: center.y + Math.sin(angle) * radius
+        };
+        if (index === 0) {
+          context.moveTo(point.x, point.y);
+        } else {
+          context.lineTo(point.x, point.y);
+        }
+      }
+      context.closePath();
+      break;
+    default:
+      context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      break;
+  }
+}
+
+function drawMarkerFacing(context, center, radius, facingDegrees, scale) {
+  const angle = ((facingDegrees - 90) * Math.PI) / 180;
+  const tip = {
+    x: center.x + Math.cos(angle) * radius * 0.82,
+    y: center.y + Math.sin(angle) * radius * 0.82
+  };
+  const tail = {
+    x: center.x - Math.cos(angle) * radius * 0.22,
+    y: center.y - Math.sin(angle) * radius * 0.22
+  };
+  const wingAngle = Math.PI * 0.78;
+  const wingLength = Math.max(radius * 0.28, 4 / Math.max(scale, minZoom));
+  const leftWing = {
+    x: tip.x + Math.cos(angle + wingAngle) * wingLength,
+    y: tip.y + Math.sin(angle + wingAngle) * wingLength
+  };
+  const rightWing = {
+    x: tip.x + Math.cos(angle - wingAngle) * wingLength,
+    y: tip.y + Math.sin(angle - wingAngle) * wingLength
+  };
+
+  context.save();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.lineWidth = Math.max(4 / scale, 2.5);
+  context.strokeStyle = "rgba(28, 30, 31, 0.62)";
+  context.beginPath();
+  context.moveTo(tail.x, tail.y);
+  context.lineTo(tip.x, tip.y);
+  context.lineTo(leftWing.x, leftWing.y);
+  context.moveTo(tip.x, tip.y);
+  context.lineTo(rightWing.x, rightWing.y);
+  context.stroke();
+
+  context.lineWidth = Math.max(2 / scale, 1.35);
+  context.strokeStyle = "rgba(255, 255, 255, 0.92)";
+  context.beginPath();
+  context.moveTo(tail.x, tail.y);
+  context.lineTo(tip.x, tip.y);
+  context.lineTo(leftWing.x, leftWing.y);
+  context.moveTo(tip.x, tip.y);
+  context.lineTo(rightWing.x, rightWing.y);
+  context.stroke();
   context.restore();
 }
 
@@ -814,12 +1016,34 @@ function updateSurfaceData(
     surface.dataset.boardRows = String(geometry.rows);
   }
   surface.dataset.markerPositions = getMarkerPositions(pieces, geometry.spaceType);
+  surface.dataset.markerFacings = getMarkerFacings(pieces);
+  surface.dataset.markerStyles = getMarkerStyles(pieces);
   const markerImageStates = getMarkerImageStates(pieces, pieceImageResources);
   if (markerImageStates) {
     surface.dataset.markerImageStates = markerImageStates;
   } else {
     delete surface.dataset.markerImageStates;
   }
+}
+
+function getMarkerFacings(pieces) {
+  return pieces
+    .map((piece) => `${piece.id}:${getPieceFacing(piece)}`)
+    .sort((left, right) => left.localeCompare(right))
+    .join(" ");
+}
+
+function getMarkerStyles(pieces) {
+  return pieces
+    .map((piece) => {
+      const style = getPieceStyle(piece, {
+        markerFill: "#d24b3f",
+        markerRing: "#61221e"
+      });
+      return `${piece.id}:${style.shape}:${style.fillColor}:${style.strokeColor}`;
+    })
+    .sort((left, right) => left.localeCompare(right))
+    .join(" ");
 }
 
 function getMarkerImageStates(pieces, pieceImageResources) {
@@ -874,6 +1098,27 @@ function createColocatedMarkerOffsets(count, orbitStep) {
   }
 
   return offsets;
+}
+
+function getPieceStyle(piece, fallback) {
+  const style = piece.style ?? {};
+  return {
+    shape: isSupportedPieceShape(style.shape) ? style.shape : "circle",
+    fillColor:
+      typeof style.fillColor === "string" && style.fillColor ? style.fillColor : fallback.markerFill,
+    strokeColor:
+      typeof style.strokeColor === "string" && style.strokeColor
+        ? style.strokeColor
+        : fallback.markerRing
+  };
+}
+
+function isSupportedPieceShape(shape) {
+  return shape === "circle" || shape === "square" || shape === "diamond" || shape === "triangle";
+}
+
+function getPieceFacing(piece) {
+  return Number.isFinite(piece.facingDegrees) ? piece.facingDegrees : 0;
 }
 
 function applyViewportTransform(context, transform) {
@@ -996,6 +1241,22 @@ function getPieceImageAsset(piece) {
   }
 
   return scenario.assets.find((asset) => asset.id === piece.imageAssetId) ?? null;
+}
+
+function getPieceSide(piece) {
+  if (!piece?.sideId || !Array.isArray(scenario.sides)) {
+    return null;
+  }
+
+  return scenario.sides.find((side) => side.id === piece.sideId) ?? null;
+}
+
+function formatPieceProperties(piece) {
+  if (!Array.isArray(piece.properties)) {
+    return [];
+  }
+
+  return piece.properties.map((property) => `${property.key}: ${String(property.value)}`);
 }
 
 function getBackgroundImagePath() {

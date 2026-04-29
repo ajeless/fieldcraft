@@ -287,7 +287,7 @@ async function createBrowserRuntimeExportHtml(scenario: Scenario): Promise<strin
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(exportedScenario.title)} | Fieldcraft Runtime</title>
+    <title>${escapeHtml(exportedScenario.title)} | Fieldcraft Viewer</title>
     <style>${sanitizeInlineStyle(browserRuntimeStyles)}</style>
   </head>
   <body>
@@ -375,13 +375,21 @@ function cloneScenarioForRuntimeExport(scenario: Scenario): Scenario {
     );
   const pieces = scenario.space
     ? scenario.pieces
-        .map((piece) => ({ ...piece }))
+        .map((piece) => ({
+          ...piece,
+          style: { ...piece.style },
+          properties: piece.properties.map((property) => ({ ...property }))
+        }))
         .sort((left, right) => left.y - right.y || left.x - right.x || left.id.localeCompare(right.id))
     : [];
+  const sides = scenario.sides
+    .map((side) => ({ ...side }))
+    .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
 
   return {
     ...scenario,
     assets,
+    sides,
     pieces,
     metadata: {
       ...scenario.metadata

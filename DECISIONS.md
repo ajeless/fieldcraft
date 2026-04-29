@@ -167,3 +167,11 @@ Pieces carry an ordered `properties` array. Each property has a unique per-piece
 This is a scenario-format v6 commitment. The `v5 → v6` migration adds `properties: []` to existing pieces.
 
 Rationale: scenario authors need a place for useful facts such as role, strength, crewed, morale, or notes without turning Fieldcraft into a rules engine. Explicit primitive typing preserves data shape for future systems while v1 treats properties as descriptive data only.
+
+## 017 — Browser export is a presentation viewer
+
+The browser export opens as a presentation/projection viewer first: the board fills the viewport, scenario metadata is hidden behind an info control, and only compact navigation controls stay visible by default. Fullscreen, pan, zoom, and reset are viewer affordances, not gameplay controls.
+
+The exported viewer must preserve v1 authored scenario display: board geometry and backgrounds, bundled image/audio asset payloads, marker image artwork, sides, facing, styling, and descriptive piece properties. The code and filenames may continue to use `runtime` for historical compatibility, but the exported artifact is functionally a viewer rather than a game runtime.
+
+Rationale: v1 scenarios are used by humans at a table, over screen share, or through browser projection. A chrome-heavy inspector layout distracts from that use, while a collapsed metadata panel keeps the export self-describing without implying rules execution or browser authoring parity.

@@ -161,11 +161,11 @@ Properties are descriptive data for humans and future systems. V1 does not evalu
 
 Three finishing branches make v1 feel intentional.
 
-### 9. `codex/viewer-export-polish`
+### 9. `codex/viewer-export-polish` — shipped
 
 Purpose: make the existing browser runtime export work as a presentation/projection viewer.
 
-Adds:
+Added:
 
 - chrome-less viewer posture by default
 - full-screen-friendly layout

@@ -761,6 +761,13 @@ try {
   await page.waitForSelector('[data-view="editor"]');
 
   await updateSourceEditorJson(page, (scenario) => {
+    scenario.sides = [
+      {
+        id: "export-side-blue",
+        label: "Blue",
+        color: "#2f80ed"
+      }
+    ];
     scenario.assets = [
       {
         id: "export-board-image",
@@ -778,6 +785,20 @@ try {
       piece.id === squareImageMarkerId
         ? {
             ...piece,
+            sideId: "export-side-blue",
+            facingDegrees: 90,
+            style: {
+              shape: "diamond",
+              fillColor: "#2f80ed",
+              strokeColor: "#174a8b"
+            },
+            properties: [
+              {
+                key: "strength",
+                type: "number",
+                value: 6
+              }
+            ],
             imageAssetId: "export-board-image"
           }
         : piece
@@ -793,6 +814,13 @@ try {
     spaceType: "square-grid",
     backgroundImagePath: "export-fixtures/checkerboard-32.png",
     markerKeys: ["0-0", "32-32"],
+    expectedFacing: "90",
+    expectedStyle: {
+      shape: "diamond",
+      fillColor: "#2f80ed",
+      strokeColor: "#174a8b"
+    },
+    infoText: ["strength: 6"],
     markerOccurrences: [
       {
         markerKey: "32-32",
@@ -1578,6 +1606,14 @@ async function verifyRuntimeExportDownload(page, runtimeExport, options) {
         { cause: error }
       );
     }
+    await runtimePage.waitForSelector(
+      '[data-view="runtime-export"][data-viewer-chrome="hidden"]'
+    );
+    await runtimePage.waitForSelector('[data-testid="runtime-viewer-controls"]');
+    await runtimePage.waitForSelector('[data-testid="runtime-viewer-fullscreen"]');
+    await runtimePage.waitForSelector('[data-testid="runtime-viewer-panel"]', {
+      state: "attached"
+    });
     await expectSurfaceSpace(runtimePage, "runtime-board-surface", options.spaceType);
     await runtimePage.waitForSelector(
       '[data-testid="runtime-board-surface"][data-background-image-status="ready"]'
@@ -1596,6 +1632,16 @@ async function verifyRuntimeExportDownload(page, runtimeExport, options) {
     for (const markerKey of options.markerKeys ?? []) {
       await waitForMarker(runtimePage, "runtime-board-surface", markerKey);
     }
+    if (options.expectedFacing) {
+      await expectMarkerFacing(
+        runtimePage,
+        "runtime-board-surface",
+        options.expectedFacing
+      );
+    }
+    if (options.expectedStyle) {
+      await expectMarkerStyle(runtimePage, "runtime-board-surface", options.expectedStyle);
+    }
     for (const markerOccurrence of options.markerOccurrences ?? []) {
       await expectMarkerPositionOccurrences(
         runtimePage,
@@ -1612,6 +1658,17 @@ async function verifyRuntimeExportDownload(page, runtimeExport, options) {
         freeMarkerCount.y,
         freeMarkerCount.count
       );
+    }
+    await runtimePage.click('[data-testid="runtime-viewer-info-toggle"]');
+    await runtimePage.waitForSelector(
+      '[data-view="runtime-export"][data-viewer-chrome="visible"]'
+    );
+    await runtimePage.waitForSelector('[data-testid="runtime-viewer-panel"]:not([hidden])');
+    for (const infoText of options.infoText ?? []) {
+      await runtimePage
+        .locator('[data-testid="runtime-viewer-panel"]')
+        .getByText(infoText, { exact: false })
+        .waitFor();
     }
   } finally {
     await runtimeContext.close();
