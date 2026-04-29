@@ -4,7 +4,7 @@ import {
 } from "./spatial";
 
 export const schemaIdentifier = "fieldcraft.scenario";
-export const currentSchemaVersion = 3;
+export const currentSchemaVersion = 4;
 
 export const maxTileGridSize = 64;
 export const maxFreeCoordinateBoardSize = 100000;
@@ -40,6 +40,7 @@ export type ScenarioPiece = {
   kind: "marker";
   x: number;
   y: number;
+  facingDegrees: number;
   sideId?: string;
   imageAssetId?: string;
 };
@@ -509,10 +510,15 @@ function parseScenarioPieces(
 
     const x = piece.x;
     const y = piece.y;
+    const facingDegrees = parseFacingDegrees(piece.facingDegrees);
     const sideId =
       piece.sideId === undefined ? undefined : parseScenarioSideId(piece.sideId);
     const imageAssetId =
       piece.imageAssetId === undefined ? undefined : parseScenarioAssetId(piece.imageAssetId);
+
+    if (facingDegrees === null) {
+      return null;
+    }
 
     if (piece.sideId !== undefined && !sideId) {
       return null;
@@ -551,6 +557,7 @@ function parseScenarioPieces(
       kind: "marker",
       x,
       y,
+      facingDegrees,
       ...(sideId ? { sideId } : {}),
       ...(imageAssetId ? { imageAssetId } : {})
     });
@@ -757,6 +764,19 @@ function isPositiveInteger(value: unknown): value is number {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function parseFacingDegrees(value: unknown): number | null {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value >= 360
+  ) {
+    return null;
+  }
+
+  return value;
 }
 
 function isPositiveNumber(value: unknown): value is number {

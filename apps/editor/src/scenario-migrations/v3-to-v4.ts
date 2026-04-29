@@ -1,17 +1,16 @@
 import { schemaIdentifier } from "../scenario";
 
-const v3SchemaVersion = 3;
+const v4SchemaVersion = 4;
 
-export function migrateV2ToV3(input: unknown): unknown {
+export function migrateV3ToV4(input: unknown): unknown {
   if (!isRecord(input)) {
-    throw new Error("migrateV2ToV3: expected an object.");
+    throw new Error("migrateV3ToV4: expected an object.");
   }
 
   return {
     ...input,
     schema: schemaIdentifier,
-    schemaVersion: v3SchemaVersion,
-    sides: [],
+    schemaVersion: v4SchemaVersion,
     pieces: Array.isArray(input.pieces) ? input.pieces.map(migratePiece) : input.pieces
   };
 }
@@ -21,10 +20,10 @@ function migratePiece(piece: unknown): unknown {
     return piece;
   }
 
-  const { side: _side, sideId: _sideId, ...rest } = piece;
-  void _side;
-  void _sideId;
-  return rest;
+  return {
+    ...piece,
+    facingDegrees: 0
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

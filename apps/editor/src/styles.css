@@ -592,6 +592,24 @@ button:disabled {
   background: var(--fc-bg3);
 }
 
+.facing-controls {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 78px;
+  align-items: center;
+  gap: 10px;
+}
+
+.facing-controls input[type="range"] {
+  height: 34px;
+  padding: 0;
+  accent-color: var(--fc-accent);
+}
+
+.facing-controls input[type="number"] {
+  text-align: right;
+}
+
 .metric {
   min-width: 0;
   display: grid;
