@@ -1185,10 +1185,18 @@ function drawMarkers(
       context.arc(center.x, center.y, radius * 0.84, 0, Math.PI * 2);
       context.strokeStyle = "rgba(255, 255, 255, 0.34)";
       context.stroke();
-      continue;
+    } else {
+      drawDefaultMarker(
+        context,
+        center,
+        radius,
+        options.scale,
+        options.markerFill,
+        options.markerRing
+      );
     }
 
-    drawDefaultMarker(context, center, radius, options.scale, options.markerFill, options.markerRing);
+    drawMarkerFacing(context, center, radius, piece.facingDegrees, options.scale);
   }
 }
 
@@ -1224,6 +1232,58 @@ function drawMarkerImage(
   context.arc(center.x, center.y, radius, 0, Math.PI * 2);
   context.clip();
   context.drawImage(image, center.x - radius, center.y - radius, radius * 2, radius * 2);
+  context.restore();
+}
+
+function drawMarkerFacing(
+  context: CanvasRenderingContext2D,
+  center: Point,
+  radius: number,
+  facingDegrees: number,
+  scale: number
+): void {
+  const angle = ((facingDegrees - 90) * Math.PI) / 180;
+  const tip = {
+    x: center.x + Math.cos(angle) * radius * 0.82,
+    y: center.y + Math.sin(angle) * radius * 0.82
+  };
+  const tail = {
+    x: center.x - Math.cos(angle) * radius * 0.22,
+    y: center.y - Math.sin(angle) * radius * 0.22
+  };
+  const wingAngle = Math.PI * 0.78;
+  const wingLength = Math.max(radius * 0.28, 4 / Math.max(scale, minZoom));
+  const leftWing = {
+    x: tip.x + Math.cos(angle + wingAngle) * wingLength,
+    y: tip.y + Math.sin(angle + wingAngle) * wingLength
+  };
+  const rightWing = {
+    x: tip.x + Math.cos(angle - wingAngle) * wingLength,
+    y: tip.y + Math.sin(angle - wingAngle) * wingLength
+  };
+
+  context.save();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.lineWidth = Math.max(4 / scale, 2.5);
+  context.strokeStyle = "rgba(28, 30, 31, 0.62)";
+  context.beginPath();
+  context.moveTo(tail.x, tail.y);
+  context.lineTo(tip.x, tip.y);
+  context.lineTo(leftWing.x, leftWing.y);
+  context.moveTo(tip.x, tip.y);
+  context.lineTo(rightWing.x, rightWing.y);
+  context.stroke();
+
+  context.lineWidth = Math.max(2 / scale, 1.35);
+  context.strokeStyle = "rgba(255, 255, 255, 0.92)";
+  context.beginPath();
+  context.moveTo(tail.x, tail.y);
+  context.lineTo(tip.x, tip.y);
+  context.lineTo(leftWing.x, leftWing.y);
+  context.moveTo(tip.x, tip.y);
+  context.lineTo(rightWing.x, rightWing.y);
+  context.stroke();
   context.restore();
 }
 
@@ -1271,6 +1331,7 @@ function updateSurfaceData(
     surface.dataset.boardRows = String(geometry.rows);
   }
   surface.dataset.markerPositions = getMarkerPositions(pieces, geometry.spaceType);
+  surface.dataset.markerFacings = getMarkerFacings(pieces);
   const markerImageStates = getMarkerImageStates(pieces, pieceImageResources);
   if (markerImageStates) {
     surface.dataset.markerImageStates = markerImageStates;
@@ -1282,6 +1343,13 @@ function updateSurfaceData(
   } else {
     delete surface.dataset.selectedMarkerId;
   }
+}
+
+function getMarkerFacings(pieces: ScenarioPiece[]): string {
+  return pieces
+    .map((piece) => `${piece.id}:${piece.facingDegrees}`)
+    .sort((left, right) => left.localeCompare(right))
+    .join(" ");
 }
 
 function getMarkerImageStates(

@@ -6,15 +6,21 @@ Settled architectural choices belong in `DECISIONS.md`. Open questions, implemen
 
 ## Current Focus
 
-V1 is committed in `docs/EDITOR-V1-SCOPE.md`: Fieldcraft is a map-and-scenario editor for tabletop wargames, and the runtime export is a viewer rather than a gameplay engine. Today's baseline covers explicit scenario creation and post-creation board setup edits across square, pointy-top hex, and free-coordinate models; permissive marker placement, selection, deletion, and colocation; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a command registry for file, board, and editor actions with a searchable command palette; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; the decision `012` editor vocabulary with a four-tab inspector, bottom status bar, bottom asset strip, full-page New Scenario flow, command palette, and left tool rail with Select/Marker tools plus Ruler/Hand placeholders; scenario-level author-defined sides managed in the Scenario tab and assigned from the Selection tab; a read-only in-app runtime/viewer surface; browser runtime/viewer export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, asset strip visibility and contextual image filtering when Marker is armed, `Save As` carrying assets forward); the v3 scenario format with opaque piece ids, author-facing labels, optional marker image refs, scenario-level sides, optional piece `sideId` refs, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
+V1 is committed in `docs/EDITOR-V1-SCOPE.md`: Fieldcraft is a map-and-scenario editor for tabletop wargames, and the runtime export is a viewer rather than a gameplay engine. Today's baseline covers explicit scenario creation and post-creation board setup edits across square, pointy-top hex, and free-coordinate models; permissive marker placement, selection, deletion, and colocation; viewport pan/zoom/reset; browser and desktop file commands with unsaved-change guards; a command registry for file, board, and editor actions with a searchable command palette; in-memory undo/redo; persisted `System`/`Light`/`Dark` themes with dark board defaults; draft-recovery autosave; an editable source pane with targeted diagnostics and shared board validation; the decision `012` editor vocabulary with a four-tab inspector, bottom status bar, bottom asset strip, full-page New Scenario flow, command palette, and left tool rail with Select/Marker tools plus Ruler/Hand placeholders; scenario-level author-defined sides managed in the Scenario tab and assigned from the Selection tab; authored marker facing edited from the Selection tab and rendered in the editor/viewer; a read-only in-app runtime/viewer surface; browser runtime/viewer export with bundled assets; the first package-local asset model (desktop image/audio import, board background images, marker image artwork, asset strip visibility and contextual image filtering when Marker is armed, `Save As` carrying assets forward); the v4 scenario format with opaque piece ids, author-facing labels, optional marker image refs, scenario-level sides, optional piece `sideId` refs, per-piece `facingDegrees`, and a chained migration registry that upgrades older files on load; and an automated desktop-semantic smoke pass for the Tauri dev shell.
 
-The immediate near-term sequence continues the v1 piece model with authored facing/orientation. That branch should make orientation visible and editable without adding movement plotting, firing arcs, or rules evaluation.
+The immediate near-term sequence continues the v1 piece model with visual token styling. That branch should let authors distinguish piece types without requiring imported art.
 
-The original `codex/unit-entity-model` branch is split for v1 into `codex/sides-and-entity-base`, `codex/piece-facing`, and `codex/piece-properties`, with `codex/token-styling` between facing and properties. Rules, turn resolution, and standalone runtime packaging are deferred or out of scope under v1.
+The original `codex/unit-entity-model` branch is split for v1: sides and facing have shipped, while token styling and piece properties remain. Rules, turn resolution, and standalone runtime packaging are deferred or out of scope under v1.
 
 Automation now covers both the browser support surface and a scripted desktop-semantic pass in the Tauri dev shell. Native desktop dialogs and packaged-build sanity remain release-significant manual checks even when both automated suites are green; the residual human-only pass lives in `DESKTOP-TESTING.md`.
 
 ## Recently Completed Baseline Slices
+
+- `codex/piece-facing`
+  - Pieces now carry authored `facingDegrees` and scenarios moved to `schemaVersion: 4`; the v3 migration initializes existing pieces to `0`.
+  - The Selection tab exposes facing as a direct range/number control, and editor/viewer canvas rendering shows a direction arrow on default and image-backed markers.
+  - Facing remains presentation data only: no movement plotting, firing arcs, line-of-sight, turn resolution, or rules evaluation.
+  - Browser smoke covers facing edit, rendered board state, and source round-trip.
 
 - `codex/sides-and-entity-base`
   - Scenarios now carry author-defined sides with opaque `side_` ids, labels, and colors, while pieces use optional `sideId` references for ownership.
@@ -123,37 +129,31 @@ Current manual testing pressure points are captured in the branch sequence below
 
 ## Near-Term Branch Sequence
 
-1. `codex/piece-facing`
-   - Make authored orientation visible and editable.
-   - Add an orientation/facing field on pieces, editor rendering that shows direction, and source-editor round-trip.
-   - Add a rotation gesture or equivalent direct manipulation that works across square, pointy-top hex, and free-coordinate boards.
-   - Not in scope: movement plotting, firing arcs, or rules evaluation.
-
-2. `codex/token-styling`
+1. `codex/token-styling`
    - Let authors distinguish piece types visually without requiring imported art.
    - Ship basic shape variation, color controls, and readable styling data in the scenario file.
    - Slot new styling controls into the Selection tab introduced by `codex/inspector-tabbed-rewrite`; avoid regrowing the old right-column stack.
    - Keep editor and viewer rendering in parity for supported styling fields; do not build a sprite editor, paint tool, or full asset styling system.
 
-3. `codex/piece-properties`
+2. `codex/piece-properties`
    - Support scenario-useful per-piece facts without building a rules engine.
    - Add extensible per-piece key/value attributes with reasonable primitive typing.
    - Add editor UI for viewing and editing properties, plus source-editor round-trip.
    - Not in scope: evaluating properties as rules or deriving gameplay behavior from them.
 
-4. `codex/viewer-export-polish`
+3. `codex/viewer-export-polish`
    - Polish the existing browser runtime export into a presentation/projection viewer.
    - Make the viewer chrome-less by default, full-screen-friendly, and easy to reset or navigate.
    - Keep viewer rendering in parity with the editor for v1-supported board, side, facing, styling, property, and asset display.
    - The codebase keeps "runtime" terminology for historical reasons; this branch treats the export functionally as a viewer.
 
-5. `codex/v1-example-scenarios`
+4. `codex/v1-example-scenarios`
    - Author one to three reference scenarios as documentation-by-example.
    - Demonstrate square, pointy-top hex, and free-coordinate space models across the set.
    - Include package-local assets where useful and exercise sides, facing, styling, and properties after those branches exist.
    - Not in scope: tutorial content, campaigns, or sample games with rules.
 
-6. `codex/v1-documentation`
+5. `codex/v1-documentation`
    - Align the repo's public-facing docs with v1 scope and the "personal tool, made shippable-shaped" bar.
    - Finish the README pass for v1 scope, including any final terminology cleanup around "runtime" in code and filenames.
    - Add v1 release notes or changelog and any final documentation cleanup needed for the v1 bar.
@@ -197,7 +197,6 @@ Open design work that should stay out of `DECISIONS.md` until concrete implement
 - Snapping, guides, bearing widgets, and authored coordinate overlays only after authoring pressure shows which aids matter.
 - Clearer origin/bounds semantics in the UI (what top-left `x`/`y` means relative to `width`/`height`) before relying on offset free-coordinate maps.
 - Visualizing coincident or near-coincident free-coordinate objects without treating rounded display precision as physical occupancy.
-- Object facing/bearing editing with the first real entity workflow, not with temporary markers.
 - Free-space movement, order plotting, and resolution are deferred beyond v1 with the other runtime-bearing work.
 - Continuous-space terrain, zones, obstacles, and movement-cost hooks after basic placement and scenario-authoring pressure justify them.
 - Map imagery, georeferenced backgrounds, and huge continuous-map performance work only when trust-blocking.

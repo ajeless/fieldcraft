@@ -61,7 +61,7 @@ Then translate that into TypeScript that fits the existing editor's patterns.
 | `components/asset-strip.jsx` | Bottom asset strip with contextual filter and pinned-first ordering |
 | `components/asset-library.jsx` | Full-screen asset library subview with grid + detail panel |
 | `components/new-scenario.jsx` | New Scenario page with three space-model cards |
-| `components/scenario.jsx` | Sample scenario JSON with sides array (`schemaVersion: 3`) and JSON syntax highlighter |
+| `components/scenario.jsx` | Sample scenario JSON with sides array and facing data (`schemaVersion: 4`) and JSON syntax highlighter |
 | `components/runtime.jsx` | Viewer preview screen; `runtime` is the mockup/code name |
 | `components/palette.jsx` | ⌘K command palette overlay |
 | `components/primitives.jsx` | Shared UI primitives — buttons, inputs, segmented controls, icons |

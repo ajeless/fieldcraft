@@ -23,7 +23,10 @@ function readCurrentFixture(name: string): string {
         const { side: _side, sideId: _sideId, ...piece } = entry;
         void _side;
         void _sideId;
-        return piece;
+        return {
+          ...piece,
+          facingDegrees: 0
+        };
       })
     : payload.pieces;
   return JSON.stringify(payload);

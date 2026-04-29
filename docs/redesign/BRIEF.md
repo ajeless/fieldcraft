@@ -38,7 +38,9 @@ The following become new architectural commitments with implementation:
 
 8. **Coordinate-label stage rulers.** Replaces decorative tick marks. For square/hex grids: A–H across the top, 1–N down the side, with the current cursor's column/row highlighted in accent color. For free-coordinate boards: world-unit labels at appropriate intervals. Rulers change with the space model.
 
-9. **Author-defined sides at the scenario level.** Scenarios have a `sides` array with author-set labels ("Federation," "Klingon Empire," "Player 1 / NPCs") and colors. Pieces reference sides by `sideId`. Sides are managed in the Scenario tab; selected pieces get a side dropdown in the Selection tab. This is a scenario-format change (`schemaVersion: 3`) and requires a migration from v2.
+9. **Author-defined sides at the scenario level.** Scenarios have a `sides` array with author-set labels ("Federation," "Klingon Empire," "Player 1 / NPCs") and colors. Pieces reference sides by `sideId`. Sides are managed in the Scenario tab; selected pieces get a side dropdown in the Selection tab. This shipped as a scenario-format v3 change with a migration from v2.
+
+10. **Authored piece facing.** Pieces carry `facingDegrees`, edited from the Selection tab and rendered as a direction arrow in the shared editor/viewer board. This shipped as a scenario-format v4 change with a migration from v3, and remains presentation data rather than rules behavior.
 
 ## Tab contents (authoritative)
 
@@ -66,6 +68,7 @@ Per-selection detail. Auto-promotes when something is selected.
 - Linked asset: thumbnail, author-facing label, mono path, Change / Unbind buttons
 - Appearance: color swatches, Label input
 - Side: styled dropdown with color swatch, current side label, "+ Add side…" entry
+- Facing: range/number control that updates the shared board renderer
 - Colocation: text description of any shared position
 
 ### Assets tab
@@ -74,7 +77,7 @@ Contextual picker. When a piece is selected, shows image assets as a pickable gr
 
 ### Source tab
 
-JSON source view with compact (340px) and expanded (640px) modes, toggled by a `|← Expand` / `→| Collapse` button. Shows the complete authored scenario including sides and `sideId` references. Apply/Reset buttons commit or discard pending edits. Validation state appears as a small header line.
+JSON source view with compact (340px) and expanded (640px) modes, toggled by a `|← Expand` / `→| Collapse` button. Shows the complete authored scenario including sides, `sideId` references, and `facingDegrees`. Apply/Reset buttons commit or discard pending edits. Validation state appears as a small header line.
 
 ## Design tokens
 
@@ -97,6 +100,7 @@ Key constraints:
 - New Scenario flow structure (three cards side by side, details panel below)
 - Edit Board Setup as a modal (not a full-screen replacement)
 - Author-defined sides model and `sideId` references
+- `facingDegrees` as authored presentation data, not gameplay logic
 - Inline-rename pattern for asset labels and side labels
 
 ### Do not copy
@@ -123,7 +127,7 @@ Do not implement this as a single branch. Decompose into six branches, threaded 
 
 6. **`codex/command-palette`** — wire ⌘K to the existing command registry.
 
-Floating/collapsible inspector and coordinate-label rulers are later branches, pending feedback from the first redesign vocabulary slices. The tool rail has shipped as the fixed left rail, and author-defined sides have shipped with the first v1 piece ownership work.
+Floating/collapsible inspector and coordinate-label rulers are later branches, pending feedback from the first redesign vocabulary slices. The tool rail has shipped as the fixed left rail; author-defined sides and authored facing have shipped with the first v1 piece model work.
 
 Each branch must leave the editor visibly better and manually testable per AGENTS.md. Update `PLAN.md`'s "Recently Completed Baseline Slices" as branches land.
 

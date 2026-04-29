@@ -143,3 +143,11 @@ Scenarios may define author-facing sides at the scenario level. A side has an op
 This is a scenario-format v3 commitment. The v2 placeholder field `side: "neutral"` is removed by the `v2 → v3` migration, which adds an empty `sides` array and clears any legacy side data from pieces. Removing a side in the editor clears matching `sideId` references on pieces rather than deleting pieces or preserving dangling references.
 
 Rationale: sides are scenario authorship data, not gameplay control or rules behavior. They let authors express ownership, faction, or role now while preserving v1's no-engine boundary. The optional reference keeps neutral markers simple and keeps the scenario file readable.
+
+## 014 — Piece facing is authored presentation data
+
+Pieces carry `facingDegrees`, a clockwise degree value where `0` points up/north on the board. The editor and viewer render facing as a directional marker overlay, and the Selection tab edits it directly. The field is required in the current scenario format so source edits and viewer export do not have to infer orientation defaults.
+
+This is a scenario-format v4 commitment. The `v3 → v4` migration adds `facingDegrees: 0` to existing pieces. Facing does not imply movement, firing arcs, line of sight, turn order, or any other rule behavior under v1 scope.
+
+Rationale: tactical scenario authors need to show which way a piece is pointed before Fieldcraft has any rules engine. Treating facing as presentation data preserves the authored scenario value while keeping the v1 no-engine boundary intact.

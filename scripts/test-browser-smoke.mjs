@@ -25,7 +25,7 @@ const duplicateMarkerIdFixturePath = path.join(
   "duplicate-marker-id-scenario.fieldcraft.json"
 );
 const legacyV0FixturePath = path.join(smokeDir, "legacy-v0-scenario.fieldcraft.json");
-const currentSchemaVersion = 3;
+const currentSchemaVersion = 4;
 
 fs.mkdirSync(smokeDir, { recursive: true });
 fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
@@ -159,14 +159,26 @@ try {
   await activateInspectorTab(page, "selection");
   await page.selectOption('[data-testid="selected-marker-side-select"]', sideId);
   await expectStatusLine(page, "Marker side updated");
+  await page.fill('[data-testid="selected-marker-facing-input"]', "90");
+  await page.locator('[data-testid="selected-marker-facing-input"]').dispatchEvent("change");
+  await expectStatusLine(page, "Marker facing updated");
+  await expectMarkerFacing(page, "board-surface", "90");
   await activateInspectorTab(page, "source");
   const sidedSource = JSON.parse(await readSourceEditorValue(page));
   if (
     sidedSource.sides.length !== 1 ||
     sidedSource.sides[0].id !== sideId ||
-    !sidedSource.pieces.some((piece) => piece.x === 2 && piece.y === 1 && piece.sideId === sideId)
+    !sidedSource.pieces.some(
+      (piece) =>
+        piece.x === 2 &&
+        piece.y === 1 &&
+        piece.sideId === sideId &&
+        piece.facingDegrees === 90
+    )
   ) {
-    throw new Error("Side creation or marker side assignment did not round-trip through source.");
+    throw new Error(
+      "Side creation, marker side assignment, or facing did not round-trip through source."
+    );
   }
   await page.reload();
   await page.waitForSelector('[data-view="editor"]');
@@ -480,7 +492,8 @@ try {
       label: "source-stack-marker",
       kind: "marker",
       x: 32,
-      y: 32
+      y: 32,
+      facingDegrees: 180
     });
     return scenario;
   });
@@ -961,7 +974,8 @@ try {
       label: "source-free-marker",
       kind: "marker",
       x: 73.25,
-      y: 18.5
+      y: 18.5,
+      facingDegrees: 225
     });
     return scenario;
   });
@@ -1138,7 +1152,8 @@ function createMenuOpenFixture() {
           label: "marker-1-2",
           kind: "marker",
           x: 1,
-          y: 2
+          y: 2,
+          facingDegrees: 0
         }
       ],
       metadata: {
@@ -1216,14 +1231,16 @@ function createDuplicateMarkerIdFixture() {
           label: "marker-1-2",
           kind: "marker",
           x: 1,
-          y: 2
+          y: 2,
+          facingDegrees: 0
         },
         {
           id: "piece_FIXT01",
           label: "marker-2-2",
           kind: "marker",
           x: 2,
-          y: 2
+          y: 2,
+          facingDegrees: 0
         }
       ],
       metadata: {
@@ -2344,6 +2361,24 @@ async function waitForMarker(page, surfaceTestId, markerPosition) {
     {
       testId: surfaceTestId,
       marker: markerPosition
+    }
+  );
+}
+
+async function expectMarkerFacing(page, surfaceTestId, facing) {
+  await page.waitForFunction(
+    ({ testId, expectedFacing }) => {
+      const surface = document.querySelector(`[data-testid="${testId}"]`);
+      const facings = surface?.getAttribute("data-marker-facings") ?? "";
+
+      return facings
+        .split(" ")
+        .filter(Boolean)
+        .some((entry) => entry.endsWith(`:${expectedFacing}`));
+    },
+    {
+      testId: surfaceTestId,
+      expectedFacing: facing
     }
   );
 }

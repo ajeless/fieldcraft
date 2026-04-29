@@ -44,6 +44,7 @@ function createScenario(): Scenario {
         kind: "marker",
         x: 1,
         y: 2,
+        facingDegrees: 90,
         sideId: "side_TEST01",
         imageAssetId: "marker-art"
       }
@@ -61,6 +62,7 @@ describe("parseScenario", () => {
     expect(scenario.schema).toBe(schemaIdentifier);
     expect(scenario.schemaVersion).toBe(currentSchemaVersion);
     expect(scenario.sides[0]?.label).toBe("Blue");
+    expect(scenario.pieces[0]?.facingDegrees).toBe(90);
     expect(scenario.pieces[0]?.sideId).toBe("side_TEST01");
     expect(scenario.pieces[0]?.imageAssetId).toBe("marker-art");
   });

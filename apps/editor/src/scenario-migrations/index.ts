@@ -3,8 +3,9 @@ import { generatePieceId } from "./identity";
 import { migrateV0ToV1 } from "./v0-to-v1";
 import { migrateV1ToV2 } from "./v1-to-v2";
 import { migrateV2ToV3 } from "./v2-to-v3";
+import { migrateV3ToV4 } from "./v3-to-v4";
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 type MigrationStep = {
   from: number;
@@ -36,6 +37,11 @@ const migrations: readonly MigrationStep[] = [
     from: 2,
     to: 3,
     migrate: migrateV2ToV3
+  },
+  {
+    from: 3,
+    to: 4,
+    migrate: migrateV3ToV4
   }
 ];
 

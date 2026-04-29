@@ -1668,6 +1668,7 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
   section.append(
     createMarkerLabelInput(selectedMarker),
     createMarkerSideSelect(selectedMarker),
+    createMarkerFacingControl(selectedMarker),
     createMarkerImageSelect(selectedMarker),
     createMarkerIdDisclosure(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
@@ -1690,6 +1691,51 @@ function createMarkerLabelInput(
     updateSelectedMarkerLabel(field.input.value)
   );
   return field.label;
+}
+
+function createMarkerFacingControl(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const label = element("label", "field-label facing-field");
+  const text = element("span", "", "Facing");
+  const controls = element("div", "facing-controls");
+  const range = document.createElement("input");
+  const number = document.createElement("input");
+  const value = String(Math.round(selectedMarker.facingDegrees));
+
+  range.type = "range";
+  range.min = "0";
+  range.max = "359";
+  range.step = "1";
+  range.value = value;
+  range.dataset.testid = "selected-marker-facing-range";
+
+  number.type = "number";
+  number.min = "0";
+  number.max = "359";
+  number.step = "1";
+  number.value = value;
+  number.dataset.testid = "selected-marker-facing-input";
+
+  range.addEventListener("input", () => {
+    number.value = range.value;
+  });
+  range.addEventListener("change", () =>
+    updateSelectedMarkerFacing(Number(range.value))
+  );
+  number.addEventListener("change", () => {
+    const nextFacing = normalizeFacingDegrees(Number(number.value));
+    if (nextFacing === null) {
+      number.value = value;
+      return;
+    }
+
+    updateSelectedMarkerFacing(nextFacing);
+  });
+
+  controls.append(range, number);
+  label.append(text, controls);
+  return label;
 }
 
 function createMarkerSideSelect(
@@ -2810,6 +2856,29 @@ function updateSelectedMarkerSide(sideId: string | null): void {
   );
 }
 
+function updateSelectedMarkerFacing(value: number): void {
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker) {
+    return;
+  }
+
+  const nextFacing = normalizeFacingDegrees(value);
+  if (nextFacing === null || selectedMarker.facingDegrees === nextFacing) {
+    return;
+  }
+
+  commitUndoableChange("marker facing edit", "Marker facing updated", () => {
+    scenario = {
+      ...scenario,
+      pieces: scenario.pieces.map((piece) =>
+        piece.id === selectedMarker.id
+          ? { ...piece, facingDegrees: nextFacing }
+          : piece
+      )
+    };
+  });
+}
+
 function updateMarkerSide(
   piece: Scenario["pieces"][number],
   sideId: string | undefined
@@ -2977,7 +3046,8 @@ function placeDefaultMarker(x: number, y: number): void {
           label: "",
           kind: "marker" as const,
           x,
-          y
+          y,
+          facingDegrees: 0
         }
       ]
     };
@@ -4329,6 +4399,14 @@ function getMarkerPositionLabel(piece: Scenario["pieces"][number]): string {
   }
 
   return `${formatCoordinate(piece.x)}, ${formatCoordinate(piece.y)}`;
+}
+
+function normalizeFacingDegrees(value: number): number | null {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  return ((Math.round(value) % 360) + 360) % 360;
 }
 
 function getDocumentState(): string {

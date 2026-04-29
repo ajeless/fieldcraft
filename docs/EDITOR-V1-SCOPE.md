@@ -122,6 +122,8 @@ Adds:
 - editor rendering that shows direction
 - a rotation gesture or equivalent direct manipulation
 - source-editor round-trip for facing
+- scenario format v4
+- migration from v3
 
 Facing is authored scenario data. It is not movement plotting, firing arcs, or rules evaluation.
 
