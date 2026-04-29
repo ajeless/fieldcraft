@@ -97,6 +97,7 @@ Keep docs light and split by ownership:
 - `DESKTOP-TESTING.md` is the manual desktop smoke checklist (release-significant per decision `009`).
 - `CLAUDE.md` is only a compatibility pointer to `AGENTS.md`.
 - `docs/EDITOR-V1-SCOPE.md` is the authoritative v1 product scope commitment.
+- `docs/V1-RELEASE-NOTES.md` is the concise v1 baseline and verification note.
 - `docs/RUNTIME-VISION.md` is historical context for the earlier runtime-bearing direction.
 - `docs/doc-audit-2026-04.md` is historical context for an earlier documentation audit and follow-up cleanup.
 - `docs/redesign/BRIEF.md` is the durable spec for the editor UX/UI redesign; `docs/redesign/reference/` holds the mockup bundle it references.

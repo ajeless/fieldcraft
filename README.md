@@ -14,7 +14,7 @@ The desktop editor is the authoritative authoring surface. The browser surface i
 
 The codebase still uses `runtime` in commands, filenames, and some UI labels for historical reasons. Under v1 scope, that surface is a scenario viewer.
 
-See `PLAN.md` for the current branch plan and near-term slices.
+See `docs/V1-RELEASE-NOTES.md` for the current v1 baseline and `PLAN.md` for deferred design space.
 
 ## Stack
 
@@ -97,6 +97,16 @@ corepack pnpm run doctor
 ```
 
 `doctor` is the fastest way to catch missing Node, pnpm, Rust, or Linux desktop packages before you spend time on a build that was never going to start.
+
+## Try The V1 Examples
+
+The `examples/v1/` directory contains three self-contained scenario packages:
+
+- square-grid bridgehead
+- pointy-top hex ridgeline
+- free-coordinate convoy
+
+Launch the desktop editor with `corepack pnpm desktop`, then open one of the `*.fieldcraft.json` files from `examples/v1/`. The adjacent `assets/` directory is intentionally package-local media referenced by those scenarios.
 
 ## Understand The Three Main Workflows
 
@@ -285,9 +295,10 @@ corepack pnpm --dir apps/editor tauri icon src-tauri/app-icon.svg
 - `examples/v1/`: self-contained v1 reference scenarios and package-local example assets
 - `AGENTS.md`: agent workflow and contribution guardrails
 - `DECISIONS.md`: settled architectural choices
-- `PLAN.md`: current branch plan and deferred questions
+- `PLAN.md`: deferred design space and future branch candidates
 - `DESKTOP-TESTING.md`: residual human-only desktop testing checklist
 - `docs/EDITOR-V1-SCOPE.md`: authoritative v1 product scope
+- `docs/V1-RELEASE-NOTES.md`: concise v1 baseline and verification notes
 - `docs/RUNTIME-VISION.md`: historical runtime-bearing analysis preserved for context
 - `docs/doc-audit-2026-04.md`: historical documentation audit and resolved follow-up record
 - `docs/redesign/BRIEF.md`: durable spec for the editor UX/UI redesign
