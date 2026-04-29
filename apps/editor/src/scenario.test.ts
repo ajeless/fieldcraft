@@ -50,6 +50,23 @@ function createScenario(): Scenario {
           fillColor: "#2f80ed",
           strokeColor: "#174a8b"
         },
+        properties: [
+          {
+            key: "role",
+            type: "text",
+            value: "Scout"
+          },
+          {
+            key: "strength",
+            type: "number",
+            value: 3
+          },
+          {
+            key: "hidden",
+            type: "boolean",
+            value: false
+          }
+        ],
         sideId: "side_TEST01",
         imageAssetId: "marker-art"
       }
@@ -70,6 +87,11 @@ describe("parseScenario", () => {
     expect(scenario.pieces[0]?.facingDegrees).toBe(90);
     expect(scenario.pieces[0]?.style.shape).toBe("diamond");
     expect(scenario.pieces[0]?.style.fillColor).toBe("#2f80ed");
+    expect(scenario.pieces[0]?.properties).toEqual([
+      { key: "role", type: "text", value: "Scout" },
+      { key: "strength", type: "number", value: 3 },
+      { key: "hidden", type: "boolean", value: false }
+    ]);
     expect(scenario.pieces[0]?.sideId).toBe("side_TEST01");
     expect(scenario.pieces[0]?.imageAssetId).toBe("marker-art");
   });
@@ -107,6 +129,21 @@ describe("parseScenario", () => {
 
     expect(() => parseScenario(scenarioToJson(scenario))).toThrowError(
       "Marker piece_ART001 image asset must be an image: marker-tone"
+    );
+  });
+
+  it("rejects duplicate marker property keys", () => {
+    const scenario = createScenario();
+    scenario.pieces[0] = {
+      ...scenario.pieces[0],
+      properties: [
+        { key: "role", type: "text", value: "Scout" },
+        { key: "role", type: "text", value: "Leader" }
+      ]
+    };
+
+    expect(() => parseScenario(scenarioToJson(scenario))).toThrowError(
+      "Marker piece_ART001 contains duplicate property key: role"
     );
   });
 });

@@ -25,7 +25,7 @@ const duplicateMarkerIdFixturePath = path.join(
   "duplicate-marker-id-scenario.fieldcraft.json"
 );
 const legacyV0FixturePath = path.join(smokeDir, "legacy-v0-scenario.fieldcraft.json");
-const currentSchemaVersion = 5;
+const currentSchemaVersion = 6;
 
 fs.mkdirSync(smokeDir, { recursive: true });
 fs.writeFileSync(menuOpenFixturePath, createMenuOpenFixture(), "utf8");
@@ -174,6 +174,14 @@ try {
     fillColor: "#2f80ed",
     strokeColor: "#174a8b"
   });
+  await page.click('[data-testid="add-marker-property"]');
+  await expectStatusLine(page, "Marker property added");
+  await page.fill('[data-testid="selected-marker-property-key-0"]', "strength");
+  await page.locator('[data-testid="selected-marker-property-key-0"]').dispatchEvent("change");
+  await page.selectOption('[data-testid="selected-marker-property-type-0"]', "number");
+  await page.fill('[data-testid="selected-marker-property-value-0"]', "6");
+  await page.locator('[data-testid="selected-marker-property-value-0"]').dispatchEvent("change");
+  await expectStatusLine(page, "Marker property updated");
   await activateInspectorTab(page, "source");
   const sidedSource = JSON.parse(await readSourceEditorValue(page));
   if (
@@ -187,11 +195,17 @@ try {
         piece.facingDegrees === 90 &&
         piece.style?.shape === "diamond" &&
         piece.style?.fillColor === "#2f80ed" &&
-        piece.style?.strokeColor === "#174a8b"
+        piece.style?.strokeColor === "#174a8b" &&
+        piece.properties?.some(
+          (property) =>
+            property.key === "strength" &&
+            property.type === "number" &&
+            property.value === 6
+        )
     )
   ) {
     throw new Error(
-      "Side creation, marker side assignment, facing, or styling did not round-trip through source."
+      "Side creation, marker side assignment, facing, styling, or properties did not round-trip through source."
     );
   }
   await page.reload();
@@ -508,7 +522,8 @@ try {
       x: 32,
       y: 32,
       facingDegrees: 180,
-      style: defaultMarkerStyle()
+      style: defaultMarkerStyle(),
+      properties: []
     });
     return scenario;
   });
@@ -991,7 +1006,8 @@ try {
       x: 73.25,
       y: 18.5,
       facingDegrees: 225,
-      style: defaultMarkerStyle()
+      style: defaultMarkerStyle(),
+      properties: []
     });
     return scenario;
   });
@@ -1178,7 +1194,8 @@ function createMenuOpenFixture() {
           x: 1,
           y: 2,
           facingDegrees: 0,
-          style: defaultMarkerStyle()
+          style: defaultMarkerStyle(),
+          properties: []
         }
       ],
       metadata: {
@@ -1258,7 +1275,8 @@ function createDuplicateMarkerIdFixture() {
           x: 1,
           y: 2,
           facingDegrees: 0,
-          style: defaultMarkerStyle()
+          style: defaultMarkerStyle(),
+          properties: []
         },
         {
           id: "piece_FIXT01",
@@ -1267,7 +1285,8 @@ function createDuplicateMarkerIdFixture() {
           x: 2,
           y: 2,
           facingDegrees: 0,
-          style: defaultMarkerStyle()
+          style: defaultMarkerStyle(),
+          properties: []
         }
       ],
       metadata: {

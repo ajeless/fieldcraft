@@ -159,3 +159,11 @@ Pieces carry a required `style` object with `shape`, `fillColor`, and `strokeCol
 This is a scenario-format v5 commitment. The `v4 → v5` migration adds the former default marker appearance as explicit style data: circle, `#c85448` fill, and `#7a2a22` stroke.
 
 Rationale: authors need a lightweight way to distinguish piece roles before importing art. The styling fields are visual authorship data only; they do not define unit type, rules, abilities, or gameplay behavior.
+
+## 016 — Piece properties are descriptive authored facts
+
+Pieces carry an ordered `properties` array. Each property has a unique per-piece `key`, an explicit primitive `type` (`text`, `number`, or `boolean`), and a matching primitive `value`. Properties are edited in the Selection tab and round-trip through the source editor as human-readable scenario data.
+
+This is a scenario-format v6 commitment. The `v5 → v6` migration adds `properties: []` to existing pieces.
+
+Rationale: scenario authors need a place for useful facts such as role, strength, crewed, morale, or notes without turning Fieldcraft into a rules engine. Explicit primitive typing preserves data shape for future systems while v1 treats properties as descriptive data only.

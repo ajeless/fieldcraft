@@ -44,6 +44,8 @@ The following become new architectural commitments with implementation:
 
 11. **Basic marker styling.** Pieces carry a `style` object with shape, fill color, and stroke color. Styling is edited from the Selection tab and rendered by the shared editor/viewer board for default markers and image-backed marker frames. This shipped as a scenario-format v5 change with a migration from v4, and remains presentation data rather than unit typing or rules behavior.
 
+12. **Typed piece properties.** Pieces carry ordered `properties` arrays with a key, explicit primitive type, and value. Properties are edited from the Selection tab and round-trip through Source. This shipped as a scenario-format v6 change with a migration from v5, and remains descriptive data rather than evaluated rules.
+
 ## Tab contents (authoritative)
 
 ### Scenario tab
@@ -71,6 +73,7 @@ Per-selection detail. Auto-promotes when something is selected.
 - Appearance: shape select, fill/stroke color controls, Label input
 - Side: styled dropdown with color swatch, current side label, "+ Add side…" entry
 - Facing: range/number control that updates the shared board renderer
+- Properties: add/remove rows with key, type, and value controls
 - Colocation: text description of any shared position
 
 ### Assets tab
@@ -79,7 +82,7 @@ Contextual picker. When a piece is selected, shows image assets as a pickable gr
 
 ### Source tab
 
-JSON source view with compact (340px) and expanded (640px) modes, toggled by a `|← Expand` / `→| Collapse` button. Shows the complete authored scenario including sides, `sideId` references, `facingDegrees`, and per-piece `style`. Apply/Reset buttons commit or discard pending edits. Validation state appears as a small header line.
+JSON source view with compact (340px) and expanded (640px) modes, toggled by a `|← Expand` / `→| Collapse` button. Shows the complete authored scenario including sides, `sideId` references, `facingDegrees`, per-piece `style`, and per-piece `properties`. Apply/Reset buttons commit or discard pending edits. Validation state appears as a small header line.
 
 ## Design tokens
 
@@ -104,6 +107,7 @@ Key constraints:
 - Author-defined sides model and `sideId` references
 - `facingDegrees` as authored presentation data, not gameplay logic
 - Piece `style` as authored presentation data, not gameplay logic
+- Piece `properties` as descriptive typed data, not gameplay logic
 - Inline-rename pattern for asset labels and side labels
 
 ### Do not copy
@@ -130,7 +134,7 @@ Do not implement this as a single branch. Decompose into six branches, threaded 
 
 6. **`codex/command-palette`** — wire ⌘K to the existing command registry.
 
-Floating/collapsible inspector and coordinate-label rulers are later branches, pending feedback from the first redesign vocabulary slices. The tool rail has shipped as the fixed left rail; author-defined sides, authored facing, and basic marker styling have shipped with the first v1 piece model work.
+Floating/collapsible inspector and coordinate-label rulers are later branches, pending feedback from the first redesign vocabulary slices. The tool rail has shipped as the fixed left rail; author-defined sides, authored facing, basic marker styling, and typed piece properties have shipped with the first v1 piece model work.
 
 Each branch must leave the editor visibly better and manually testable per AGENTS.md. Update `PLAN.md`'s "Recently Completed Baseline Slices" as branches land.
 

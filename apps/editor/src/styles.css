@@ -622,6 +622,48 @@ button:disabled {
   padding: 2px;
 }
 
+.marker-properties-section {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--fc-line);
+  border-bottom: 1px solid var(--fc-line);
+}
+
+.subsection-title {
+  margin: 0;
+  color: var(--fc-ink);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.compact-empty {
+  margin: 0;
+  padding: 0;
+}
+
+.marker-property-list {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.marker-property-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.boolean-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  justify-self: start;
+  accent-color: var(--fc-accent);
+}
+
 .metric {
   min-width: 0;
   display: grid;
