@@ -134,4 +134,12 @@ Rationale: the editor grew feature-first, and each new feature accreted into the
 
 `docs/redesign/BRIEF.md` is the implementation spec for shape, pixel dimensions, tab contents, and interaction patterns. Specific values there (tab labels, widths, contextual filter behaviors) are tactical; this decision records the architectural shape.
 
-Out of scope for this decision, and reserved for later entries when their branches ship: author-defined sides at the scenario level (a scenario-format change that lands with the entity model), coordinate-label stage rulers, and any floating or collapsible inspector variant beyond the docked baseline.
+Out of scope for this decision, and reserved for later entries when their branches ship: coordinate-label stage rulers, and any floating or collapsible inspector variant beyond the docked baseline.
+
+## 013 — Scenario sides and piece ownership
+
+Scenarios may define author-facing sides at the scenario level. A side has an opaque `side_` id, a free-form label, and a color. Pieces refer to sides by optional `sideId`; an absent `sideId` means unassigned/neutral.
+
+This is a scenario-format v3 commitment. The v2 placeholder field `side: "neutral"` is removed by the `v2 → v3` migration, which adds an empty `sides` array and clears any legacy side data from pieces. Removing a side in the editor clears matching `sideId` references on pieces rather than deleting pieces or preserving dangling references.
+
+Rationale: sides are scenario authorship data, not gameplay control or rules behavior. They let authors express ownership, faction, or role now while preserving v1's no-engine boundary. The optional reference keeps neutral markers simple and keeps the scenario file readable.

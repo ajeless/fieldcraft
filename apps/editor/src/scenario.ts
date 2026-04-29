@@ -4,7 +4,7 @@ import {
 } from "./spatial";
 
 export const schemaIdentifier = "fieldcraft.scenario";
-export const currentSchemaVersion = 2;
+export const currentSchemaVersion = 3;
 
 export const maxTileGridSize = 64;
 export const maxFreeCoordinateBoardSize = 100000;
@@ -28,13 +28,19 @@ export type ScenarioAsset = {
   path: string;
 };
 
+export type ScenarioSide = {
+  id: string;
+  label: string;
+  color: string;
+};
+
 export type ScenarioPiece = {
   id: string;
   label: string;
   kind: "marker";
-  side: "neutral";
   x: number;
   y: number;
+  sideId?: string;
   imageAssetId?: string;
 };
 
@@ -92,6 +98,7 @@ export type Scenario = {
   schemaVersion: typeof currentSchemaVersion;
   title: string;
   space: ScenarioSpace | null;
+  sides: ScenarioSide[];
   assets: ScenarioAsset[];
   pieces: ScenarioPiece[];
   metadata: {
@@ -130,6 +137,7 @@ export function createEmptyScenario(): Scenario {
     schemaVersion: currentSchemaVersion,
     title: "Untitled Fieldcraft Scenario",
     space: null,
+    sides: [],
     assets: [],
     pieces: [],
     metadata: {
@@ -257,7 +265,9 @@ export function parseScenario(input: string): Scenario {
   }
 
   validateUniqueAssetIds(scenario);
+  validateUniqueSideIds(scenario);
   validateUniquePieceIds(scenario);
+  validateScenarioSideReferences(scenario);
   validateScenarioAssetReferences(scenario);
 
   return scenario;
@@ -284,6 +294,11 @@ function parseScenarioValue(value: unknown): Scenario | null {
     return null;
   }
 
+  const sides = parseScenarioSides(value.sides);
+  if (!sides) {
+    return null;
+  }
+
   const assets = parseScenarioAssets(value.assets);
   if (!assets) {
     return null;
@@ -304,6 +319,7 @@ function parseScenarioValue(value: unknown): Scenario | null {
     schemaVersion: currentSchemaVersion,
     title: value.title,
     space,
+    sides,
     assets,
     pieces,
     metadata: {
@@ -331,6 +347,18 @@ function validateUniqueAssetIds(scenario: Scenario): void {
   }
 }
 
+function validateUniqueSideIds(scenario: Scenario): void {
+  const seenIds = new Set<string>();
+
+  for (const side of scenario.sides) {
+    if (seenIds.has(side.id)) {
+      throw new Error(`Scenario contains duplicate side ID: ${side.id}`);
+    }
+
+    seenIds.add(side.id);
+  }
+}
+
 function validateUniquePieceIds(scenario: Scenario): void {
   const seenIds = new Set<string>();
 
@@ -340,6 +368,16 @@ function validateUniquePieceIds(scenario: Scenario): void {
     }
 
     seenIds.add(piece.id);
+  }
+}
+
+function validateScenarioSideReferences(scenario: Scenario): void {
+  const sideIds = new Set(scenario.sides.map((side) => side.id));
+
+  for (const piece of scenario.pieces) {
+    if (piece.sideId && !sideIds.has(piece.sideId)) {
+      throw new Error(`Marker ${piece.id} references missing side ID: ${piece.sideId}`);
+    }
   }
 }
 
@@ -381,6 +419,35 @@ function validateScenarioAssetReferences(scenario: Scenario): void {
       );
     }
   }
+}
+
+function parseScenarioSides(value: unknown): ScenarioSide[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const sides: ScenarioSide[] = [];
+
+  for (const side of value) {
+    if (!isRecord(side)) {
+      return null;
+    }
+
+    const id = parseScenarioSideId(side.id);
+    const color = parseColor(side.color, "");
+
+    if (!id || typeof side.label !== "string" || !color) {
+      return null;
+    }
+
+    sides.push({
+      id,
+      label: side.label,
+      color
+    });
+  }
+
+  return sides;
 }
 
 function parseScenarioAssets(value: unknown): ScenarioAsset[] | null {
@@ -435,16 +502,21 @@ function parseScenarioPieces(
       typeof piece.id !== "string" ||
       piece.id.length === 0 ||
       typeof piece.label !== "string" ||
-      piece.kind !== "marker" ||
-      piece.side !== "neutral"
+      piece.kind !== "marker"
     ) {
       return null;
     }
 
     const x = piece.x;
     const y = piece.y;
+    const sideId =
+      piece.sideId === undefined ? undefined : parseScenarioSideId(piece.sideId);
     const imageAssetId =
       piece.imageAssetId === undefined ? undefined : parseScenarioAssetId(piece.imageAssetId);
+
+    if (piece.sideId !== undefined && !sideId) {
+      return null;
+    }
 
     if (piece.imageAssetId !== undefined && !imageAssetId) {
       return null;
@@ -477,9 +549,9 @@ function parseScenarioPieces(
       id: piece.id,
       label: piece.label,
       kind: "marker",
-      side: "neutral",
       x,
       y,
+      ...(sideId ? { sideId } : {}),
       ...(imageAssetId ? { imageAssetId } : {})
     });
   }
@@ -720,6 +792,10 @@ function parseColor(value: unknown, fallback: string): string | null {
 }
 
 function parseScenarioAssetId(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function parseScenarioSideId(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 

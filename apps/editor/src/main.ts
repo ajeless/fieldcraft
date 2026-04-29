@@ -37,6 +37,7 @@ import {
   type ScenarioAsset,
   type ScenarioAssetKind,
   type Scenario,
+  type ScenarioSide,
   type ScenarioSpaceType,
   type ScenarioTileSpaceType,
   createFreeCoordinateScenarioSpace,
@@ -65,7 +66,7 @@ import {
   loadScenarioWithMeta,
   ScenarioLoadError
 } from "./scenario-migrations";
-import { generatePieceId } from "./scenario-migrations/identity";
+import { generatePieceId, generateSideId } from "./scenario-migrations/identity";
 import {
   type ScenarioStorageResult,
   canImportScenarioAssets,
@@ -217,6 +218,14 @@ const boardViewportStates: Record<Route, BoardViewportState> = {
   editor: createBoardViewportState(),
   runtime: createBoardViewportState()
 };
+const sideColorPalette = [
+  "#2f80ed",
+  "#d94f45",
+  "#27ae60",
+  "#f2994a",
+  "#9b51e0",
+  "#00a8a8"
+] as const;
 
 window.addEventListener("hashchange", render);
 window.addEventListener("keydown", handleCommandShortcutKeyDown);
@@ -584,9 +593,7 @@ function createScenarioTab(): HTMLElement {
   );
   tab.append(contentsSection);
 
-  // TODO(codex/unit-entity-model): Scenario tab should host a Sides section
-  // with author-defined sides. Sides are a scenario-format change that lands
-  // with the entity-model branch (schemaVersion: 3).
+  tab.append(createSidesSection());
 
   const fileSection = element("section", "inspector-section");
   const savedAt = scenario.metadata.savedAt
@@ -668,6 +675,69 @@ function getScenarioSpaceMetrics(): ReadonlyArray<{
       testId: "scenario-tab-space-scale"
     }
   ];
+}
+
+function createSidesSection(): HTMLElement {
+  const section = element("section", "inspector-section sides-section");
+  const header = element("div", "inspector-section-header");
+  const addButton = buttonElement("Add", () => addScenarioSide(), "add-side");
+  addButton.className = "action-button compact-action";
+  header.append(element("p", "eyebrow", "Sides"), addButton);
+  section.append(header);
+
+  if (scenario.sides.length === 0) {
+    section.append(
+      element(
+        "p",
+        "inspector-empty",
+        "No sides yet. Add sides for factions, players, or scenario roles."
+      )
+    );
+    return section;
+  }
+
+  const list = element("div", "side-list");
+  for (const side of scenario.sides) {
+    list.append(createSideRow(side));
+  }
+  section.append(list);
+  return section;
+}
+
+function createSideRow(side: ScenarioSide): HTMLElement {
+  const row = element("article", "side-row");
+  row.dataset.testid = `side-row-${side.id}`;
+
+  const color = document.createElement("input");
+  color.type = "color";
+  color.value = side.color;
+  color.className = "side-color-input";
+  color.dataset.testid = `side-color-${side.id}`;
+  color.setAttribute("aria-label", `${side.label || side.id} color`);
+  color.addEventListener("change", () => updateScenarioSideColor(side.id, color.value));
+
+  const label = document.createElement("input");
+  label.type = "text";
+  label.value = side.label;
+  label.className = "side-label-input";
+  label.dataset.testid = `side-label-${side.id}`;
+  label.setAttribute("aria-label", `${side.label || side.id} label`);
+  label.addEventListener("change", () => updateScenarioSideLabel(side.id, label.value));
+
+  const pieceCount = getSidePieceCount(side.id);
+  const count = element(
+    "span",
+    "side-piece-count",
+    `${pieceCount} ${pieceCount === 1 ? "marker" : "markers"}`
+  );
+  const remove = buttonElement(
+    "Remove",
+    () => removeScenarioSide(side.id),
+    `remove-side-${side.id}`
+  );
+  remove.className = "action-button compact-action destructive-action side-remove-button";
+  row.append(color, label, count, remove);
+  return row;
 }
 
 function createSelectionTab(
@@ -1597,6 +1667,7 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
 
   section.append(
     createMarkerLabelInput(selectedMarker),
+    createMarkerSideSelect(selectedMarker),
     createMarkerImageSelect(selectedMarker),
     createMarkerIdDisclosure(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
@@ -1618,6 +1689,39 @@ function createMarkerLabelInput(
   field.input.addEventListener("change", () =>
     updateSelectedMarkerLabel(field.input.value)
   );
+  return field.label;
+}
+
+function createMarkerSideSelect(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const field = selectInput(
+    "Side",
+    [
+      {
+        label: "None",
+        value: ""
+      },
+      ...scenario.sides.map((side) => ({
+        label: side.label || side.id,
+        value: side.id
+      })),
+      {
+        label: "+ Add side...",
+        value: "__add_side__"
+      }
+    ],
+    selectedMarker.sideId ?? "",
+    "selected-marker-side-select"
+  );
+  field.input.addEventListener("change", () => {
+    if (field.input.value === "__add_side__") {
+      addScenarioSide({ assignToSelectedMarkerId: selectedMarker.id });
+      return;
+    }
+
+    updateSelectedMarkerSide(field.input.value || null);
+  });
   return field.label;
 }
 
@@ -2679,6 +2783,55 @@ function updateSelectedMarkerImageAsset(assetId: string | null): void {
   );
 }
 
+function updateSelectedMarkerSide(sideId: string | null): void {
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker) {
+    return;
+  }
+
+  const nextSideId = sideId || undefined;
+  if (selectedMarker.sideId === nextSideId) {
+    return;
+  }
+
+  commitUndoableChange(
+    nextSideId ? "marker side assign" : "marker side clear",
+    nextSideId ? "Marker side updated" : "Marker side cleared",
+    () => {
+      scenario = {
+        ...scenario,
+        pieces: scenario.pieces.map((piece) =>
+          piece.id === selectedMarker.id
+            ? updateMarkerSide(piece, nextSideId)
+            : piece
+        )
+      };
+    }
+  );
+}
+
+function updateMarkerSide(
+  piece: Scenario["pieces"][number],
+  sideId: string | undefined
+): Scenario["pieces"][number] {
+  if (sideId) {
+    return {
+      ...piece,
+      sideId
+    };
+  }
+
+  if (!piece.sideId) {
+    return piece;
+  }
+
+  const nextPiece = {
+    ...piece
+  };
+  delete nextPiece.sideId;
+  return nextPiece;
+}
+
 function updateMarkerImageAsset(
   piece: Scenario["pieces"][number],
   imageAssetId: string | undefined
@@ -2716,6 +2869,96 @@ function deleteSelectedMarker(): void {
   });
 }
 
+function addScenarioSide(options: { assignToSelectedMarkerId?: string } = {}): void {
+  const side = createScenarioSide();
+
+  commitUndoableChange("side add", "Side added", () => {
+    scenario = {
+      ...scenario,
+      sides: [...scenario.sides, side],
+      pieces: options.assignToSelectedMarkerId
+        ? scenario.pieces.map((piece) =>
+            piece.id === options.assignToSelectedMarkerId
+              ? updateMarkerSide(piece, side.id)
+              : piece
+          )
+        : scenario.pieces
+    };
+  });
+}
+
+function updateScenarioSideLabel(sideId: string, label: string): void {
+  const nextLabel = label.trim() || getScenarioSide(sideId)?.label || "Side";
+  const side = getScenarioSide(sideId);
+  if (!side || side.label === nextLabel) {
+    return;
+  }
+
+  commitUndoableChange("side label edit", "Side label updated", () => {
+    scenario = {
+      ...scenario,
+      sides: scenario.sides.map((entry) =>
+        entry.id === sideId ? { ...entry, label: nextLabel } : entry
+      )
+    };
+  });
+}
+
+function updateScenarioSideColor(sideId: string, color: string): void {
+  const side = getScenarioSide(sideId);
+  if (!side || side.color === color) {
+    return;
+  }
+
+  commitUndoableChange("side color edit", "Side color updated", () => {
+    scenario = {
+      ...scenario,
+      sides: scenario.sides.map((entry) =>
+        entry.id === sideId ? { ...entry, color } : entry
+      )
+    };
+  });
+}
+
+function removeScenarioSide(sideId: string): void {
+  const side = getScenarioSide(sideId);
+  if (!side) {
+    return;
+  }
+
+  commitUndoableChange("side removal", "Side removed", () => {
+    scenario = {
+      ...scenario,
+      sides: scenario.sides.filter((entry) => entry.id !== sideId),
+      pieces: scenario.pieces.map((piece) =>
+        piece.sideId === sideId ? updateMarkerSide(piece, undefined) : piece
+      )
+    };
+  });
+}
+
+function createScenarioSide(): ScenarioSide {
+  const existingIds = new Set(scenario.sides.map((side) => side.id));
+  const nextNumber = scenario.sides.length + 1;
+  return {
+    id: generateSideId(existingIds),
+    label: `Side ${nextNumber}`,
+    color: sideColorPalette[scenario.sides.length % sideColorPalette.length]
+  };
+}
+
+function getScenarioSide(sideId: string | null | undefined): ScenarioSide | null {
+  if (!sideId) {
+    return null;
+  }
+
+  return scenario.sides.find((side) => side.id === sideId) ?? null;
+}
+
+function getSidePieceCount(sideId: string): number {
+  return scenario.pieces.filter((piece) => piece.sideId === sideId).length;
+}
+
 function placeDefaultMarker(x: number, y: number): void {
   if (!scenario.space) {
     return;
@@ -2733,7 +2976,6 @@ function placeDefaultMarker(x: number, y: number): void {
           id: markerId,
           label: "",
           kind: "marker" as const,
-          side: "neutral" as const,
           x,
           y
         }
@@ -4479,6 +4721,7 @@ function cloneScenarioValue(value: Scenario): Scenario {
   return {
     ...value,
     space: cloneScenarioSpaceValue(value.space),
+    sides: value.sides.map((side) => ({ ...side })),
     assets: value.assets.map((asset) => ({ ...asset })),
     pieces: value.pieces.map((piece) => ({ ...piece })),
     metadata: {
