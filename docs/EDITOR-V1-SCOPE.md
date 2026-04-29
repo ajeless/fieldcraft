@@ -174,11 +174,11 @@ Added:
 
 The codebase preserves "runtime" terminology for historical reasons. Functionally, this branch treats the export as a viewer.
 
-### 10. `codex/v1-example-scenarios`
+### 10. `codex/v1-example-scenarios` — shipped
 
 Purpose: provide documentation-by-example.
 
-Adds:
+Added:
 
 - one to three reference scenarios committed to the repo
 - coverage of square, pointy-top hex, and free-coordinate space models across the set

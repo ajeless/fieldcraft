@@ -90,6 +90,7 @@ building gameplay-engine features that v1 explicitly does not ship. If the edito
 Keep docs light and split by ownership:
 
 - `README.md` is for project overview, setup, and commands.
+- `examples/v1/` holds self-contained reference scenarios and package-local example assets.
 - `AGENTS.md` is for agent workflow and contribution guardrails.
 - `DECISIONS.md` is for settled architectural and design choices.
 - `PLAN.md` is for mutable branch plans, open questions, and deferred design space.
