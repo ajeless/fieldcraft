@@ -4,7 +4,7 @@ import {
 } from "./spatial";
 
 export const schemaIdentifier = "fieldcraft.scenario";
-export const currentSchemaVersion = 4;
+export const currentSchemaVersion = 5;
 
 export const maxTileGridSize = 64;
 export const maxFreeCoordinateBoardSize = 100000;
@@ -34,6 +34,14 @@ export type ScenarioSide = {
   color: string;
 };
 
+export type ScenarioPieceShape = "circle" | "square" | "diamond" | "triangle";
+
+export type ScenarioPieceStyle = {
+  shape: ScenarioPieceShape;
+  fillColor: string;
+  strokeColor: string;
+};
+
 export type ScenarioPiece = {
   id: string;
   label: string;
@@ -41,6 +49,7 @@ export type ScenarioPiece = {
   x: number;
   y: number;
   facingDegrees: number;
+  style: ScenarioPieceStyle;
   sideId?: string;
   imageAssetId?: string;
 };
@@ -511,12 +520,13 @@ function parseScenarioPieces(
     const x = piece.x;
     const y = piece.y;
     const facingDegrees = parseFacingDegrees(piece.facingDegrees);
+    const style = parseScenarioPieceStyle(piece.style);
     const sideId =
       piece.sideId === undefined ? undefined : parseScenarioSideId(piece.sideId);
     const imageAssetId =
       piece.imageAssetId === undefined ? undefined : parseScenarioAssetId(piece.imageAssetId);
 
-    if (facingDegrees === null) {
+    if (facingDegrees === null || !style) {
       return null;
     }
 
@@ -558,6 +568,7 @@ function parseScenarioPieces(
       x,
       y,
       facingDegrees,
+      style,
       ...(sideId ? { sideId } : {}),
       ...(imageAssetId ? { imageAssetId } : {})
     });
@@ -725,6 +736,25 @@ function parseBackground(value: unknown): ScenarioBoardBackground | null {
   return imageAssetId ? { color, imageAssetId } : { color };
 }
 
+function parseScenarioPieceStyle(value: unknown): ScenarioPieceStyle | null {
+  if (!isRecord(value) || !isScenarioPieceShape(value.shape)) {
+    return null;
+  }
+
+  const fillColor = parseColor(value.fillColor, "");
+  const strokeColor = parseColor(value.strokeColor, "");
+
+  if (!fillColor || !strokeColor) {
+    return null;
+  }
+
+  return {
+    shape: value.shape,
+    fillColor,
+    strokeColor
+  };
+}
+
 function parseFreeCoordinateBounds(value: unknown): ScenarioFreeCoordinateBounds | null {
   if (!isRecord(value)) {
     return null;
@@ -849,6 +879,15 @@ function isScaleUnit(value: unknown): value is string {
 
 function isScenarioAssetKind(value: unknown): value is ScenarioAssetKind {
   return value === "image" || value === "audio";
+}
+
+function isScenarioPieceShape(value: unknown): value is ScenarioPieceShape {
+  return (
+    value === "circle" ||
+    value === "square" ||
+    value === "diamond" ||
+    value === "triangle"
+  );
 }
 
 function normalizeScaleUnit(value: string): string {

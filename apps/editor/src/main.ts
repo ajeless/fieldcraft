@@ -37,6 +37,8 @@ import {
   type ScenarioAsset,
   type ScenarioAssetKind,
   type Scenario,
+  type ScenarioPieceShape,
+  type ScenarioPieceStyle,
   type ScenarioSide,
   type ScenarioSpaceType,
   type ScenarioTileSpaceType,
@@ -226,6 +228,22 @@ const sideColorPalette = [
   "#9b51e0",
   "#00a8a8"
 ] as const;
+
+const defaultPieceStyle: ScenarioPieceStyle = {
+  shape: "circle",
+  fillColor: "#c85448",
+  strokeColor: "#7a2a22"
+};
+
+const pieceShapeOptions: ReadonlyArray<{
+  label: string;
+  value: ScenarioPieceShape;
+}> = [
+  { label: "Circle", value: "circle" },
+  { label: "Square", value: "square" },
+  { label: "Diamond", value: "diamond" },
+  { label: "Triangle", value: "triangle" }
+];
 
 window.addEventListener("hashchange", render);
 window.addEventListener("keydown", handleCommandShortcutKeyDown);
@@ -1669,6 +1687,7 @@ function createSelectionInspector(selectedMarker: Scenario["pieces"][number] | n
     createMarkerLabelInput(selectedMarker),
     createMarkerSideSelect(selectedMarker),
     createMarkerFacingControl(selectedMarker),
+    createMarkerStyleControls(selectedMarker),
     createMarkerImageSelect(selectedMarker),
     createMarkerIdDisclosure(selectedMarker),
     metric("Position", getMarkerPositionLabel(selectedMarker), "selected-marker-position"),
@@ -1736,6 +1755,43 @@ function createMarkerFacingControl(
   controls.append(range, number);
   label.append(text, controls);
   return label;
+}
+
+function createMarkerStyleControls(
+  selectedMarker: Scenario["pieces"][number]
+): HTMLElement {
+  const group = element("div", "marker-style-controls");
+  const shapeField = selectInput(
+    "Shape",
+    pieceShapeOptions,
+    selectedMarker.style.shape,
+    "selected-marker-shape-select"
+  );
+  const fillField = colorInput(
+    "Fill",
+    selectedMarker.style.fillColor,
+    "selected-marker-fill-color-input"
+  );
+  const strokeField = colorInput(
+    "Stroke",
+    selectedMarker.style.strokeColor,
+    "selected-marker-stroke-color-input"
+  );
+
+  shapeField.input.addEventListener("change", () => {
+    if (isScenarioPieceShape(shapeField.input.value)) {
+      updateSelectedMarkerStyle({ shape: shapeField.input.value });
+    }
+  });
+  fillField.input.addEventListener("change", () =>
+    updateSelectedMarkerStyle({ fillColor: fillField.input.value })
+  );
+  strokeField.input.addEventListener("change", () =>
+    updateSelectedMarkerStyle({ strokeColor: strokeField.input.value })
+  );
+
+  group.append(shapeField.label, fillField.label, strokeField.label);
+  return group;
 }
 
 function createMarkerSideSelect(
@@ -2879,6 +2935,34 @@ function updateSelectedMarkerFacing(value: number): void {
   });
 }
 
+function updateSelectedMarkerStyle(stylePatch: Partial<ScenarioPieceStyle>): void {
+  const selectedMarker = getSelectedMarker();
+  if (!selectedMarker) {
+    return;
+  }
+
+  const nextStyle = {
+    ...selectedMarker.style,
+    ...stylePatch
+  };
+  if (
+    selectedMarker.style.shape === nextStyle.shape &&
+    selectedMarker.style.fillColor === nextStyle.fillColor &&
+    selectedMarker.style.strokeColor === nextStyle.strokeColor
+  ) {
+    return;
+  }
+
+  commitUndoableChange("marker style edit", "Marker style updated", () => {
+    scenario = {
+      ...scenario,
+      pieces: scenario.pieces.map((piece) =>
+        piece.id === selectedMarker.id ? { ...piece, style: nextStyle } : piece
+      )
+    };
+  });
+}
+
 function updateMarkerSide(
   piece: Scenario["pieces"][number],
   sideId: string | undefined
@@ -3047,7 +3131,8 @@ function placeDefaultMarker(x: number, y: number): void {
           kind: "marker" as const,
           x,
           y,
-          facingDegrees: 0
+          facingDegrees: 0,
+          style: { ...defaultPieceStyle }
         }
       ]
     };
@@ -4409,6 +4494,10 @@ function normalizeFacingDegrees(value: number): number | null {
   return ((Math.round(value) % 360) + 360) % 360;
 }
 
+function isScenarioPieceShape(value: string): value is ScenarioPieceShape {
+  return pieceShapeOptions.some((option) => option.value === value);
+}
+
 function getDocumentState(): string {
   if (dirty || hasPendingSourceEdits()) {
     return "Unsaved changes";
@@ -4801,7 +4890,7 @@ function cloneScenarioValue(value: Scenario): Scenario {
     space: cloneScenarioSpaceValue(value.space),
     sides: value.sides.map((side) => ({ ...side })),
     assets: value.assets.map((asset) => ({ ...asset })),
-    pieces: value.pieces.map((piece) => ({ ...piece })),
+    pieces: value.pieces.map((piece) => ({ ...piece, style: { ...piece.style } })),
     metadata: {
       ...value.metadata
     }

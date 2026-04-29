@@ -2,7 +2,7 @@
 
 const SAMPLE_SCENARIO = `{
   "schema": "fieldcraft.scenario",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "title": "Untitled Fieldcraft Scenario",
   "space": {
     "type": "square-grid",
@@ -27,8 +27,10 @@ const SAMPLE_SCENARIO = `{
     { "id": "kli", "label": "Klingon Empire", "color": "#e06a5e" }
   ],
   "markers": [
-    { "id": "m-1", "x": 2, "y": 3, "kind": "marker", "sideId": "fed", "facingDegrees": 0 },
-    { "id": "m-2", "x": 5, "y": 4, "kind": "marker", "sideId": "kli", "facingDegrees": 180 }
+    { "id": "m-1", "x": 2, "y": 3, "kind": "marker", "sideId": "fed", "facingDegrees": 0,
+      "style": { "shape": "circle", "fillColor": "#5ea7e0", "strokeColor": "#1f5d83" } },
+    { "id": "m-2", "x": 5, "y": 4, "kind": "marker", "sideId": "kli", "facingDegrees": 180,
+      "style": { "shape": "diamond", "fillColor": "#e06a5e", "strokeColor": "#82362f" } }
   ],
   "assets": [
     { "id": "checkerboard-32", "kind": "image",

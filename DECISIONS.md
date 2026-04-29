@@ -151,3 +151,11 @@ Pieces carry `facingDegrees`, a clockwise degree value where `0` points up/north
 This is a scenario-format v4 commitment. The `v3 → v4` migration adds `facingDegrees: 0` to existing pieces. Facing does not imply movement, firing arcs, line of sight, turn order, or any other rule behavior under v1 scope.
 
 Rationale: tactical scenario authors need to show which way a piece is pointed before Fieldcraft has any rules engine. Treating facing as presentation data preserves the authored scenario value while keeping the v1 no-engine boundary intact.
+
+## 015 — Piece styling is authored presentation data
+
+Pieces carry a required `style` object with `shape`, `fillColor`, and `strokeColor`. Supported v1 shapes are `circle`, `square`, `diamond`, and `triangle`; colors are six-digit hex values. The shared editor/viewer renderer applies those fields to default markers and to the frame/clipping shape for image-backed markers.
+
+This is a scenario-format v5 commitment. The `v4 → v5` migration adds the former default marker appearance as explicit style data: circle, `#c85448` fill, and `#7a2a22` stroke.
+
+Rationale: authors need a lightweight way to distinguish piece roles before importing art. The styling fields are visual authorship data only; they do not define unit type, rules, abilities, or gameplay behavior.
